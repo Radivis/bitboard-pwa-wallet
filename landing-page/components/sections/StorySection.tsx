@@ -22,7 +22,7 @@ export function StorySection() {
               ecosystem and its foundational technologies.
             </p>
             <p>
-              &gt; Bitboard Wallet represents my best shot at demystifying the Bitcoin Matrix to those willing to take
+              &gt; Bitcoin Codex represents my best shot at demystifying the Bitcoin Matrix to those willing to take
               that plunge.
             </p>
             <p>

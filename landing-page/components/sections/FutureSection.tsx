@@ -9,7 +9,7 @@ export function FutureSection() {
         {[
           {
             title: 'Connecting Hardware Wallets',
-            desc: 'Even with top security, online wallets are inherently at risk. Secure your coins by moving them to a hardware wallet and using Bitboard Wallet as bridge to the blockchain.',
+            desc: 'Even with top security, online wallets are inherently at risk. Secure your coins by moving them to a hardware wallet and using Bitcoin Codex as bridge to the blockchain.',
             icon: HardDrive,
           },
           {
@@ -24,7 +24,7 @@ export function FutureSection() {
           },
           {
             title: 'In Mobile App Stores',
-            desc: "Bitboard Wallet as mobile app you can get from a store",
+            desc: "Bitcoin Codex as mobile app you can get from a store",
             icon: Smartphone,
           },
           {

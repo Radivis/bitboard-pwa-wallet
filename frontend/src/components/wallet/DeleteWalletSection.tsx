@@ -9,8 +9,9 @@ import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DialogDescription } from '@/components/ui/dialog'
 
 export type DeleteWalletSectionProps = {
@@ -147,21 +148,20 @@ export function DeleteWalletSection({
           infoText="Removes this wallet’s name, encrypted data, and settings from this device only. It does not remove coins from the Bitcoin network—you can still recover funds with your seed phrase in another wallet unless you delete without a backup."
         >
           <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">Danger zone</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-emphasis text-destructive">Danger zone</p>
+            <p className="design-type-regular text-muted-foreground">
               Permanently remove this wallet from Bitboard on this device.
             </p>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={!canAttemptDelete || probingMainnet || deleteWalletMutation.isPending}
               onClick={() => setFirstDialogOpen(true)}
+              icon={<Trash2 />}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
               Delete wallet
-            </Button>
+            </DesignDestructiveButton>
             {!canAttemptDelete && (
-              <p className="text-xs text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Unlock your wallet to delete it.
               </p>
             )}
@@ -169,7 +169,7 @@ export function DeleteWalletSection({
         </InfomodeWrapper>
       </div>
 
-      <AppModal
+      <DesignModal
         isOpen={firstDialogOpen}
         onOpenChange={setFirstDialogOpen}
         onCancel={() => {}}
@@ -177,22 +177,21 @@ export function DeleteWalletSection({
         isCloseButtonHidden={probingMainnet}
         footer={(requestClose) => (
           <>
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               disabled={probingMainnet}
               onClick={requestClose}
             >
               Cancel
-            </Button>
-            <Button
+            </DesignButton>
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={probingMainnet || deleteWalletMutation.isPending}
               onClick={() => void onFirstDialogConfirm()}
             >
               {probingMainnet ? 'Checking…' : 'Continue'}
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
@@ -201,31 +200,30 @@ export function DeleteWalletSection({
           need this wallet again, confirm you have your recovery phrase saved somewhere safe before
           continuing.
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
 
-      <AppModal
+      <DesignModal
         isOpen={mainnetWarnOpen}
         onOpenChange={setMainnetWarnOpen}
         onCancel={() => {}}
         title="Mainnet bitcoin may be at risk"
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="outline" onClick={requestClose}>
+            <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
-            </Button>
-            <Button
+            </DesignButton>
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={deleteWalletMutation.isPending}
               onClick={() => void performDelete().then(() => setMainnetWarnOpen(false))}
             >
               I have a backup — delete wallet
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
               on-chain balance (Lightning / NWC balances are not counted here). Your recovery phrase
@@ -238,22 +236,21 @@ export function DeleteWalletSection({
             </p>
           </div>
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
 
-      <AppModal
+      <DesignModal
         isOpen={mainnetBlockedOpen}
         onOpenChange={setMainnetBlockedOpen}
         onCancel={() => {}}
         title="Cannot delete this wallet"
-        footerClassName="justify-end"
         footer={(requestClose) => (
-          <Button type="button" variant="default" onClick={requestClose}>
+          <DesignButton type="button" onClick={requestClose}>
             Understood
-          </Button>
+          </DesignButton>
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
               on-chain balance. Deleting it now would be extremely dangerous because Bitboard has no
@@ -267,14 +264,14 @@ export function DeleteWalletSection({
               </strong>
               .
             </p>
-            <p className="font-bold text-foreground">
+            <p className="design-type-emphasis text-foreground">
               Deletion cannot proceed while the &quot;no mnemonic backup&quot; flag is set for this
               wallet and mainnet funds are present. Use Seed Phrase Backup in Management to record
               your recovery phrase first; then you can delete the wallet if you still want to.
             </p>
           </div>
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
     </>
   )
 }

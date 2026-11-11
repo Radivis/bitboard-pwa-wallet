@@ -36,8 +36,8 @@ vi.mock('@/components/PasswordStrengthIndicator', () => ({
   PasswordStrengthIndicator: () => <div data-testid="password-strength" />,
 }))
 
-vi.mock('@/components/infomode/InfomodeToggle', () => ({
-  InfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
+vi.mock('@/components/design/DesignInfomodeToggle', () => ({
+  DesignInfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
 }))
 
 describe('SetAppPasswordModal', () => {

@@ -15,11 +15,11 @@ For why incremental Esplora sync needs a post-sync **anchor+chain reconcile** pa
 
 - Each descriptor wallet may store `lastSuccessfulEsploraSyncAt` (ISO string): when Esplora sync last completed successfully for that descriptor wallet.
 - Used only for **stale UX** (“last verified with Esplora”) when the current session has not completed Esplora sync yet or sync failed.
-- **Not set** on lab mode or WASM-only paths without Esplora.
+- **Not set** on Labnet or WASM-only paths without Esplora.
 
-## Lab mode
+## Labnet
 
-- Lab on-chain activity comes from the lab SQLite simulator, not BDK/Esplora snapshots or timestamps.
+- On Labnet, on-chain activity comes from the lab SQLite simulator, not BDK/Esplora snapshots or timestamps.
 
 ## Lightning (unchanged)
 

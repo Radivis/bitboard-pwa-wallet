@@ -13,7 +13,7 @@ import {
   resetE2eArkadeOperatorMockState,
   type E2eArkadeMockIncomingPayment,
   type E2eArkadeOperatorMockState,
-} from './arkade-operator-mock-state'
+} from './arkade-operator-mock-state.ts'
 
 const mockHandlerDir = path.dirname(fileURLToPath(import.meta.url))
 const serverInfoFixturePath = path.resolve(

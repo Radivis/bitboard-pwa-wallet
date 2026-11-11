@@ -1,0 +1,8 @@
+{
+  "collections": {
+    "theme": "theme.json",
+    "network": "network.json"
+  },
+  "resolution": "A screen selects one theme mode and one network mode. A theme token that aliases a network token uses the theme mode to choose the alias, then the network mode to choose the hex. Signet and Mutinynet use the testnet value. Regtest uses the lab value. Those names are not extra modes.",
+  "figmaImport": "Figma imports Design Tokens files, one mode per file. Drop every file in figma-import/network into one new collection, then every file in figma-import/theme into another. Import network first so the theme aliases can find it. A token is created only when it appears in every file of that drop."
+}

@@ -80,7 +80,7 @@ export function ArkadeAutonomousModeSwitch() {
       />
     <div
       className={cn(
-        'rounded-md border p-3 text-sm',
+        'design-type-regular rounded-md border p-3',
         checked
           ? 'border-sky-500/40 bg-sky-500/10'
           : 'border-border bg-muted/30',
@@ -108,7 +108,7 @@ export function ArkadeAutonomousModeSwitch() {
               infoComponent={ArkadeAutonomousModeInfomodeContent}
               as="span"
             >
-              <Label htmlFor="arkade-autonomous-mode" className="text-sm font-medium">
+              <Label htmlFor="arkade-autonomous-mode" className="design-type-emphasis">
                 Autonomous mode
               </Label>
             </InfomodeWrapper>
@@ -123,19 +123,19 @@ export function ArkadeAutonomousModeSwitch() {
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Do not contact this operator until you turn this off. The setting survives reload. Only
             unilateral exit stays available.
           </p>
           {!canEnable && !checked ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className="design-type-regular text-amber-700 dark:text-amber-400">
               {status?.operatorTrustPending
                 ? 'Resolve pending operator configuration changes before enabling autonomous mode manually.'
                 : 'Sync with the operator at least once while reachable before enabling autonomous mode.'}
             </p>
           ) : null}
           {checked && status?.operatorTrustPending ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className="design-type-regular text-amber-700 dark:text-amber-400">
               Accept operator changes before leaving autonomous mode.
             </p>
           ) : null}
@@ -146,7 +146,7 @@ export function ArkadeAutonomousModeSwitch() {
                 used. Esplora is still used for broadcast, UTXO lookup, and timelock checks. Turn
                 this off to resume operator sync.
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Exit materials ready for {status.materialsReadyCount} of {status.eligibleCount}{' '}
                 eligible VTXO{status.eligibleCount === 1 ? '' : 's'}.
               </p>

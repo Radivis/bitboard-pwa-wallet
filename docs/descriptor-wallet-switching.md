@@ -18,7 +18,7 @@ For post-sync anchor+chain reconcile (why dashboard sync is not “just call `bd
 | **Committed triple** | Persisted preference in `walletStore` (`networkMode`, `addressType`, `accountId`). |
 | **Loaded descriptor wallet** | `loadedDescriptorWallet` — the triple WASM was last loaded for; set together with commit after a successful `loadWallet`. |
 | **Live network** | `regtest`, `signet`, `testnet`, or `mainnet` — Esplora-backed on-chain sync applies. |
-| **Lab** | Local SQLite simulator; no Esplora, no `lastSuccessfulEsploraSyncAt`. |
+| **Labnet** | Local SQLite simulator; no Esplora, no `lastSuccessfulEsploraSyncAt`. |
 
 ## Entry points
 
@@ -122,8 +122,8 @@ Defined in `switchDescriptorWallet`; executed inside `syncLoadedDescriptorWallet
 | From | To | Behavior |
 |------|-----|----------|
 | Live | Live | `switchDescriptorWallet` (if unlocked) |
-| Live | Lab | `switchToLabNetwork` (see Lab section) |
-| Lab | Live | `switchDescriptorWallet` + `terminateLabWorker` |
+| Live | Labnet | `switchToLabNetwork` (see Labnet section) |
+| Labnet | Live | `switchDescriptorWallet` + `terminateLabWorker` |
 | Any | Same | no-op |
 
 ## Address type switch
@@ -132,17 +132,17 @@ Same core function, different UX copy. [`execute-settings-address-type-switch.ts
 
 Esplora and BDK hydration behave like a live network switch (unless the committed network is lab — address type switches on lab still go through `switchDescriptorWallet`, but the target branch skips Esplora when `targetNetworkMode === 'lab'`).
 
-## Lab mode (simplified path)
+## Labnet (simplified path)
 
-Lab does not use Esplora, BDK dashboard hydration for stale UX, or `lastSuccessfulEsploraSyncAt`. On-chain activity on the lab dashboard comes from the **lab SQLite DB**, not the loaded BDK wallet’s tx graph.
+Labnet does not use Esplora, BDK dashboard hydration for stale UX, or `lastSuccessfulEsploraSyncAt`. On-chain activity on the lab dashboard comes from the **lab SQLite DB**, not the loaded BDK wallet’s tx graph.
 
-### Switching **to** lab
+### Switching **to** Labnet
 
 [`switch-to-lab-network.ts`](../frontend/src/lib/lab/switch-to-lab-network.ts):
 
 ```mermaid
 flowchart TB
-  START([User selects Lab]) --> TERM[terminateLabWorker]
+  START([User selects Labnet]) --> TERM[terminateLabWorker]
   TERM --> UNLOCK{Unlocked or syncing?}
   UNLOCK -->|no| PREF[setNetworkMode lab only]
   UNLOCK -->|yes| SAVE[Save live changeset to payload]
@@ -153,21 +153,21 @@ flowchart TB
   WARM --> DONE([Done])
 ```
 
-- **Save (optional):** Same export + `updateDescriptorWalletChangeset` for the **previous live** network before leaving it.
+- **Save (optional):** Same export + `updateDescriptorWalletChangeset` for the **previous live** network before leaving it for Labnet.
 - **Load:** `loadDescriptorWalletWithoutSync` — resolve + `loadWallet`, commit triple, **no** `refreshWalletStoreFromLoadedBdk`, **no** Esplora.
 - **Warm:** Prefetch lab chain state for React Query.
 - **Locked:** Only persisted `networkMode` → `lab`; WASM load happens on unlock.
 
-### Switching **from** lab to live
+### Switching **from** Labnet to live
 
 Uses the full live `switchDescriptorWallet` path (save/load/sync/Esplora), then `terminateLabWorker` in `afterDescriptorSwitch`.
 
-### What lab skips (compared to live)
+### What Labnet skips (compared to live)
 
-| Step | Live switch | Lab switch |
-|------|-------------|------------|
-| Persist outgoing changeset | Yes (if WASM active) | Yes, when leaving live for lab |
-| `loadWallet` target | Yes | Yes (lab network in WASM) |
+| Step | Live switch | Labnet switch |
+|------|-------------|---------------|
+| Persist outgoing changeset | Yes (if WASM active) | Yes, when leaving live for Labnet |
+| `loadWallet` target | Yes | Yes (Labnet in WASM) |
 | `refreshWalletStoreFromLoadedBdk` | Yes | No |
 | `invalidateOnchainDashboardQueries` | Yes | No |
 | `syncLoadedDescriptorWalletWithEsplora` | Yes | No |

@@ -2,8 +2,10 @@ import { test, expect, type Page } from '@playwright/test'
 import { bech32 } from '@scure/base'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 import {
   openSettingsFeaturesTab,
+  settingsNetworkButton,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
@@ -24,9 +26,9 @@ function encodeLnurlForUrl(url: string): string {
 const LNURL_BECH32 = encodeLnurlForUrl(LNURL_PAY_HTTPS_URL)
 
 async function switchToSignetWithLightning(page: Page) {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Signet' }).click()
+  await settingsNetworkButton(page, 'Signet').click()
   await waitForSettingsNetworkSwitchComplete(page)
   await waitForSettingsNetworkModeButtonSelected(page, 'Signet')
 

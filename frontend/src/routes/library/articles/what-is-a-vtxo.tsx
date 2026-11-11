@@ -27,7 +27,7 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="Offchain vs on-chain">
         <p>
-          Your normal <code className="text-sm">bc1</code> wallet balance lives in{' '}
+          Your normal <code className="design-type-addresses">bc1</code> wallet balance lives in{' '}
           <strong>on-chain UTXOs</strong>—outputs recorded on the Bitcoin blockchain. Arkade
           balances live in <strong>VTXOs</strong> managed with the Arkade operator. You can still
           move value back to on-chain Bitcoin through boarding (in) and exits (out).
@@ -56,10 +56,10 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="In Bitboard Wallet">
+      <ArticleSection title="In Bitcoin Codex">
         <p>
           Enable Arkade under Settings → Features, then use{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> for
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink> for
           addresses, boarding, and payments. To fund Arkade from on-chain, read{' '}
           <ArticleLink slug="boarding-to-arkade">Boarding Bitcoin into Arkade</ArticleLink>.
         </p>

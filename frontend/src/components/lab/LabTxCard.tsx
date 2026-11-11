@@ -43,7 +43,7 @@ export function LabTxCard({
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 break-words text-sm',
+        'design-type-regular flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 break-words',
         className,
       )}
     >
@@ -56,7 +56,7 @@ export function LabTxCard({
       <span className="flex min-w-0 max-w-full items-center gap-1.5">
         <Hash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="sr-only">Transaction id</span>
-        <span className="min-w-0 font-mono" title={txid}>
+        <span className="design-type-addresses min-w-0" title={txid}>
           {truncateAddress(txid)}
         </span>
       </span>

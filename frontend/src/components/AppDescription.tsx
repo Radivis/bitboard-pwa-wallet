@@ -10,16 +10,8 @@ interface AppDescriptionProps {
  */
 export function AppDescription({ className }: AppDescriptionProps) {
   return (
-    <p className={cn('text-muted-foreground', className)}>
-      An educational{' '}
-      <InfomodeWrapper
-        as="span"
-        infoId="app-description-self-custody"
-        infoTitle="Self-custody"
-        infoText="You—not a bank or company—control the keys that spend your money. That means more freedom, but also more responsibility: if you lose your backup words, nobody can press a “reset password” button for you. Keep your recovery phrase safe and private."
-      >
-        self-custody
-      </InfomodeWrapper>{' '}
+    <p className={cn('design-type-regular text-muted-foreground', className)}>
+      The interactive {' '}
       <InfomodeWrapper
         as="span"
         infoId="app-description-bitcoin"
@@ -28,15 +20,7 @@ export function AppDescription({ className }: AppDescriptionProps) {
       >
         Bitcoin
       </InfomodeWrapper>{' '}
-      <InfomodeWrapper
-        as="span"
-        infoId="app-description-wallet"
-        infoTitle="Wallet (the app)"
-        infoText="Here, “wallet” means software like Bitboard that stores your secret keys and helps you receive, hold, and send Bitcoin. It does not stuff coins into one folder on your phone—the shared ledger records balances; your wallet proves you control yours."
-      >
-        wallet
-      </InfomodeWrapper>{' '}
-      in your browser and mobile device.
+      learning app.
     </p>
   )
 }

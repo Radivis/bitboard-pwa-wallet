@@ -10,6 +10,7 @@ import {
   getOnchainSaveLifecycleSnapshot,
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import {
+  abandonInFlightOnchainSync,
   awaitOnchainSyncQuiescence,
   getOnchainSyncLifecycleSnapshot,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -106,6 +107,7 @@ export async function awaitOnchainQuiescenceBeforeDescriptorMutation(): Promise<
     syncSnapshot.syncPhase === 'syncing' &&
     !syncSnapshotAppliesToLoadedDescriptor(syncSnapshot)
   if (!foreignInFlightScan) {
+    await abandonInFlightOnchainSync()
     await awaitOnchainSyncQuiescence()
   }
   await awaitOnchainSaveQuiescence()

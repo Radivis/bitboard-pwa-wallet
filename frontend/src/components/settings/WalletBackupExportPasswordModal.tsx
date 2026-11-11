@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { APP_PASSWORD_MIN_LENGTH } from '@/lib/shared/app-password-policy'
@@ -101,7 +101,7 @@ export function WalletBackupExportPasswordModal({
   }, [onCancel])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Sign wallet backup"
@@ -109,21 +109,21 @@ export function WalletBackupExportPasswordModal({
       isBlockDismissed={isBusy}
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={handleCancel}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={handleCancel}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={isBusy || !canSubmit}
             onClick={() => void onConfirm(password)}
           >
             {isBusy ? 'Signing…' : 'Sign and export'}
-          </Button>
+          </DesignButton>
         </>
       )}
     >
       <DialogDescription asChild>
-        <div className="space-y-3 text-left text-sm text-foreground">
+        <div className="design-type-regular space-y-3 text-left text-foreground">
           <p>
             This export is cryptographically signed. Use a <strong>strong</strong> password for
             signing—ideally your <strong>current Bitboard app password</strong>, so you only have one
@@ -164,7 +164,7 @@ export function WalletBackupExportPasswordModal({
           />
         </div>
         {password.length > 0 && confirmPassword.length > 0 && !passwordsMatch ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             Passwords do not match.
           </p>
         ) : null}
@@ -172,25 +172,25 @@ export function WalletBackupExportPasswordModal({
         confirmPassword.length > 0 &&
         passwordsMatch &&
         !meetsMinLength ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             Use at least {APP_PASSWORD_MIN_LENGTH} characters (Bitboard’s minimum app password length).
           </p>
         ) : null}
         {canCompare ? (
           <div className="space-y-2" aria-live="polite">
             {comparePending ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <p className="design-type-regular flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
                 Checking against your Bitboard app password…
               </p>
             ) : compareResult?.skipped ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Could not compare to the app password (no wallet selected). You can still export; use
                 a password you will remember for import verification.
               </p>
             ) : compareResult?.match ? (
               <p
-                className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400"
+                className="design-type-emphasis flex items-center gap-2 text-green-700 dark:text-green-400"
                 role="status"
               >
                 <CheckCircle2 className="size-4 shrink-0" aria-hidden />
@@ -198,7 +198,7 @@ export function WalletBackupExportPasswordModal({
               </p>
             ) : (
               <p
-                className="flex items-start gap-2 text-sm font-medium text-destructive"
+                className="design-type-emphasis flex items-start gap-2 text-destructive"
                 role="status"
               >
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -212,6 +212,6 @@ export function WalletBackupExportPasswordModal({
           </div>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

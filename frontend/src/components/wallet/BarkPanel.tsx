@@ -1,8 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { BarkNextRefreshHint } from '@/components/bark/BarkNextRefreshHint'
 import { BarkSessionGate } from '@/components/bark/BarkSessionGate'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
@@ -15,11 +20,11 @@ export function BarkPanel() {
   if (loadSnapshot.loadPhase === 'not-configured') return null
 
   return (
-    <Card data-testid="bark-management-panel">
-      <CardHeader>
-        <CardTitle>Bark</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <DesignCard data-testid="bark-management-panel">
+      <DesignCardHeader>
+        <DesignCardTitle>Bark</DesignCardTitle>
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-3">
         <BarkSessionGate
           loadPhase={loadSnapshot.loadPhase}
           errorMessage={loadSnapshot.errorMessage}
@@ -29,20 +34,20 @@ export function BarkPanel() {
             <BarkNextRefreshHint />
             <BarkPendingActionBanner />
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" asChild>
+              <DesignButton type="button" appearance="secondary" asChild>
                 <Link to="/wallet/bark/vtxos" data-testid="bark-list-vtxos-link">
                   List VTXOs
                 </Link>
-              </Button>
-              <Button type="button" variant="outline" size="sm" asChild>
+              </DesignButton>
+              <DesignButton type="button" appearance="secondary" asChild>
                 <Link to="/wallet/bark/emergency-exit" data-testid="bark-emergency-exit-link">
                   Emergency exit
                 </Link>
-              </Button>
+              </DesignButton>
             </div>
           </>
         </BarkSessionGate>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

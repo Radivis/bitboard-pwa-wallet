@@ -54,7 +54,7 @@ export const BitcoinUnitSelect = forwardRef<
       onMouseDown={onMouseDown}
       onClick={onClick}
       className={cn(
-        'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'design-type-addresses rounded-md border border-input bg-background px-2 py-1 text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
       value={value}

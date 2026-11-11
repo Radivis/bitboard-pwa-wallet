@@ -17,9 +17,15 @@ import {
   loadCustomEsploraUrl,
 } from '@/lib/wallet/wallet-utils'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { shouldWarnEsploraNotWhitelisted } from '@/lib/esplora/esplora-service-whitelist'
@@ -102,25 +108,25 @@ export function EsploraUrlSettings() {
       infoText="Bitboard uses an Esplora-style HTTP API to read blockchain data (balances, history) and to broadcast transactions. Each network can point at its own server URL. Most people keep the default; advanced users may enter their own node or a mirror they trust."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
+      <DesignCard>
+        <DesignCardHeader>
           <div className="flex items-center gap-2">
-            <CardTitle className="flex items-center gap-2">
+            <DesignCardTitle>
               <Globe className="h-5 w-5" />
               Esplora Endpoint for {NETWORK_LABELS[networkMode]}
-            </CardTitle>
+            </DesignCardTitle>
             {isCustom && <Badge variant="secondary">Custom</Badge>}
           </div>
-          <CardDescription>
+          <DesignCardDescription>
             Network-specific: changing network will use the endpoint configured for
             that network.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           {showNonWhitelistedEsploraWarning && (
             <div
               role="status"
-              className="rounded-md border border-amber-600/50 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
+              className="design-type-regular rounded-md border border-amber-600/50 bg-amber-50 px-3 py-2 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
               data-testid="esplora-non-whitelisted-warning"
             >
               This app runs in your browser. Endpoints that are not in Bitboard’s
@@ -131,35 +137,28 @@ export function EsploraUrlSettings() {
           )}
           <div className="space-y-2">
             <Label htmlFor="esplora-url">Endpoint URL</Label>
-            <Input
+            <DesignInput
               id="esplora-url"
+              leadingIcon={Globe}
               value={editUrl}
+              resetTo={defaultUrl}
               onChange={(e) => setEditUrl(e.target.value)}
+              onReset={() => resetMutation.mutate()}
               placeholder={defaultUrl}
               disabled={loading}
             />
           </div>
           <div className="flex gap-2">
-            <Button
+            <DesignButton
               type="button"
               onClick={() => saveMutation.mutate()}
               disabled={loading}
-              size="sm"
             >
               Save Endpoint
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => resetMutation.mutate()}
-              disabled={loading || !isCustom}
-              size="sm"
-            >
-              Reset to Default
-            </Button>
+            </DesignButton>
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

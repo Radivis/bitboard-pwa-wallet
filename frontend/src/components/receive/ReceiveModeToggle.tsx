@@ -32,7 +32,7 @@ export function ReceiveModeToggle({
           type="button"
           onClick={() => onModeChange('bitcoin')}
           className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 text-sm font-medium transition-all',
+            'design-type-emphasis flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 transition-all',
             mode === 'bitcoin'
               ? 'bg-background shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -46,7 +46,7 @@ export function ReceiveModeToggle({
             type="button"
             onClick={() => onModeChange('lightning')}
             className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 text-sm font-medium transition-all',
+              'design-type-emphasis flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 transition-all',
               mode === 'lightning'
                 ? 'bg-background shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -61,7 +61,7 @@ export function ReceiveModeToggle({
             type="button"
             onClick={() => onModeChange('arkade')}
             className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 text-sm font-medium transition-all',
+              'design-type-emphasis flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 transition-all',
               mode === 'arkade'
                 ? 'bg-background shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -76,7 +76,7 @@ export function ReceiveModeToggle({
             type="button"
             onClick={() => onModeChange('bark')}
             className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 text-sm font-medium transition-all',
+              'design-type-emphasis flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 transition-all',
               mode === 'bark'
                 ? 'bg-background shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',

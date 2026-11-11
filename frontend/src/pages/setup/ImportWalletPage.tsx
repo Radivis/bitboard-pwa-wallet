@@ -129,10 +129,10 @@ export function ImportWalletPage() {
                   onChange={(e) => setMnemonicInput(e.target.value)}
                   placeholder="Enter your seed words separated by spaces..."
                   rows={4}
-                  className="font-mono"
+                  className="design-type-addresses"
                   disabled={restoreMutation.isPending}
                 />
-                <div className="flex items-center gap-2 text-xs">
+                <div className="design-type-regular flex items-center gap-2">
                   <span className="text-muted-foreground">
                     {wordCount} / {wordCount > 12 ? 24 : 12} words
                   </span>

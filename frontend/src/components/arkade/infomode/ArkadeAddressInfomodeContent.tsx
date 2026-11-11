@@ -20,7 +20,7 @@ export function ArkadeAddressInfomodeContent() {
       </InfomodeParagraph>
       <InfomodeParagraph>
         See{' '}
-        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitboard Wallet</ArticleLink>
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitcoin Codex</ArticleLink>
         {' '}for how Arkade addresses differ from bc1 and boarding addresses.
       </InfomodeParagraph>
     </div>

@@ -22,7 +22,7 @@ test.describe('Receive Page', () => {
 
     const addressDisplay = page
       .locator('[data-infomode-id="receive-receiving-address-card"]')
-      .locator('.font-mono')
+      .locator('.design-type-addresses:not(input):not(textarea):not(select)')
     await expect(addressDisplay).toBeVisible({ timeout: 10000 })
     const addressText = await addressDisplay.textContent()
     expect(addressText).toBeTruthy()

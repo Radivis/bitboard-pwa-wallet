@@ -1,9 +1,17 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
+import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi, Tag, Link as LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { ConfirmationDialog } from '@/components/ConfirmationDialog'
+import { DesignButton } from '@/components/design/DesignButton'
+import { designDestructiveIconClassName } from '@/components/design/design-classes'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -100,8 +108,9 @@ function RenameLightningWalletDialog({
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor={`ln-rename-${wallet.id}`}>Label</Label>
-          <Input
+          <DesignInput
             id={`ln-rename-${wallet.id}`}
+            leadingIcon={Tag}
             value={draftLabel}
             maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
             onChange={(e) => setDraftLabel(e.target.value)}
@@ -109,24 +118,22 @@ function RenameLightningWalletDialog({
           />
         </div>
         <DialogFooter>
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             onClick={() => onOpenChange(false)}
             disabled={savePending}
           >
             Cancel
-          </Button>
-          <Button type="button" disabled={!canSave} onClick={() => void handleSave()}>
-            {savePending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              'Save'
-            )}
-          </Button>
+          </DesignButton>
+          <DesignButton
+            type="button"
+            disabled={!canSave}
+            onClick={() => void handleSave()}
+            icon={savePending ? <Loader2 className="animate-spin" /> : undefined}
+          >
+            {savePending ? 'Saving…' : 'Save'}
+          </DesignButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -145,6 +152,7 @@ function WalletRow({
   onRemove: () => void
 }) {
   const [renameOpen, setRenameOpen] = useState(false)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const balanceQuery = useLnWalletBalanceQuery({
     connectionId: wallet.id,
     walletId: wallet.walletId,
@@ -169,25 +177,25 @@ function WalletRow({
           onClick={onSetActive}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">{wallet.label}</p>
-            <Badge variant="outline" className="text-xs">
+            <p className="design-type-emphasis">{wallet.label}</p>
+            <Badge variant="outline" className="design-type-regular">
               {NETWORK_LABELS[wallet.networkMode]}
             </Badge>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="design-type-regular">
               {walletTypeBadgeLabel(wallet.config.type)}
             </Badge>
             {isActive && (
-              <Badge variant="default" className="text-xs">
+              <Badge variant="default" className="design-type-regular">
                 Active
               </Badge>
             )}
             {showNetworkMismatch && (
-              <Badge variant="destructive" className="text-xs">
+              <Badge variant="destructive" className="design-type-regular">
                 Probable network mismatch
               </Badge>
             )}
           </div>
-          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+          <div className="design-type-regular flex flex-col gap-0.5 text-muted-foreground">
             {balanceQuery.isPending ? (
               <span className="flex items-center gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -198,8 +206,10 @@ function WalletRow({
             ) : (
               <>
                 <span>
-                  {balanceQuery.data.balanceSats.toLocaleString()}{' '}
-                  {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
+                  <span className="design-type-addresses tabular-nums">
+                    {balanceQuery.data.balanceSats.toLocaleString()}{' '}
+                    {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
+                  </span>
                   {balanceQuery.data.isStaleBalance ? (
                     <span className="ml-1.5 text-amber-700 dark:text-amber-400">
                       (cached)
@@ -208,7 +218,7 @@ function WalletRow({
                 </span>
                 {balanceQuery.data.isStaleBalance &&
                   balanceQuery.data.balanceSnapshotAt != null && (
-                    <span className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
+                    <span className="design-type-regular text-amber-700/90 dark:text-amber-400/90">
                       Last saved in this app:{' '}
                       {new Date(
                         balanceQuery.data.balanceSnapshotAt,
@@ -220,12 +230,12 @@ function WalletRow({
           </div>
         </button>
         {showNetworkMismatch && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="design-type-regular text-amber-700 dark:text-amber-400">
             The Lightning wallet&apos;s block height differs from your Esplora
             tip by more than {NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE} blocks. Confirm
             this NWC wallet runs on the same chain as the Esplora endpoint for{' '}
             {NETWORK_LABELS[wallet.networkMode]} in{' '}
-            <Link to="/settings" className="font-medium underline">
+            <Link to="/settings" className="design-type-emphasis underline">
               Settings
             </Link>
             .
@@ -233,33 +243,42 @@ function WalletRow({
         )}
       </div>
       <div className="flex shrink-0 gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
+        <DesignButton
+          appearance="tertiary"
           onClick={(e) => {
             e.stopPropagation()
             setRenameOpen(true)
           }}
           aria-label={`Rename ${wallet.label}`}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
+          icon={<Pencil />}
+        />
+        <DesignButton
+          appearance="tertiary"
           onClick={(e) => {
             e.stopPropagation()
-            onRemove()
+            setRemoveConfirmOpen(true)
           }}
           aria-label={`Remove ${wallet.label}`}
-        >
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
+          icon={<Trash2 className={designDestructiveIconClassName} />}
+        />
       </div>
       <RenameLightningWalletDialog
         wallet={wallet}
         open={renameOpen}
         onOpenChange={setRenameOpen}
+      />
+      <ConfirmationDialog
+        open={removeConfirmOpen}
+        title={`Remove ${wallet.label}?`}
+        message={`This disconnects the NWC wallet “${wallet.label}” from Bitboard on this device. Funds stay in that Lightning wallet. You can connect it again with its connection string.`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={() => {
+          setRemoveConfirmOpen(false)
+          onRemove()
+        }}
+        onCancel={() => setRemoveConfirmOpen(false)}
       />
     </div>
   )
@@ -321,20 +340,18 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
-      <h4 className="text-sm font-medium">Connect Lightning Wallet</h4>
+      <h4 className="design-type-emphasis">Connect Lightning Wallet</h4>
 
       <div className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Label className="design-type-regular text-muted-foreground">Type</Label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
             <InfomodeWrapper
               infoId="connect-lightning-nwc-type"
               infoComponent={NwcWalletOptionsInfomodeContent}
               className="min-w-0 w-full sm:flex-1"
             >
-              <Button
-                variant="default"
-                size="sm"
+              <DesignButton
                 className="w-full"
                 type="button"
                 disabled={!isInfomodeActive}
@@ -350,7 +367,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
                 }
               >
                 NWC
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
             <InfomodeWrapper
               infoId="connect-lightning-app-internal-type"
@@ -358,9 +375,8 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
               infoText="This mode will implement a fully Bitboard-internal Lightning wallet: channels and keys live in the app instead of an external wallet over NWC. That can be a simple way to get started with everything in one place, but the caveats are serious. Lightning requires you to react to certain on-chain events in time; without connecting to a watchtower service that monitors the chain on your behalf, you would need to log into Bitboard on your own about once a day to review and act on time-critical transactions—until watchtower support exists or you use another connection mode."
               className="min-w-0 w-full sm:flex-1"
             >
-              <Button
-                variant="outline"
-                size="sm"
+              <DesignButton
+                appearance="secondary"
                 className="w-full"
                 type="button"
                 disabled={!isInfomodeActive}
@@ -376,15 +392,16 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
                 }
               >
                 App-internal node (coming soon)
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
           </div>
         </div>
 
         <div className="space-y-1">
           <Label htmlFor="nwc-connection-string">NWC Connection String</Label>
-          <Input
+          <DesignInput
             id="nwc-connection-string"
+            leadingIcon={LinkIcon}
             value={connectionString}
             maxLength={MAX_NWC_CONNECTION_STRING_LENGTH}
             onChange={(e) => {
@@ -394,7 +411,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
             placeholder="nostr+walletconnect://..."
           />
           {connectionString.trim().length > 0 && !connectionStringValid && (
-            <p className="text-xs text-destructive">
+            <p className="design-type-regular text-destructive">
               Must start with nostr+walletconnect://
             </p>
           )}
@@ -402,11 +419,11 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
         {testSucceeded && testMutation.data.ok && (
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <div className="design-type-regular flex items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle className="h-4 w-4" />
               Connected to &ldquo;{testMutation.data.walletName}&rdquo;
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Network reported by wallet:{' '}
               {NETWORK_LABELS[testMutation.data.lightningNetworkMode]}
             </p>
@@ -415,8 +432,9 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
         <div className="space-y-1">
           <Label htmlFor="ln-wallet-label">Label</Label>
-          <Input
+          <DesignInput
             id="ln-wallet-label"
+            leadingIcon={Tag}
             value={label}
             maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
             onChange={(e) => setLabel(e.target.value)}
@@ -424,13 +442,13 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           />
         </div>
         {testMutation.isSuccess && !testMutation.data.ok && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
+          <div className="design-type-regular flex items-center gap-2 text-destructive">
             <XCircle className="h-4 w-4" />
             {testMutation.data.error}
           </div>
         )}
         {testMutation.isError && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
+          <div className="design-type-regular flex items-center gap-2 text-destructive">
             <XCircle className="h-4 w-4" />
             {testMutation.error instanceof Error
               ? testMutation.error.message
@@ -439,31 +457,28 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
         )}
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
+          <DesignButton
+            appearance="secondary"
             className="flex-1"
             onClick={handleTestConnection}
             disabled={!canTest || testMutation.isPending}
+            icon={
+              testMutation.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Wifi />
+              )
+            }
           >
-            {testMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Testing...
-              </>
-            ) : (
-              <>
-                <Wifi className="mr-2 h-4 w-4" />
-                Test Connection
-              </>
-            )}
-          </Button>
-          <Button
+            {testMutation.isPending ? 'Testing...' : 'Test Connection'}
+          </DesignButton>
+          <DesignButton
             className="flex-1"
             disabled={!canSave}
             onClick={handleSave}
           >
             Save
-          </Button>
+          </DesignButton>
         </div>
       </div>
     </div>
@@ -498,17 +513,17 @@ export function LightningWallets() {
       infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them. With Infomode on, tap the NWC type control in Connect Lightning Wallet to open a short guide with links to Library articles on popular NWC wallets, or tap App-internal node (coming soon) to read about the planned in-app Lightning mode and its risks."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
             Lightning Wallets
-          </CardTitle>
-          <CardDescription>
+          </DesignCardTitle>
+          <DesignCardDescription>
             Manage Lightning wallet connections for this Bitcoin wallet.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-4">
           {hasConnections && (
             <div className="space-y-2">
               {connections.map((wallet) => (
@@ -542,7 +557,7 @@ export function LightningWallets() {
 
           {!hasConnections && !showConnectForm && (
             <div className="space-y-3 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 No Lightning wallet connected yet. Connect one via NWC to start
                 sending and receiving Lightning payments.
               </p>
@@ -554,17 +569,17 @@ export function LightningWallets() {
               onConnected={() => setShowConnectForm(false)}
             />
           ) : (
-            <Button
-              variant="outline"
+            <DesignButton
+              appearance="secondary"
               className="w-full"
               onClick={() => setShowConnectForm(true)}
+              icon={<Zap />}
             >
-              <Zap className="mr-2 h-4 w-4" />
               Connect Lightning Wallet
-            </Button>
+            </DesignButton>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

@@ -12,9 +12,9 @@ export function ArkadeExitInfomodeContent() {
       <InfomodeHeading>Exit to on-chain</InfomodeHeading>
       <InfomodeParagraph>
         Exiting moves Arkade funds back to a normal Bitcoin bc1 address.{' '}
-        <strong className="font-medium text-popover-foreground">Collaborative exit</strong> uses the
+        <strong className="design-type-emphasis text-popover-foreground">Collaborative exit</strong> uses the
         Arkade operator—faster and usually cheaper.{' '}
-        <strong className="font-medium text-popover-foreground">Unilateral exit</strong> works
+        <strong className="design-type-emphasis text-popover-foreground">Unilateral exit</strong> works
         without the operator but needs on-chain fee transactions and a wait for timelocks.
       </InfomodeParagraph>
       <InfomodeParagraph>

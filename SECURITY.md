@@ -1,6 +1,6 @@
 # Security policy
 
-Bitboard Wallet is a **non-custodial**, **educational** Bitcoin wallet shipped as a Progressive Web App. It is still in active development; do not assume it is production-hardened. This document explains how to **report security vulnerabilities** in this repository.
+Bitcoin Codex is a **non-custodial**, **educational** Bitcoin wallet shipped as a Progressive Web App. It is still in active development; do not assume it is production-hardened. This document explains how to **report security vulnerabilities** in this repository.
 
 There is **no separate monitored security email**. Use GitHub only (see below).
 
@@ -20,7 +20,7 @@ Do **not** file public issues for undisclosed security bugs. Do **not** post exp
 - Clear **steps to reproduce** and a concise **impact** assessment (e.g. key exposure, unauthorized spend, cross-wallet data leak).
 - Optional: suggested fix or references.
 
-Avoid testing against **other people’s wallets** or **mainnet funds** without permission; prefer testnet, signet, lab mode, or a local setup where possible.
+Avoid testing against **other people’s wallets** or **mainnet funds** without permission; prefer testnet, signet, Labnet, or a local setup where possible.
 
 ### What to expect
 

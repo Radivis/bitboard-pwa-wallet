@@ -1,0 +1,657 @@
+/* Design-system colors. Consumed by components in frontend/src/components/design and infomode. */
+
+/* Neutral (data-palette="neutral") is last so a locked or missing wallet wins over data-network. */
+
+:root {
+  --design-font-ui: "Plus Jakarta Sans", sans-serif;
+  --design-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --design-background: #F7F8F9;
+  --design-elevation-drawer: #E9EDF299;
+  --design-elevation-nav-bar: #E9EDF2b3;
+  --design-elevation-1: #EFF2F5;
+  --design-elevation-2: #E9EDF2;
+  --design-elevation-3: #E2E7EE;
+  --design-elevation-4: #DCE2EA;
+  --design-text-regular: #000000;
+  --design-text-subdued: #333A42;
+  --design-special-infomode-highlight: #4079BF99;
+  --design-special-bitcoin: #F7931A;
+  --design-special-bitcoin-stroke: #362817;
+  --design-special-destructive: #FF1500;
+  --design-special-destructive-background: #FF150080;
+  --design-special-destructive-background-hover: #FF15006B;
+  --design-special-destructive-background-active: #FF150057;
+  --design-text-regular-bright: #F7F8F9;
+  --design-text-button: #000000;
+  --design-text-button-hover: #1A1A1A;
+  --design-text-button-active: #333333;
+  --design-text-button-disabled: #6F6F6F;
+  --design-text-button-primary-disabled: #262626;
+  --design-text-button-tertiary-disabled: #6F6F6F;
+  --design-text-card-title: #192222;
+  --design-text-card-description: #334242;
+  --design-surface-card: #EFF1F5;
+  --design-stroke-card: #DFE8E8e6;
+  --design-input-enabled-background: #0000001f;
+  --design-input-disabled-background: #0000000a;
+  --design-input-placeholder: #575757;
+  --design-input-content: #000000;
+  --design-nav-background: #0000000a;
+  --design-nav-background-hover: #00000014;
+  --design-nav-background-active: #0000001f;
+  --design-nav-background-selected: #00000033;
+  --design-nav-stroke: #0000001a;
+  --design-tag-stroke: #00000033;
+  --design-stroke-tertiary: #00000033;
+  --design-stroke-tertiary-hover: #1A1A1A33;
+  --design-stroke-tertiary-active: #33333333;
+  --design-stroke-tertiary-disabled: #6F6F6F1A;
+  --design-wallet-group-stroke: #00000040;
+  --design-drawer-surface: #F7F8F9cc;
+  --design-drawer-track: #0000000a;
+  --design-drawer-divider: #00000014;
+  --design-drawer-label: #6B7280;
+  --design-status-success-surface: #F0FDF7;
+  --design-status-success-foreground: #0A7F4A;
+  --design-status-success-description: #065F37;
+  --design-status-success-stroke: #0A7F4A40;
+  --design-status-error-surface: #FEF2F2;
+  --design-status-error-foreground: #C91D1D;
+  --design-status-error-description: #991B1B;
+  --design-status-error-stroke: #C91D1D40;
+  --design-status-warning-surface: #F9EDD2;
+  --design-status-warning-foreground: #866313;
+  --design-status-warning-description: #59420D;
+  --design-status-warning-stroke: #86631340;
+  --design-status-info-surface: #D2F7F9;
+  --design-status-info-foreground: #11787D;
+  --design-status-info-description: #0B4D50;
+  --design-status-info-stroke: #11787D40;
+  --design-status-risk-surface: #FCE8F1;
+  --design-status-risk-foreground: #C91C6A;
+  --design-status-risk-description: #9C1753;
+  --design-status-risk-stroke: #C91C6A40;
+  --design-focus-ring: #739ED4;
+  --design-accent-primary: #F7931A;
+  --design-accent-secondary: #A85E06;
+  --design-accent-secondary-stroke: #A85E0680;
+  --design-accent-primary-hover: #EF8708;
+  --design-accent-secondary-hover: #8F5005;
+  --design-accent-secondary-stroke-hover: #8F500580;
+  --design-accent-primary-active: #D77907;
+  --design-accent-secondary-active: #774204;
+  --design-accent-secondary-stroke-active: #77420480;
+  --design-accent-primary-disabled: #9F8B72;
+  --design-accent-secondary-disabled: #675847;
+  --design-accent-secondary-stroke-disabled: #67584780;
+}
+
+.dark {
+  --design-background: #040404;
+  --design-elevation-drawer: #12141799;
+  --design-elevation-nav-bar: #121417b3;
+  --design-elevation-1: #0D0F11;
+  --design-elevation-2: #121417;
+  --design-elevation-3: #16191D;
+  --design-elevation-4: #1B1E22;
+  --design-text-regular: #E4E5E7;
+  --design-text-subdued: #B8BEC6;
+  --design-special-infomode-highlight: #4079BF99;
+  --design-special-bitcoin: #F7931A;
+  --design-special-bitcoin-stroke: #36281700;
+  --design-special-destructive: #FF1500;
+  --design-special-destructive-background: #FF150080;
+  --design-special-destructive-background-hover: #FF15006B;
+  --design-special-destructive-background-active: #FF150057;
+  --design-text-regular-bright: #F7F8F9;
+  --design-text-button: #000000;
+  --design-text-button-hover: #D8D8D8;
+  --design-text-button-active: #CCCCCC;
+  --design-text-button-disabled: #919191;
+  --design-text-button-primary-disabled: #1E1E1E;
+  --design-text-button-tertiary-disabled: #919191;
+  --design-text-card-title: #E4E5E7;
+  --design-text-card-description: #B8BFC6;
+  --design-surface-card: #090A0B;
+  --design-stroke-card: #DFE8E8e6;
+  --design-input-enabled-background: #FFFFFF1f;
+  --design-input-disabled-background: #FFFFFF0a;
+  --design-input-placeholder: #8C8C8C;
+  --design-input-content: #E4E5E7;
+  --design-nav-background: #FFFFFF0a;
+  --design-nav-background-hover: #FFFFFF14;
+  --design-nav-background-active: #FFFFFF1f;
+  --design-nav-background-selected: #FFFFFF33;
+  --design-nav-stroke: #FFFFFF1a;
+  --design-tag-stroke: #FFFFFF33;
+  --design-stroke-tertiary: #E4E5E71F;
+  --design-stroke-tertiary-hover: #D8D8D81F;
+  --design-stroke-tertiary-active: #CCCCCC1F;
+  --design-stroke-tertiary-disabled: #9191910F;
+  --design-wallet-group-stroke: #ffffff40;
+  --design-drawer-surface: #0D0F11cc;
+  --design-drawer-track: #ffffff0a;
+  --design-drawer-divider: #ffffff14;
+  --design-drawer-label: #6B7280;
+  --design-status-success-surface: #04150E;
+  --design-status-success-foreground: #219C64;
+  --design-status-success-description: #25C17B;
+  --design-status-success-stroke: #219C6440;
+  --design-status-error-surface: #150404;
+  --design-status-error-foreground: #EF3434;
+  --design-status-error-description: #F26363;
+  --design-status-error-stroke: #EF343440;
+  --design-status-warning-surface: #241B05;
+  --design-status-warning-foreground: #E5A819;
+  --design-status-warning-description: #EBBA47;
+  --design-status-warning-stroke: #E5A81940;
+  --design-status-info-surface: #072122;
+  --design-status-info-foreground: #28B6BD;
+  --design-status-info-description: #57D5DB;
+  --design-status-info-stroke: #28B6BD40;
+  --design-status-risk-surface: #1B040E;
+  --design-status-risk-foreground: #D74285;
+  --design-status-risk-description: #E06CA0;
+  --design-status-risk-stroke: #D7428540;
+  --design-focus-ring: #56779F;
+  --design-accent-primary: #B96E13;
+  --design-accent-secondary: #EA952F;
+  --design-accent-secondary-stroke: #EA952F80;
+  --design-accent-primary-hover: #A26011;
+  --design-accent-secondary-hover: #E88918;
+  --design-accent-secondary-stroke-hover: #E8891880;
+  --design-accent-primary-active: #8B530E;
+  --design-accent-secondary-active: #D17C15;
+  --design-accent-secondary-stroke-active: #D17C1580;
+  --design-accent-primary-disabled: #776855;
+  --design-accent-secondary-disabled: #9F8E7A;
+  --design-accent-secondary-stroke-disabled: #9F8E7A80;
+}
+
+:root[data-network="mainnet"] {
+  --design-accent-primary: #F7931A;
+  --design-accent-secondary: #A85E06;
+  --design-accent-secondary-stroke: #A85E0680;
+  --design-accent-primary-hover: #EF8708;
+  --design-accent-secondary-hover: #8F5005;
+  --design-accent-secondary-stroke-hover: #8F500580;
+  --design-accent-primary-active: #D77907;
+  --design-accent-secondary-active: #774204;
+  --design-accent-secondary-stroke-active: #77420480;
+  --design-accent-primary-disabled: #9F8B72;
+  --design-accent-secondary-disabled: #675847;
+  --design-accent-secondary-stroke-disabled: #67584780;
+}
+
+:root[data-network="testnet"],
+:root[data-network="signet"] {
+  --design-accent-primary: #1CB524;
+  --design-accent-secondary: #0E5D12;
+  --design-accent-secondary-stroke: #0E5D1280;
+  --design-accent-primary-hover: #199F20;
+  --design-accent-secondary-hover: #0B470E;
+  --design-accent-secondary-stroke-hover: #0B470E80;
+  --design-accent-primary-active: #15891B;
+  --design-accent-secondary-active: #073109;
+  --design-accent-secondary-stroke-active: #07310980;
+  --design-accent-primary-disabled: #59785B;
+  --design-accent-secondary-disabled: #2E3D2E;
+  --design-accent-secondary-stroke-disabled: #2E3D2E80;
+}
+
+:root[data-network="lab"],
+:root[data-network="regtest"] {
+  --design-accent-primary: #E765E0;
+  --design-accent-secondary: #C71FBE;
+  --design-accent-secondary-stroke: #C71FBE80;
+  --design-accent-primary-hover: #E44FDC;
+  --design-accent-secondary-hover: #B11CA9;
+  --design-accent-secondary-stroke-hover: #B11CA980;
+  --design-accent-primary-active: #E039D7;
+  --design-accent-secondary-active: #9B1894;
+  --design-accent-secondary-stroke-active: #9B189480;
+  --design-accent-primary-disabled: #B399B2;
+  --design-accent-secondary-disabled: #846282;
+  --design-accent-secondary-stroke-disabled: #84628280;
+}
+
+:root[data-palette="neutral"] {
+  --design-accent-primary: #739ED4;
+  --design-accent-secondary: #356AAC;
+  --design-accent-secondary-stroke: #356AAC80;
+  --design-accent-primary-hover: #5F90CE;
+  --design-accent-secondary-hover: #2F5E99;
+  --design-accent-secondary-stroke-hover: #2F5E9980;
+  --design-accent-primary-active: #4C83C8;
+  --design-accent-secondary-active: #295285;
+  --design-accent-secondary-stroke-active: #29528580;
+  --design-accent-primary-disabled: #9AA2AD;
+  --design-accent-secondary-disabled: #656F7C;
+  --design-accent-secondary-stroke-disabled: #656F7C80;
+}
+
+.dark[data-network="mainnet"] {
+  --design-accent-primary: #B96E13;
+  --design-accent-secondary: #EA952F;
+  --design-accent-secondary-stroke: #EA952F80;
+  --design-accent-primary-hover: #A26011;
+  --design-accent-secondary-hover: #E88918;
+  --design-accent-secondary-stroke-hover: #E8891880;
+  --design-accent-primary-active: #8B530E;
+  --design-accent-secondary-active: #D17C15;
+  --design-accent-secondary-stroke-active: #D17C1580;
+  --design-accent-primary-disabled: #776855;
+  --design-accent-secondary-disabled: #9F8E7A;
+  --design-accent-secondary-stroke-disabled: #9F8E7A80;
+}
+
+.dark[data-network="testnet"],
+.dark[data-network="signet"] {
+  --design-accent-primary: #15881B;
+  --design-accent-secondary: #1EC226;
+  --design-accent-secondary-stroke: #1EC22680;
+  --design-accent-primary-hover: #127217;
+  --design-accent-secondary-hover: #1BAC22;
+  --design-accent-secondary-stroke-hover: #1BAC2280;
+  --design-accent-primary-active: #0E5C12;
+  --design-accent-secondary-active: #17961D;
+  --design-accent-secondary-stroke-active: #17961D80;
+  --design-accent-primary-disabled: #435A44;
+  --design-accent-secondary-disabled: #608061;
+  --design-accent-secondary-stroke-disabled: #60806180;
+}
+
+.dark[data-network="lab"],
+.dark[data-network="regtest"] {
+  --design-accent-primary: #AD4BA8;
+  --design-accent-secondary: #D194CE;
+  --design-accent-secondary-stroke: #D194CE80;
+  --design-accent-primary-hover: #9B4397;
+  --design-accent-secondary-hover: #C982C6;
+  --design-accent-secondary-stroke-hover: #C982C680;
+  --design-accent-primary-active: #893C85;
+  --design-accent-secondary-active: #C270BE;
+  --design-accent-secondary-stroke-active: #C270BE80;
+  --design-accent-primary-disabled: #867285;
+  --design-accent-secondary-disabled: #B9ACB8;
+  --design-accent-secondary-stroke-disabled: #B9ACB880;
+}
+
+.dark[data-palette="neutral"] {
+  --design-accent-primary: #56779F;
+  --design-accent-secondary: #95ABC6;
+  --design-accent-secondary-stroke: #95ABC680;
+  --design-accent-primary-hover: #4D6B8E;
+  --design-accent-secondary-hover: #849EBD;
+  --design-accent-secondary-stroke-hover: #849EBD80;
+  --design-accent-primary-active: #445E7E;
+  --design-accent-secondary-active: #7491B4;
+  --design-accent-secondary-stroke-active: #7491B480;
+  --design-accent-primary-disabled: #737A82;
+  --design-accent-secondary-disabled: #A9ADB2;
+  --design-accent-secondary-stroke-disabled: #A9ADB280;
+}
+
+.design-ui {
+  font-family: var(--design-font-ui);
+}
+.design-mono {
+  font-family: var(--design-font-mono);
+}
+
+/* Legal type from the Basics typography frame. Sizes are the sample labels. */
+.design-type-metadata {
+  font-family: var(--design-font-ui);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+.design-type-regular,
+.design-toaster [data-sonner-toast] [data-description] {
+  font-family: var(--design-font-ui);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 400;
+  /* Figma Regular letter spacing is -2% of the font size. */
+  letter-spacing: -0.02em;
+}
+.design-type-addresses,
+.design-type-small-balances {
+  font-family: var(--design-font-mono);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.design-type-large-balances {
+  font-family: var(--design-font-mono);
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.design-type-button,
+.design-type-emphasis,
+.design-toaster [data-sonner-toast] [data-title],
+.design-toaster [data-sonner-toast] [data-action] {
+  font-family: var(--design-font-ui);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.design-type-screen-heading,
+.design-type-large-button {
+  font-family: var(--design-font-ui);
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.design-type-area-heading {
+  font-family: var(--design-font-ui);
+  font-size: 27px;
+  line-height: 32px;
+  font-weight: 700;
+}
+.design-type-hero {
+  font-family: var(--design-font-ui);
+  font-size: 35px;
+  line-height: 40px;
+  font-weight: 800;
+}
+/* Compact nav: metadata below the md breakpoint, button from 48rem. */
+.design-type-compact-nav {
+  font-family: var(--design-font-ui);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+@media (min-width: 48rem) {
+  .design-type-compact-nav {
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 600;
+  }
+}
+
+[data-slot="design-banner"][data-status="success"],
+[data-slot="design-toast"][data-status="success"],
+.design-toaster [data-sonner-toast][data-type="success"] {
+  background: var(--design-status-success-surface);
+  color: var(--design-status-success-foreground);
+  border-color: var(--design-status-success-stroke);
+}
+[data-slot="design-banner"][data-status="success"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="success"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="success"] [data-description] {
+  color: var(--design-status-success-description);
+}
+[data-slot="design-banner"][data-status="error"],
+[data-slot="design-toast"][data-status="error"],
+.design-toaster [data-sonner-toast][data-type="error"] {
+  background: var(--design-status-error-surface);
+  color: var(--design-status-error-foreground);
+  border-color: var(--design-status-error-stroke);
+}
+[data-slot="design-banner"][data-status="error"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="error"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="error"] [data-description] {
+  color: var(--design-status-error-description);
+}
+[data-slot="design-banner"][data-status="warning"],
+[data-slot="design-toast"][data-status="warning"],
+.design-toaster [data-sonner-toast][data-type="warning"] {
+  background: var(--design-status-warning-surface);
+  color: var(--design-status-warning-foreground);
+  border-color: var(--design-status-warning-stroke);
+}
+[data-slot="design-banner"][data-status="warning"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="warning"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="warning"] [data-description] {
+  color: var(--design-status-warning-description);
+}
+[data-slot="design-banner"][data-status="info"],
+[data-slot="design-toast"][data-status="info"],
+.design-toaster [data-sonner-toast][data-type="info"],
+.design-toaster [data-sonner-toast][data-type="loading"],
+.design-toaster [data-sonner-toast]:not([data-type]) {
+  background: var(--design-status-info-surface);
+  color: var(--design-status-info-foreground);
+  border-color: var(--design-status-info-stroke);
+}
+[data-slot="design-banner"][data-status="info"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="info"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="info"] [data-description],
+.design-toaster [data-sonner-toast][data-type="loading"] [data-description],
+.design-toaster [data-sonner-toast]:not([data-type]) [data-description] {
+  color: var(--design-status-info-description);
+}
+[data-slot="design-banner"][data-status="risk"],
+[data-slot="design-toast"][data-status="risk"] {
+  background: var(--design-status-risk-surface);
+  color: var(--design-status-risk-foreground);
+  border-color: var(--design-status-risk-stroke);
+}
+[data-slot="design-banner"][data-status="risk"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="risk"] [data-slot="design-status-description"] {
+  color: var(--design-status-risk-description);
+}
+
+/* Unstyled Sonner toasts share DesignToast layout. Status color comes from the rules above. */
+.design-toaster [data-sonner-toast] {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: var(--width);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 16px;
+  padding: 0.5rem 1rem;
+  font-family: var(--design-font-ui);
+}
+
+.design-toaster [data-sonner-toast] [data-content] {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.design-toaster [data-sonner-toast] [data-icon] {
+  display: flex;
+  flex-shrink: 0;
+  align-self: center;
+  align-items: center;
+}
+
+.design-toaster [data-sonner-toast] [data-icon] svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.design-toaster [data-sonner-toast] .sonner-loader {
+  position: static;
+  inset: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  transform: none;
+}
+
+/* Beat Sonner's dark-theme close-button color so the mark matches the status icon. */
+.design-toaster[data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button] {
+  order: 1;
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.design-toaster[data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button] svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: inherit;
+}
+
+.design-toaster [data-sonner-toast] [data-action] {
+  flex-shrink: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--design-accent-secondary);
+  cursor: pointer;
+}
+
+/* Elevation shadows match Basics / elevation-patterns. Light and dark share each stack: two drop shadows and an inner shadow. Elevation 2 is the nested-card step. */
+[data-slot="design-card"] {
+  --design-card-shadow:
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+}
+
+[data-slot="design-card"][data-elevation="2"] {
+  --design-card-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+}
+
+/*
+ * Card-Button. Default, hover, and active each keep their own outer drop
+ * shadows and inner shadow. The fill steps through elevation 1, 2, and 3.
+ * Shadows are set here so a Tailwind shadow or ring utility cannot drop a layer.
+ */
+[data-slot="design-card-button"] {
+  background: var(--design-elevation-1);
+  color: var(--design-text-regular);
+  --design-card-button-shadow:
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+  box-shadow: var(--design-card-button-shadow);
+}
+
+[data-slot="design-card-button"]:hover {
+  background: var(--design-elevation-2);
+  --design-card-button-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+}
+
+[data-slot="design-card-button"]:active {
+  background: var(--design-elevation-3);
+  --design-card-button-shadow:
+    0 5px 12px 0 rgb(0 0 0 / 0.25),
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
+}
+
+[data-slot="design-card-button"]:focus-visible {
+  box-shadow: var(--design-card-button-shadow), 0 0 0 2px var(--design-focus-ring);
+}
+
+/* Set on the element, not through a Tailwind shadow utility. DialogContent also
+   applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
+[data-slot="design-modal"] {
+  box-shadow:
+    0 5px 14px 0 rgb(0 0 0 / 0.25),
+    0 6px 10px 4px rgb(0 0 0 / 0.15),
+    inset 0 4px 13px 0 rgb(220 219 224 / 0.08);
+}
+
+/*
+ * Info-Popup. Shadow is set here, not with a Tailwind shadow utility, so every
+ * layer stays: the elevation 3 drop shadows, the infomode glow, and the inner shadow.
+ * The content root uses display: contents, so the heading and the close button
+ * share the first row and the body spans the full width.
+ */
+[data-infomode-popup] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 8px;
+  align-items: center;
+  box-sizing: border-box;
+  width: min(calc(100vw - 2rem), 394px);
+  max-height: min(50vh, 24rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 24px 24px;
+  border-radius: 20px;
+  background: var(--design-elevation-3);
+  color: var(--design-text-subdued);
+  /* The fill stays slightly see-through so covered controls remain visible. */
+  opacity: 0.9;
+  box-shadow:
+    0 5px 12px 0 rgb(0 0 0 / 0.25),
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    0 0 8px 8px var(--design-special-infomode-highlight),
+    inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
+}
+
+[data-infomode-popup] > button {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--design-text-regular);
+  cursor: pointer;
+}
+
+[data-infomode-popup] > button svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+[data-infomode-popup] .contents > :first-child {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  min-width: 0;
+}
+
+[data-infomode-popup] .contents > :not(:first-child) {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  min-width: 0;
+}
+
+[data-infomode-popup] :is(h2, strong) {
+  color: var(--design-text-regular);
+}
+
+[data-infomode-popup] :is(p, li, h3) {
+  color: var(--design-text-subdued);
+}
+
+[data-infomode-popup] a {
+  color: var(--design-accent-secondary);
+  text-underline-offset: 2px;
+}
+
+[data-infomode-popup] a:hover {
+  text-decoration: underline;
+}

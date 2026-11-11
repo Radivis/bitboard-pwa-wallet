@@ -17,7 +17,7 @@ feature:
     - React components read lifecycle phase via useSyncExternalStore hooks in frontend/src/hooks (L5); not ad hoc getSnapshot in render
     - not-configured means rail inactive (feature off, unsupported network, or no setup) — not wallet locked
     - When a rail is not-configured, Load, Sync, and Save lifecycles for that rail are all not-configured (no mixed states)
-    - Lab network has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
+    - Labnet has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
     - load-error is rare persistence/decrypt failure; rail data must not be shown
     - sync-error serves last loaded local data with stale/error indication
     - While on-chain syncPhase is sync-error, exportChangesetForPersistence is blocked; network/address switch may proceed but skips outgoing changeset save

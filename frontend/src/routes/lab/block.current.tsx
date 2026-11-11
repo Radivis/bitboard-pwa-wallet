@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Hammer } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PageHeader } from '@/components/PageHeader'
 import {
   LabBlockHeaderCard,
@@ -65,10 +65,9 @@ function LabCurrentBlockPage() {
       <div className="space-y-4">
         <p className="text-muted-foreground">Could not build current block template.</p>
         <Link to="/lab/blocks" preload={false}>
-          <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <DesignButton appearance="secondary" icon={<ArrowLeft aria-hidden />}>
             Back to blocks
-          </Button>
+          </DesignButton>
         </Link>
       </div>
     )
@@ -78,9 +77,7 @@ function LabCurrentBlockPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Link to="/lab/blocks" preload={false}>
-          <Button variant="ghost" size="icon" aria-label="Back to blocks">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          <DesignButton appearance="tertiary" className="h-12 w-12 px-0" aria-label="Back to blocks" icon={<ArrowLeft aria-hidden />} />
         </Link>
         <PageHeader title="Current block template" icon={Hammer} />
       </div>

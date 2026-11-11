@@ -1,6 +1,7 @@
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
 
 interface ConfirmationDialogProps {
   open: boolean
@@ -23,28 +24,33 @@ export function ConfirmationDialog({
   onCancel,
   variant = 'default',
 }: ConfirmationDialogProps) {
+  const confirmButton =
+    variant === 'destructive' ? (
+      <DesignDestructiveButton type="button" onClick={onConfirm}>
+        {confirmText}
+      </DesignDestructiveButton>
+    ) : (
+      <DesignButton type="button" onClick={onConfirm}>
+        {confirmText}
+      </DesignButton>
+    )
+
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       title={title}
       onCancel={onCancel}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             {cancelText}
-          </Button>
-          <Button
-            type="button"
-            variant={variant === 'destructive' ? 'destructive' : 'default'}
-            onClick={onConfirm}
-          >
-            {confirmText}
-          </Button>
+          </DesignButton>
+          {confirmButton}
         </>
       )}
     >
       <DialogDescription className="text-left">{message}</DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

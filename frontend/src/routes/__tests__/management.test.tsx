@@ -159,14 +159,9 @@ describe('ManagementPage', () => {
     })
   })
 
-  it('lock wallet clears sensitive state', async () => {
-    const user = userEvent.setup()
+  it('does not render a lock wallet button', () => {
     renderWithProviders(<ManagementPage />)
-
-    await user.click(screen.getByRole('button', { name: 'Lock Wallet' }))
-    expect(mockLockWallet).toHaveBeenCalled()
-    expect(mockTerminateWorker).toHaveBeenCalled()
-    expect(mockClearSession).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Lock Wallet' })).not.toBeInTheDocument()
   })
 
   it('delete wallet with no mainnet balance deletes after first confirmation', async () => {

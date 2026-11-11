@@ -1,8 +1,9 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
 import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 
 export async function enableBarkFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
   const barkSwitch = page.getByRole('switch', { name: 'Enable Bark rail' })

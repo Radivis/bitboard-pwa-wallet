@@ -43,10 +43,10 @@ export function UnilateralExitAutomationSection(props: {
     <div className="rounded-md border p-4 space-y-4 md:col-span-2 xl:col-span-3" data-testid="unilateral-exit-automation-section">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Label htmlFor="unilateral-exit-proceed-automatically" className="text-sm font-medium">
+          <Label htmlFor="unilateral-exit-proceed-automatically" className="design-type-emphasis">
             Proceed automatically
           </Label>
-          <p className="text-xs text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Uses the selected fee rate degree (low, medium, or high) for each step. Automatic
             proceeding requires the app to be unlocked and this wallet to be selected. This process
             cannot be delegated.
@@ -78,7 +78,7 @@ export function UnilateralExitAutomationSection(props: {
       ) : null}
 
       {pausedReason != null && proceedAutomatically ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="unilateral-exit-automation-paused">
+        <p className="design-type-regular text-amber-700 dark:text-amber-400" data-testid="unilateral-exit-automation-paused">
           {PAUSED_REASON_LABELS[pausedReason]}
           {lastErrorMessage != null ? ` ${lastErrorMessage}` : ''}
         </p>

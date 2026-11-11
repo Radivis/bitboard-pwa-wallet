@@ -61,7 +61,7 @@ export const article: LibraryArticle = {
             requests. Settings shows a warning for this case.
           </li>
           <li>
-            <strong>Regtest and Lab:</strong> Esplora traffic stays local (for example{' '}
+            <strong>Regtest and Labnet:</strong> Esplora traffic stays local (for example{' '}
             <code>localhost</code>) or on your own regtest setup — not through the public proxy.
           </li>
         </ul>

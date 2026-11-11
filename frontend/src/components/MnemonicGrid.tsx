@@ -14,10 +14,10 @@ export function MnemonicGrid({ words, columns = 3 }: MnemonicGridProps) {
       {words.map((word, index) => (
         <Card key={index} className="py-2">
           <CardContent className="flex items-center gap-2 px-3 py-0">
-            <span className="min-w-6 text-xs font-medium text-muted-foreground">
+            <span className="design-type-metadata min-w-6 text-muted-foreground">
               {index + 1}.
             </span>
-            <span className="font-mono text-sm">{word}</span>
+            <span className="design-type-addresses">{word}</span>
           </CardContent>
         </Card>
       ))}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
@@ -47,7 +47,7 @@ export function EnterAppPasswordModal({
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       isModal
       onOpenChange={(nextOpen) => {
@@ -61,7 +61,6 @@ export function EnterAppPasswordModal({
           <span className="min-w-0">{title}</span>
         </>
       }
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => {
         if (isBusy) e.preventDefault()
       }}
@@ -89,7 +88,7 @@ export function EnterAppPasswordModal({
               autoFocus
             />
             {error ? (
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="design-type-regular text-destructive">{error}</p>
             ) : null}
           </div>
 
@@ -102,6 +101,6 @@ export function EnterAppPasswordModal({
           )}
         </form>
       </>
-    </AppModal>
+    </DesignModal>
   )
 }

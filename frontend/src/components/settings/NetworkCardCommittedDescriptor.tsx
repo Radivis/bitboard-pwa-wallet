@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Copy, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { useCommittedExternalDescriptor } from '@/hooks/useCommittedExternalDescriptor'
 import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import { useWalletStore } from '@/stores/walletStore'
@@ -56,55 +56,52 @@ export function NetworkCardCommittedDescriptor() {
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="text-sm font-medium leading-none text-foreground">Receiving descriptor</p>
+          <p className="design-type-emphasis text-foreground">Receiving descriptor</p>
           {walletUnlocked && query.data ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={handleRevealToggle}
               aria-label={
                 descriptorVisible ? 'Hide receiving descriptor' : 'Show receiving descriptor'
               }
               aria-pressed={descriptorVisible}
-            >
-              {descriptorVisible ? (
-                <EyeOff className="h-4 w-4" aria-hidden />
-              ) : (
-                <Eye className="h-4 w-4" aria-hidden />
-              )}
-            </Button>
+              icon={
+                descriptorVisible ? (
+                  <EyeOff aria-hidden />
+                ) : (
+                  <Eye aria-hidden />
+                )
+              }
+            />
           ) : !walletUnlocked ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={handleRevealToggle}
               aria-label="Unlock to show receiving descriptor"
-            >
-              <Eye className="h-4 w-4" aria-hidden />
-            </Button>
+              icon={<Eye aria-hidden />}
+            />
           ) : null}
         </div>
         {walletUnlocked && query.data && descriptorVisible ? (
-          <Button
+          <DesignButton
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 shrink-0 self-start px-2 sm:self-auto"
+            appearance="tertiary"
+            className="shrink-0 self-start sm:self-auto"
             onClick={handleCopyDescriptor}
             aria-label="Copy receiving descriptor"
+            icon={<Copy aria-hidden />}
           >
-            <Copy className="mr-1 h-4 w-4" aria-hidden />
             Copy
-          </Button>
+          </DesignButton>
         ) : null}
       </div>
 
       {!walletUnlocked ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Unlock your wallet to view the receiving descriptor.
           </p>
         ) : query.isPending ? (
@@ -113,19 +110,19 @@ export function NetworkCardCommittedDescriptor() {
             className="flex-row items-center justify-start gap-2 py-1 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4"
           />
         ) : query.isError ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Could not load the descriptor. Try unlocking again or return after a moment.
           </p>
         ) : query.data === null || query.data === '' ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             No saved descriptor for this network and address type yet.
           </p>
         ) : descriptorVisible ? (
-          <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
+          <p className="design-type-addresses break-all text-muted-foreground">
             {query.data}
           </p>
         ) : (
-          <p className="min-w-0 select-none break-all font-mono text-xs leading-relaxed text-muted-foreground/80">
+          <p className="design-type-addresses min-w-0 select-none break-all text-muted-foreground/80">
             <span aria-hidden>{'•'.repeat(48)}</span>
             <span className="sr-only">
               Receiving descriptor hidden. Use the show button next to the label to reveal it.

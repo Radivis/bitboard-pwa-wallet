@@ -1,5 +1,6 @@
+import { Coins } from 'lucide-react'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
 import type { MainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
 
@@ -38,9 +39,10 @@ export function SatsOrFiatAmountField({
   const fiatPriceUnavailable = fiat.mainnetFiatEntry && !fiat.hasUsableFiatSpot
 
   return (
-    <label className="block space-y-1 text-sm">
+    <label className="design-type-regular block space-y-1">
       <span>{fiat.mainnetFiatEntry ? fiatLabel : satsLabel}</span>
-      <Input
+      <DesignInput
+        leadingIcon={Coins}
         inputMode={fiat.mainnetFiatEntry ? 'decimal' : 'numeric'}
         value={amountRaw}
         placeholder={
@@ -52,7 +54,7 @@ export function SatsOrFiatAmountField({
         data-testid={inputTestId}
       />
       {useFiatField && parsedAmountSats != null ? (
-        <p className="text-sm text-muted-foreground" data-testid={btcPreviewTestId}>
+        <p className="design-type-regular text-muted-foreground" data-testid={btcPreviewTestId}>
           ≈{' '}
           <BitcoinAmountDisplay
             amountSats={parsedAmountSats}
@@ -63,7 +65,7 @@ export function SatsOrFiatAmountField({
         </p>
       ) : null}
       {fiatPriceUnavailable ? (
-        <p className="text-sm text-destructive" data-testid={priceUnavailableTestId}>
+        <p className="design-type-regular text-destructive" data-testid={priceUnavailableTestId}>
           {BITCOIN_PRICE_UNAVAILABLE_MESSAGE}
         </p>
       ) : null}

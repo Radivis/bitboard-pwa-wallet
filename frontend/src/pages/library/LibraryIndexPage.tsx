@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { List } from 'lucide-react'
+import { List, Search } from 'lucide-react'
+import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { PageHeader } from '@/components/PageHeader'
-import { Input } from '@/components/ui/input'
 import { listArticlesSortedByTitle } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 
@@ -26,20 +27,21 @@ export function LibraryIndexPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Library" icon={List} />
+      <PageHeader title="Library" icon={List} variant="area" />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
         browse by tag, favorites, or history.
       </p>
 
       <div className="space-y-2">
-        <label htmlFor="library-search" className="text-sm font-medium text-foreground">
+        <label htmlFor="library-search" className="design-type-emphasis text-foreground">
           Search
         </label>
-        <Input
+        <DesignInput
           id="library-search"
           type="search"
+          leadingIcon={Search}
           placeholder="Filter by title or tag…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -47,10 +49,14 @@ export function LibraryIndexPage() {
         />
       </div>
 
-      <LibraryArticleList
-        articles={articles}
-        emptyMessage="No articles match your search. Try a different term."
-      />
+      <DesignCard>
+        <DesignCardContent>
+          <LibraryArticleList
+            articles={articles}
+            emptyMessage="No articles match your search. Try a different term."
+          />
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

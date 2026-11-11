@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 
 interface MigrationFailureReportModalProps {
   isOpen: boolean
@@ -37,35 +37,34 @@ export function MigrationFailureReportModal({
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       title="Wallet upgrade failed"
       onCancel={() => onOpenChange(false)}
-      contentClassName="sm:max-w-2xl"
       footer={() => (
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
-          <Button type="button" variant="outline" onClick={handleCopy}>
+        <>
+          <DesignButton type="button" appearance="secondary" onClick={() => void handleCopy()}>
             Copy report
-          </Button>
-          <Button type="button" onClick={handleGoToSettings}>
+          </DesignButton>
+          <DesignButton type="button" onClick={handleGoToSettings}>
             Go to Settings
-          </Button>
-        </div>
+          </DesignButton>
+        </>
       )}
     >
       <div className="flex max-h-[min(50vh,420px)] flex-col gap-3 overflow-hidden">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           A diagnostic file was saved on this device. You can copy the report below or export the
           same file from Settings → Data Backups.
         </p>
         <pre
-          className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground"
+          className="design-type-addresses min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 break-words whitespace-pre-wrap text-foreground"
           tabIndex={0}
         >
           {reportText}
         </pre>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

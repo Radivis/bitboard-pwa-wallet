@@ -86,7 +86,7 @@ export function TransactionItem({ transaction, activityLabel }: TransactionItemP
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium capitalize">{direction}</p>
+            <p className="design-type-emphasis capitalize">{direction}</p>
             {transaction.isCpfpFeeBump === true ? (
               <DashboardActivityRailBadge
                 icon={ArrowUpFromLine}
@@ -108,7 +108,7 @@ export function TransactionItem({ transaction, activityLabel }: TransactionItemP
           </div>
           {timestamp && (
             <button
-              className="text-xs text-muted-foreground hover:underline"
+              className="design-type-regular text-muted-foreground hover:underline"
               onClick={(e) => {
                 e.stopPropagation()
                 setShowAbsoluteTime(!showAbsoluteTime)
@@ -124,7 +124,7 @@ export function TransactionItem({ transaction, activityLabel }: TransactionItemP
         <div className="text-right">
           <p
             className={cn(
-              'text-sm font-medium',
+              'design-type-emphasis',
               isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
             )}
           >
@@ -145,10 +145,10 @@ export function TransactionItem({ transaction, activityLabel }: TransactionItemP
       </div>
 
       {expanded && (
-        <div className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <div className="design-type-regular mt-3 space-y-1 border-t pt-3 text-muted-foreground">
           <div className="flex justify-between">
             <span>TXID</span>
-            <span className="font-mono">{truncateAddress(transaction.txid, 12, 12)}</span>
+            <span className="design-type-addresses">{truncateAddress(transaction.txid, 12, 12)}</span>
           </div>
           {transaction.feeSats != null && (
             <div className="flex justify-between gap-2">

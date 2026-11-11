@@ -7,7 +7,7 @@ export function LabAddressTypeBadge({ addressType }: { addressType: AddressType 
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   if (!isSegwitAddressesEnabled) return null
   return (
-    <Badge variant="secondary" className="font-normal">
+    <Badge variant="secondary" className="design-type-regular">
       {ADDRESS_TYPE_LABELS[addressType]}
     </Badge>
   )

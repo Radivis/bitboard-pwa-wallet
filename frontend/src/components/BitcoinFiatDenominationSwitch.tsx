@@ -38,7 +38,7 @@ export function BitcoinFiatDenominationSwitch({
     >
       <Label
         htmlFor="bitcoin-fiat-denomination-switch"
-        className="flex flex-1 cursor-pointer items-center justify-between gap-3 text-sm font-medium"
+        className="design-type-emphasis flex flex-1 cursor-pointer items-center justify-between gap-3"
       >
         <span className="tabular-nums" aria-hidden>
           ₿

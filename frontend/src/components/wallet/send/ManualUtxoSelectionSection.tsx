@@ -143,14 +143,14 @@ export function ManualUtxoSelectionSection({
     <div className="space-y-3">
       {manualSelectionEnabled ? (
         <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2 text-sm">
+          <div className="design-type-regular flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Selected inputs total</span>
             <span className={showInsufficientSum ? 'text-destructive' : undefined}>
               <BitcoinAmountDisplay amountSats={selectedSumSats} size="sm" />
             </span>
           </div>
           {isRebuildPending ? (
-            <p className="text-xs text-muted-foreground">Updating fee…</p>
+            <p className="design-type-regular text-muted-foreground">Updating fee…</p>
           ) : null}
         </div>
       ) : null}
@@ -162,7 +162,7 @@ export function ManualUtxoSelectionSection({
       />
 
       <div className="flex items-center justify-between gap-2">
-        <Label htmlFor="manual-utxo-selection" className="cursor-pointer text-sm">
+        <Label htmlFor="manual-utxo-selection" className="design-type-regular cursor-pointer">
           Manual UTXO selection
         </Label>
         <Switch
@@ -178,7 +178,7 @@ export function ManualUtxoSelectionSection({
       {manualSelectionEnabled ? (
         <>
           <div className="border-t pt-3">
-            <p className="mb-2 text-sm font-medium">Available UTXOs</p>
+            <p className="design-type-emphasis mb-2">Available UTXOs</p>
             {availableUtxos.length > 0 ? (
               <ReviewInputUtxoList
                 inputUtxos={availableUtxos}
@@ -186,7 +186,7 @@ export function ManualUtxoSelectionSection({
                 onAction={handleAddUtxo}
               />
             ) : (
-              <p className="text-sm text-muted-foreground">No other UTXOs available.</p>
+              <p className="design-type-regular text-muted-foreground">No other UTXOs available.</p>
             )}
           </div>
         </>

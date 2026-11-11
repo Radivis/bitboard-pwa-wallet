@@ -30,7 +30,7 @@ export function SendLightningWalletPicker(props: {
   return (
     <div className="space-y-2">
       <Label>Pay from Lightning wallet</Label>
-      <p className="text-xs text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         {connectedLightningWallets.length > 1
           ? 'Select which connected wallet should pay this invoice.'
           : 'Using your connected Lightning wallet for this network.'}
@@ -46,13 +46,13 @@ export function SendLightningWalletPicker(props: {
                 disabled={disabled}
                 onClick={() => onSelectConnection(connection.id)}
                 className={cn(
-                  'flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left text-sm transition-colors',
+                  'design-type-regular flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left transition-colors',
                   isSelected
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:bg-muted/50',
                 )}
               >
-                <span className="min-w-0 flex-1 font-medium">{connection.label}</span>
+                <span className="design-type-emphasis min-w-0 flex-1">{connection.label}</span>
                 <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
                   {balanceQuery?.isPending ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

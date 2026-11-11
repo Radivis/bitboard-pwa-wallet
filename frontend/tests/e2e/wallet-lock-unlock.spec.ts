@@ -8,8 +8,10 @@ import {
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 import {
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './helpers/settings-waits'
@@ -90,10 +92,10 @@ test.describe('Wallet Lock/Unlock', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await openSettingsMainTab(page)
 
-    await page.getByRole('button', { name: 'Signet' }).click()
+    await settingsNetworkButton(page, 'Signet').click()
     await expectWalletUnlockDialog(page)
     await fillWalletUnlockDialog(page, TEST_PASSWORD)
 
@@ -117,10 +119,10 @@ test.describe('Wallet Lock/Unlock', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await openSettingsMainTab(page)
 
-    await page.getByRole('link', { name: /^Wallet$/i }).click()
+    await clickDrawerNavLink(page, 'Wallet')
     await expectWalletUnlockDialog(page)
     await dismissWalletUnlockDialog(page)
 

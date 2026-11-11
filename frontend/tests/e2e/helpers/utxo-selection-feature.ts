@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
 import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 
 /**
@@ -22,8 +23,7 @@ export async function ensureUtxoSelectionFeatureOn(page: Page): Promise<void> {
  * Opens Settings and enables manual UTXO selection on send review.
  */
 export async function enableUtxoSelectionFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /^Settings$/i }).click()
-  await page.waitForURL(/\/settings/)
+  await clickDrawerNavLink(page, 'Settings')
   await openSettingsMainTab(page)
   await ensureUtxoSelectionFeatureOn(page)
 }

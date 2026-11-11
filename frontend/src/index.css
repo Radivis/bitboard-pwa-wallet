@@ -1,4 +1,11 @@
-@import "@fontsource-variable/inter";
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+@import "./design-tokens.css";
 @import "tailwindcss";
 @source "../common";
 @import "tw-animate-css";
@@ -11,7 +18,7 @@
 :root {
   --hue: 120;
   --saturation-scale: 1;
-  font-family: "Inter Variable", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--design-font-ui);
   line-height: 1.5;
   font-weight: 400;
 
@@ -24,8 +31,6 @@
   /* WalletLayout sticky header (`h-14`). Toasts sit below it so they do not cover the title bar. */
   --app-sticky-header-height: 3.5rem;
   --toast-top-offset: calc(var(--app-sticky-header-height) + 0.5rem);
-  --toast-close-button-size: 2.5rem; /* 2× Sonner default (20px) */
-  --toast-close-icon-size: 1.5rem; /* 2× Sonner default (12px) */
 
   /* Light theme lightness values */
   --background-l: 90%;
@@ -239,15 +244,6 @@ body {
   }
 }
 
-/* Sonner toast close control — 2× default size, top-right corner. */
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  left: auto !important;
-  right: 0 !important;
-  transform: translate(35%, -35%) !important;
-  height: var(--toast-close-button-size);
-  width: var(--toast-close-button-size);
-}
-
 @keyframes unilateral-exit-edge-dash {
   to {
     stroke-dashoffset: -10;
@@ -260,29 +256,28 @@ body {
   animation: unilateral-exit-edge-dash 0.5s linear infinite;
 }
 
-[data-sonner-toast][data-styled='true'] [data-close-button] svg {
-  height: var(--toast-close-icon-size);
-  width: var(--toast-close-icon-size);
-}
-
 /*
- * Infomode highlight: inset box-shadow on the wrapper alone sits *under* opaque
- * children (e.g. Card bg-card), so it never shows. A ::after layer paints the
- * same inner glow on top with pointer-events: none so clicks still reach targets.
+ * Infomode highlight. The glow sits on the wrapper so a child card or button
+ * keeps its own elevation shadow. Radius follows the painted control.
+ * Blur and spread are 8px. Opacity lives on --design-special-infomode-highlight (60%).
  */
 [data-infomode-active] [data-infomode-id] {
-  position: relative;
   cursor: help;
+  box-shadow: 0 0 8px 8px var(--design-special-infomode-highlight);
 }
 
-[data-infomode-active] [data-infomode-id]::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 4px 2px rgba(34, 211, 238, 0.5);
-  pointer-events: none;
-  z-index: 1;
+[data-infomode-active] span[data-infomode-id] {
+  display: inline-block;
+}
+
+[data-infomode-active] [data-infomode-id]:has(> [data-slot="design-card"]) {
+  border-radius: 32px;
+}
+
+[data-infomode-active] [data-infomode-id]:has(> [data-slot="design-button"]),
+[data-infomode-active] [data-infomode-id]:has(> a[data-slot="design-button"]) {
+  display: inline-flex;
+  border-radius: 20px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -307,5 +302,81 @@ body {
 
   .infomode-lightbulb-jitter--active {
     animation: infomode-lightbulb-jitter 0.45s ease-out;
+  }
+
+  /* ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1) */
+  @keyframes design-drawer-enter-from-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes design-drawer-exit-to-right {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes design-drawer-enter-from-top {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes design-drawer-exit-to-top {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-100%);
+    }
+  }
+
+  .design-drawer-enter-from-right {
+    animation: design-drawer-enter-from-right 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .design-drawer-exit-to-right {
+    animation: design-drawer-exit-to-right 0.25s ease-out both;
+  }
+
+  .design-drawer-enter-from-top {
+    animation: design-drawer-enter-from-top 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .design-drawer-exit-to-top {
+    animation: design-drawer-exit-to-top 0.25s ease-out both;
+  }
+
+  [data-design-drawer-backdrop] {
+    transition: opacity 0.3s ease-out;
+  }
+}
+
+/*
+ * Page veil behind an open drawer. 20% pure black. Opacity fades over 0.3s
+ * ease-out when motion is allowed; the rule above supplies that transition.
+ */
+[data-design-drawer-backdrop] {
+  background-color: rgb(0 0 0 / 0.2);
+  opacity: 0;
+}
+
+[data-design-drawer-backdrop][data-motion='enter'][data-revealed] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design-drawer-backdrop][data-motion='enter'] {
+    opacity: 1;
   }
 }

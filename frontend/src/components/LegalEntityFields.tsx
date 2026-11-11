@@ -13,7 +13,7 @@ type LegalEntityFieldsProps = {
   emailLinkClassName?: string
 }
 
-const defaultLine = 'whitespace-pre-wrap text-sm text-muted-foreground'
+const defaultLine = 'design-type-regular whitespace-pre-wrap text-muted-foreground'
 const defaultEmailLink =
   'text-muted-foreground underline underline-offset-2 hover:text-foreground'
 
@@ -35,7 +35,7 @@ export function LegalEntityFields({
       {name ? <p className={lineClassName}>{name}</p> : null}
       {addressText ? <p className={lineClassName}>{addressText}</p> : null}
       {email ? (
-        <p className="text-sm">
+        <p className="design-type-regular">
           <a href={`mailto:${email}`} className={emailLinkClassName}>
             {email}
           </a>

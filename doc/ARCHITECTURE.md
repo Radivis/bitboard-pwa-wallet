@@ -2,7 +2,7 @@
 
 ## Tech Stack
 
-Bitboard Wallet is a PWA using the following technologies
+Bitcoin Codex is a PWA using the following technologies
 
 ### Frontend / UI
 Language: TypeScript
@@ -107,7 +107,7 @@ flowchart TB
 
 **Lock/unlock** and **per-rail load, sync, and save** (on-chain, Lightning, Arkade) live in `frontend/src/lib/wallet/lifecycle/`. Orchestrators own phase transitions and expose `get*Snapshot` + `subscribe*`; they drive TanStack Query `enabled` / `queryFn` for async work but **do not** store phase in Query cache or Zustand.
 
-**Routing:** Rail lifecycles are route-independent. Wallet hydration (near-zero session restore + bootstrap load) may **start** only for operations that need a secrets session: the `/wallet/*` secrets gate, or action-gated unlock (`ensureWalletUnlockedForAction` / `useRequireUnlockedWallet`) on Settings, Lab, and similar. Opening Library, Lab, or Settings does **not** restore the session by itself. Post-lock redirect to Library is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
+**Routing:** Rail lifecycles are route-independent. Wallet hydration (near-zero session restore + bootstrap load) may **start** only for operations that need a secrets session: the `/wallet/*` secrets gate, or action-gated unlock (`ensureWalletUnlockedForAction` / `useRequireUnlockedWallet`) on Settings, Lab, and similar. Opening Start, Guides, Library, Lab, or Settings does **not** restore the session by itself. Post-lock redirect to Start is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
 
 **React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
 

@@ -9,7 +9,7 @@ feature:
     - Per-rail rows appear for on-chain always; Lightning when isLightningEnabled; Arkade when isArkadeEnabled; Bark when isBarkEnabled
     - Each row has an interval field (30–86400 seconds, default 300) and a "periodic sync enabled" switch (default on)
     - Polling uses React Query refetchInterval while the tab is visible and the rail is loaded
-    - On-chain lab network never periodic-syncs Esplora
+    - On-chain Labnet never periodic-syncs Esplora
     - Hydration (postUnlock/postLoad) and manual sync are unchanged
     - The on-chain periodic query must not run its first fetch when periodic sync is off; refetchInterval false only disables later polls
   contracts:

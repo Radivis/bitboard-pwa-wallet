@@ -7,7 +7,7 @@ interface OperatorConfigDiffViewerProps {
 export function OperatorConfigDiffViewer({ entries }: OperatorConfigDiffViewerProps) {
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         No field-level differences were detected between the accepted and pending operator
         configuration.
       </p>
@@ -17,22 +17,22 @@ export function OperatorConfigDiffViewer({ entries }: OperatorConfigDiffViewerPr
   return (
     <div className="overflow-x-auto rounded-md border">
       <table
-        className="w-full text-left text-sm"
+        className="design-type-regular w-full text-left"
         data-testid="arkade-operator-config-diff-table"
       >
-        <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
+        <thead className="design-type-regular border-b bg-muted/40 text-muted-foreground">
           <tr>
-            <th className="px-3 py-2 font-medium">Setting</th>
-            <th className="px-3 py-2 font-medium">Current (trusted)</th>
-            <th className="px-3 py-2 font-medium">Proposed (ASP)</th>
+            <th className="design-type-emphasis px-3 py-2">Setting</th>
+            <th className="design-type-emphasis px-3 py-2">Current (trusted)</th>
+            <th className="design-type-emphasis px-3 py-2">Proposed (ASP)</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.fieldKey} className="border-b last:border-b-0 align-top">
-              <th className="px-3 py-2 font-medium text-foreground">{entry.fieldLabel}</th>
-              <td className="px-3 py-2 font-mono text-xs break-all">{entry.acceptedValue}</td>
-              <td className="px-3 py-2 font-mono text-xs break-all">{entry.pendingValue}</td>
+              <th className="design-type-emphasis px-3 py-2 text-foreground">{entry.fieldLabel}</th>
+              <td className="design-type-addresses px-3 py-2 break-all">{entry.acceptedValue}</td>
+              <td className="design-type-addresses px-3 py-2 break-all">{entry.pendingValue}</td>
             </tr>
           ))}
         </tbody>

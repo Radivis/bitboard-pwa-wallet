@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
@@ -47,7 +47,7 @@ export function WalletBackupImportPasswordModal({
   }, [onCancel])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Verify wallet backup"
@@ -55,16 +55,16 @@ export function WalletBackupImportPasswordModal({
       isBlockDismissed={isBusy}
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={handleCancel}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={handleCancel}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={isBusy || password.length === 0}
             onClick={() => void onConfirm(password)}
           >
             {isBusy ? 'Verifying…' : 'Verify and import'}
-          </Button>
+          </DesignButton>
         </>
       )}
     >
@@ -82,11 +82,11 @@ export function WalletBackupImportPasswordModal({
           disabled={isBusy}
         />
         {verificationError ? (
-          <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+          <p className="design-type-regular text-destructive" role="alert" aria-live="assertive">
             {verificationError}
           </p>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

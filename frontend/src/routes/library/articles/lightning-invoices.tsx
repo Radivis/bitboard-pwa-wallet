@@ -19,8 +19,8 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Works">
         <p>
           When you want to receive a Lightning payment, you generate an <strong>invoice</strong>. It
-          looks like a long string starting with <code className="text-sm">lnbc</code> (mainnet) or{' '}
-          <code className="text-sm">lntb</code> / <code className="text-sm">lnbcrt</code> (testnet /
+          looks like a long string starting with <code className="design-type-addresses">lnbc</code> (mainnet) or{' '}
+          <code className="design-type-addresses">lntb</code> / <code className="design-type-addresses">lnbcrt</code> (testnet /
           regtest). You share this string with the payer—via QR code, copy-paste, or embedded in an
           app.
         </p>
@@ -97,8 +97,8 @@ export const article: LibraryArticle = {
           <strong>Amountless invoices in practice:</strong> Since the invoice itself contains no
           amount, the payer must specify one when sending. In{' '}
           <ArticleLink slug="nostr-wallet-connect">NWC</ArticleLink>, this means the{' '}
-          <code className="text-sm">pay_invoice</code> request includes a separate{' '}
-          <code className="text-sm">amount</code> parameter (in millisatoshis) alongside the
+          <code className="design-type-addresses">pay_invoice</code> request includes a separate{' '}
+          <code className="design-type-addresses">amount</code> parameter (in millisatoshis) alongside the
           invoice string. The wallet then pays that amount using the invoice&apos;s payment hash
           and destination.
         </p>

@@ -1,11 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
 type PageHeaderIcon = LucideIcon | ComponentType<{ className?: string }>
 
-/** Shared typography for top-of-page titles (see `PageHeader`). */
-export const PAGE_HEADER_TITLE_CLASS = 'text-2xl font-bold tracking-tight'
+/** Screen-heading metrics for a regular page title. Area indexes pass `variant="area"`. */
+const PAGE_HEADER_TITLE_CLASS = designTypeClassName.screenHeading
+
+export type PageHeaderVariant = 'screen' | 'area'
 
 function isDefined<T>(value: T | null | undefined): value is T {
   return value !== undefined && value !== null
@@ -16,15 +19,24 @@ interface PageHeaderProps {
   icon?: PageHeaderIcon
   children?: ReactNode
   className?: string
+  variant?: PageHeaderVariant
 }
 
-export function PageHeader({ title, icon: Icon, children, className }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  icon: Icon,
+  children,
+  className,
+  variant = 'screen',
+}: PageHeaderProps) {
   const titleText = title ?? ''
+  const titleClassName =
+    variant === 'area' ? designTypeClassName.areaHeading : PAGE_HEADER_TITLE_CLASS
 
   const heading = (
     <h2
       className={cn(
-        PAGE_HEADER_TITLE_CLASS,
+        titleClassName,
         isDefined(Icon) && 'flex items-center gap-2',
       )}
     >

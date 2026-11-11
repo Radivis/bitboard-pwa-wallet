@@ -65,6 +65,8 @@ export function AppInitializer({ children }: AppInitializerProps) {
     const isLibraryRoute = location.pathname.startsWith('/library')
     const isLabRoute = location.pathname.startsWith('/lab')
     const isPrivacyRoute = location.pathname === '/privacy'
+    const isStartRoute = location.pathname === '/'
+    const isGuidesRoute = location.pathname.startsWith('/guides')
 
     if (!wallets || wallets.length === 0) {
       // After create/import, `addWallet` invalidates this query; cached data can stay
@@ -78,7 +80,9 @@ export function AppInitializer({ children }: AppInitializerProps) {
         !isSettingsRoute &&
         !isLibraryRoute &&
         !isLabRoute &&
-        !isPrivacyRoute
+        !isPrivacyRoute &&
+        !isStartRoute &&
+        !isGuidesRoute
       ) {
         navigate({ to: '/setup' })
       }

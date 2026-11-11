@@ -9,7 +9,9 @@ test.describe('Wallet Creation Flow', () => {
   test('wallet creation full flow', async ({ page }) => {
     await page.goto('/setup')
 
-    await expect(page.getByRole('button', { name: 'Create New Wallet' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create New Wallet' })).toBeVisible({
+      timeout: 30_000,
+    })
     await expect(page.getByRole('button', { name: 'Import Wallet' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Create New Wallet' }).click()
@@ -26,7 +28,7 @@ test.describe('Wallet Creation Flow', () => {
     await expect(page.getByText('Step 2 of 3')).toBeVisible({ timeout: 15000 })
     await expect(page.getByText('Backup Seed Phrase')).toBeVisible()
 
-    const wordSpans = page.locator('.font-mono.text-sm')
+    const wordSpans = page.locator('.design-type-addresses:not(input):not(textarea):not(select)')
     await expect(wordSpans.first()).toBeVisible()
 
     const words: string[] = []

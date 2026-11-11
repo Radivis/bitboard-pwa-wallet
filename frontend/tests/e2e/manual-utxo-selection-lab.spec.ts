@@ -50,7 +50,7 @@ test.describe('Manual UTXO selection (lab)', { tag: '@lab @lab-manual-utxo' }, (
     await expect(
       page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
     ).toBeVisible({ timeout: 15_000 })
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     await expect(addressEl).toBeVisible({ timeout: 10_000 })
     const walletAddress = (await addressEl.textContent())?.trim()
     expect(walletAddress).toMatch(/^bcrt1/)

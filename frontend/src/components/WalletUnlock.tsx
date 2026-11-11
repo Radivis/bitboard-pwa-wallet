@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateManualUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { navigateAwayFromWalletUnlockPrompt } from '@/lib/shared/app-router'
@@ -80,20 +80,19 @@ export function WalletUnlock({
   })
 
   return (
-    <AppModal
+    <DesignModal
       isOpen
       isModal
       onOpenChange={() => {}}
       onCancel={handleClose}
       title={
-        <>
-          <Lock className="mt-0.5 h-5 w-5 shrink-0" />
+        <span className="inline-flex min-w-0 items-center">
+          <Lock className="mr-2 h-5 w-5 shrink-0" />
           <span className="min-w-0">
             {variant === 'setup' ? 'Unlock to continue' : 'Unlock Wallet'}
           </span>
-        </>
+        </span>
       }
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => e.preventDefault()}
     >
       <>
@@ -126,7 +125,7 @@ export function WalletUnlock({
           </div>
 
           {unlockErrorMessage != null && (
-            <p className="text-sm text-destructive">{unlockErrorMessage}</p>
+            <p className="design-type-regular text-destructive">{unlockErrorMessage}</p>
           )}
 
           {unlockMutation.isPending ? (
@@ -138,6 +137,6 @@ export function WalletUnlock({
           )}
         </form>
       </>
-    </AppModal>
+    </DesignModal>
   )
 }

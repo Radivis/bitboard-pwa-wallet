@@ -5,6 +5,14 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 /** react-hooks "recommended" here is the classic two rules, not plugin v7's expanded flat.recommended (React Compiler). */
+
+/** Tailwind type utilities. Color utilities such as `text-[var(--token)]` stay allowed. */
+const rawTypeUtilityPattern =
+  /(?:^|[^A-Za-z0-9-])(?:text-(?:xs|sm|base|lg|xl|[2-9]xl|\[[0-9])|font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b|leading-|tracking-)/
+
+const rawTypeUtilityMessage =
+  'Use a design-type class from design-type.ts. Raw Tailwind size, weight, leading, and tracking utilities are not legal type.'
+
 export default tseslint.config(
   {
     ignores: [
@@ -67,6 +75,27 @@ export default tseslint.config(
             regex: '_',
             match: true,
           },
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'src/components/design/**/*.{ts,tsx}',
+      'src/components/PageHeader.tsx',
+      'src/lib/library/article-shared.tsx',
+    ],
+    ignores: ['src/components/design/**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `Literal[value=/${rawTypeUtilityPattern.source}/]`,
+          message: rawTypeUtilityMessage,
+        },
+        {
+          selector: `TemplateElement[value.raw=/${rawTypeUtilityPattern.source}/]`,
+          message: rawTypeUtilityMessage,
         },
       ],
     },

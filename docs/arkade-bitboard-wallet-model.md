@@ -183,9 +183,9 @@ After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT.
 - Bitboard-hosted Fulmine renews VTXOs without holding user keys (presigned intents).
 - Users should read Library / SECURITY for operator and delegator trust.
 
-## Lab and regtest
+## Labnet and regtest
 
-- **Lab** and **regtest** have no Arkade UI in v1.
+- **Labnet** and **regtest** have no Arkade UI in v1.
 - Regtest Fulmine is reserved for a later phase.
 
 ## Lightning

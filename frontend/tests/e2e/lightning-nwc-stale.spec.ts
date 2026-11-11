@@ -7,6 +7,7 @@ import {
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
 import { runLightningRailSyncUntilIdle } from './helpers/dashboard-sync'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 
 const E2E_NWC_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 const E2E_NWC_LABEL = 'E2E Mock Wallet'
@@ -37,7 +38,7 @@ async function addE2eNwcPayment(page: Page, paymentHash: string) {
 }
 
 async function switchToNetworkInSettings(page: Page, networkLabel: 'Signet' | 'Testnet') {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('button', { name: networkLabel }).click()
   await waitForSettingsNetworkSwitchComplete(page)

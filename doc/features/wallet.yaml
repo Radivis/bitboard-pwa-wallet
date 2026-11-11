@@ -100,7 +100,7 @@ feature:
         - recent transactions list
           - paginated activity list (5 / 8 / 10 items per page on small / medium / large viewports; page navigator when more than one page)
           - on public networks, on-chain and Lightning activity are merged in one list
-          - lab network dashboard uses the same pagination for wallet-scoped lab transactions
+          - the Labnet dashboard uses the same pagination for wallet-scoped lab transactions
           - each transaction shows: direction (sent/received), amount, date, confirmation status
             - sent amount in list = net paid to recipients (excludes fee)
             - received amount in list = net received (unchanged)
@@ -119,7 +119,7 @@ feature:
         - If wallet is locked, show unlock prompt (Bitboard app password)
         - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
         - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
-        - Lab network does not use Esplora timestamps; lab dashboard uses simulator chain state only
+        - Labnet does not use Esplora timestamps; the lab dashboard uses simulator chain state only
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 import { AutomatedFeeCapControls } from '@/components/wallet/AutomatedFeeCapControls'
@@ -35,6 +36,16 @@ describe('AutomatedFeeCapControls', () => {
     )
     expect(screen.getByTestId('fee-cap-max-rate')).toHaveValue(20)
     expect(screen.queryByRole('button', { name: 'Custom' })).not.toBeInTheDocument()
+  })
+
+  it('clears the draft without writing an empty cap', async () => {
+    const user = userEvent.setup()
+    const { onMaxFeeRateChange } = renderControls()
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+
+    expect(screen.getByTestId('fee-cap-max-rate')).toHaveValue(null)
+    expect(onMaxFeeRateChange).not.toHaveBeenCalled()
   })
 
   it('reports a positive max and ignores a non-positive entry', () => {

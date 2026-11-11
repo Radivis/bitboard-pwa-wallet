@@ -14,7 +14,7 @@ export function ArkadeVtxoExpiryIndicator() {
 
   if (expiryQuery.isLoading) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="design-type-regular flex items-center gap-1.5 text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         Checking VTXO expiry…
       </p>
@@ -45,7 +45,7 @@ export function ArkadeVtxoExpiryIndicator() {
     >
       <p
         className={cn(
-          'flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs',
+          'design-type-regular flex flex-wrap items-center gap-x-1.5 gap-y-0.5',
           needsRenewalSoon
             ? 'text-amber-700 dark:text-amber-400'
             : 'text-muted-foreground',
@@ -60,7 +60,7 @@ export function ArkadeVtxoExpiryIndicator() {
         <Clock className="h-3 w-3 shrink-0" aria-hidden />
         <span>{indicatorText.primary}</span>
         {indicatorText.renewalSoonSuffix != null ? (
-          <span className="font-medium">· {indicatorText.renewalSoonSuffix}</span>
+          <span className="design-type-emphasis">· {indicatorText.renewalSoonSuffix}</span>
         ) : null}
       </p>
     </InfomodeWrapper>

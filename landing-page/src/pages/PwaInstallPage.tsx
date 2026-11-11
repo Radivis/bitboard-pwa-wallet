@@ -92,7 +92,7 @@ function PlatformInstructions({ platform, appUrl }: { platform: InstallGuidePlat
               open the browser menu.
             </li>
             <li>
-              Choose <strong className="text-white">Install Bitboard Wallet</strong> (or similar) and confirm.
+              Choose <strong className="text-white">Install Bitcoin Codex</strong> (or similar) and confirm.
             </li>
           </ol>
           <p className="text-matrix/80 text-xs">
