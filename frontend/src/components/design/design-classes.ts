@@ -13,7 +13,7 @@ const designButtonLayoutClassName =
 
 export const designPillClassName = `${designButtonLayoutClassName} rounded-[20px]`
 
-/** Top-right and bottom-left are square. The other two corners stay at the pill radius. */
+/** Top-right and bottom-left use a 4px radius. The other two corners stay at the pill radius. */
 export const designDestructiveShapeClassName = `${designButtonLayoutClassName} rounded-tl-[20px] rounded-tr-[4px] rounded-br-[20px] rounded-bl-[4px]`
 
 /** Glyph color for an icon-only destructive control. The labeled control uses the cut-corner button. */

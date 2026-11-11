@@ -120,7 +120,7 @@ export const DesignInput = React.forwardRef<
             readOnly={readOnly}
             data-slot="design-input-field"
             className={cn(
-              'w-full min-w-0 bg-transparent text-[var(--design-input-content)] outline-none disabled:cursor-not-allowed',
+              'w-full min-w-0 bg-transparent text-[var(--design-input-content)] outline-none disabled:cursor-not-allowed [unicode-bidi:isolate]',
               nativeSearchCancelClassName,
               showPen
                 ? 'placeholder:text-transparent'

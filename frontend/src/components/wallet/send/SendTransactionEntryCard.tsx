@@ -306,7 +306,6 @@ export function SendTransactionEntryCard({
               <DesignInput
                 id="recipient-address"
                 leadingIcon={Wallet}
-                className="[unicode-bidi:isolate]"
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={sendRecipientPlaceholder({
