@@ -298,6 +298,7 @@ export function SendTransactionEntryCard({
               </div>
               <Input
                 id="recipient-address"
+                className="[unicode-bidi:isolate]"
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={sendRecipientPlaceholder({

@@ -65,6 +65,10 @@ vi.mock('@/lib/arkade/background-bumper-wallet-sync', () => ({
   scheduleBackgroundBumperWalletSync,
 }))
 
+const completionFeeQueryParams = vi.hoisted(() => ({
+  current: undefined as { readinessRevision?: string } | undefined,
+}))
+
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeUnilateralExitTimelockQuery: () => ({
     data: { unilateralExitTimelockBlocks: 144 },
@@ -74,11 +78,16 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isPending: false,
     isError: false,
   }),
-  useArkadeUnilateralExitCompletionFeeQuery: () => ({
-    isLoading: false,
-    data: completionFeeQueryState.data,
-    refetch: vi.fn(),
-  }),
+  useArkadeUnilateralExitCompletionFeeQuery: (params: {
+    readinessRevision?: string
+  }) => {
+    completionFeeQueryParams.current = params
+    return {
+      isLoading: false,
+      data: completionFeeQueryState.data,
+      refetch: vi.fn(),
+    }
+  },
   useArkadeUnilateralExitsInProgressQuery: () => ({
     isLoading: false,
     data: inProgressRows.current,
@@ -130,7 +139,7 @@ describe('useCompleteUnilateralExitFlow', () => {
     })
   })
 
-  it('enables complete when the fee estimate covers the selection before the list flips', () => {
+  it('keeps complete disabled when the fee estimate covers a row that is not claimable', () => {
     const waitingTxid = 'cc'.repeat(32)
     const waitingRow: ArkadeUnilateralExitInProgressDto = {
       id: `${waitingTxid}:0`,
@@ -141,20 +150,24 @@ describe('useCompleteUnilateralExitFlow', () => {
       virtualStatusState: 'unrolled',
       phase: 'unrolled',
     }
-    inProgressRows.current = [waitingRow]
+    inProgressRows.current = [readyRow, waitingRow]
     completionFeeQueryState.data = {
-      selectedTotalSats: 10_000,
+      selectedTotalSats: 60_000,
       estimatedFeeSats: 238,
-      estimatedReceiveSats: 9_762,
+      estimatedReceiveSats: 59_762,
       feeRateSatPerVb: 1.07,
     }
 
     const { result } = renderHook(() => useCompleteUnilateralExitFlow())
     act(() => {
+      result.current.toggleInProgressSelection(readyRow)
       result.current.toggleInProgressSelection(waitingRow)
     })
 
-    expect(result.current.allSelectedCanComplete).toBe(true)
+    expect(result.current.allSelectedCanComplete).toBe(false)
+    expect(completionFeeQueryParams.current?.readinessRevision).toBe(
+      `${readyRow.txid}:${readyRow.vout}`,
+    )
   })
 
   it('schedules the bumper scan in the background', () => {

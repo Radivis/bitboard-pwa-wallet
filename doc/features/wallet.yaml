@@ -171,7 +171,7 @@ feature:
               - return to compose step
       - requirements:
         - Wallet must be unlocked
-        - Address validation for the current network decodes the address (bech32 checksum and witness program), not only the prefix
+        - Address validation for the current network decodes the address (bech32 checksum and a standard witness program: version 0 of 20 or 32 bytes, or version 1 of 32 bytes), not only the prefix. The confirmed destination is the sanitized address.
         - Pasted on-chain addresses with invisible characters (zero-width space, byte-order mark) or surrounding backticks are accepted when the underlying address is valid
         - An on-chain recipient that cannot be decoded shows an invalid-address error and must not report "legacy address base58"
         - Insufficient funds must show clear error

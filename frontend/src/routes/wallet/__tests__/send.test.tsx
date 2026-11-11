@@ -217,6 +217,8 @@ describe('SendFlow', () => {
     vi.clearAllMocks()
     sendStoreState.recipient = ''
     sendStoreState.amount = '1000'
+    sendStoreState.step = 1
+    sendStoreState.psbt = null
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -257,6 +259,30 @@ describe('SendFlow', () => {
     renderWithProviders(<SendFlow />)
     expect(screen.queryByText(/Fee Rate \(sat\/vB\)/)).not.toBeInTheDocument()
     expect(screen.getByText('Send Lightning')).toBeInTheDocument()
+  })
+
+  it('stores and reviews the address with a bidi override removed', () => {
+    const address = 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx'
+    const polluted = `\u202E${address}`
+    sendStoreState.recipient = polluted
+    const entry = renderWithProviders(<SendFlow />)
+
+    expect(sendStoreState.setRecipient).toHaveBeenCalledWith(address)
+    expect(screen.getByRole('textbox', { name: /recipient/i })).toHaveClass(
+      '[unicode-bidi:isolate]',
+    )
+    entry.unmount()
+
+    sendStoreState.recipient = polluted
+    sendStoreState.step = 2
+    sendStoreState.psbt = 'cHNidA'
+    renderWithProviders(<SendFlow />)
+
+    expect(screen.getByText(address.slice(0, 8))).toBeInTheDocument()
+    expect(screen.queryByText(polluted.slice(0, 8))).not.toBeInTheDocument()
+    expect(screen.getByText(address.slice(0, 8))).toHaveClass(
+      '[unicode-bidi:isolate]',
+    )
   })
 
   it('defaults unified BIP21 (?lightning=…) to Lightning not on-chain balance check', () => {

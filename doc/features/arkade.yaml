@@ -91,8 +91,9 @@ feature:
           A spendable VTXO is in the renewal window when remaining lifetime is under 10% of its
           total lifetime, or sooner when the operator's quoted offchain-input fee for that VTXO
           is zero (Mutinynet waives the 0.2% fee once remaining lifetime is at most 518656
-          seconds, so a ~7-day VTXO with about a day left renews). A missing fee program does
-          not count as a zero quote.
+          seconds, so a ~7-day VTXO becomes free with about six days left). A program that is
+          zero at every age still includes those VTXOs. A missing fee program does not count
+          as a zero quote.
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.

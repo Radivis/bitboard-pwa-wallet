@@ -1,3 +1,4 @@
+import { bech32m } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 import { isValidAddress } from '../bitcoin-utils'
 import { normalizeSendRecipient } from '../send/normalize-send-recipient'
@@ -11,6 +12,14 @@ const REGTEST_P2WPKH = 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080'
 /** Mutinynet receive address from the reported send failure. */
 const MUTINYNET_P2TR =
   'tb1pca7a2yt9zwxccwclzl4l0qcaep0waxnk9jg75k44fq4sfnwa2l3sdn7zh9'
+
+function encodeWitnessAddress(
+  humanReadablePart: string,
+  version: number,
+  program: Uint8Array,
+): string {
+  return bech32m.encode(humanReadablePart, [version, ...bech32m.toWords(program)])
+}
 
 describe('isValidAddress', () => {
   it('accepts a decoded signet bech32 address', () => {
@@ -60,6 +69,16 @@ describe('isValidAddress', () => {
     expect(isValidAddress(REGTEST_P2WPKH, 'lab')).toBe(true)
     expect(isValidAddress(REGTEST_P2WPKH, 'signet')).toBe(false)
     expect(isValidAddress(REGTEST_P2WPKH, 'mainnet')).toBe(false)
+  })
+
+  it('rejects a witness v1 program that is not 32 bytes', () => {
+    const shortTaproot = encodeWitnessAddress('bc', 1, new Uint8Array(20).fill(1))
+    expect(isValidAddress(shortTaproot, 'mainnet')).toBe(false)
+  })
+
+  it('rejects a witness version above 1', () => {
+    const futureVersion = encodeWitnessAddress('bc', 2, new Uint8Array(32).fill(2))
+    expect(isValidAddress(futureVersion, 'mainnet')).toBe(false)
   })
 
   it('still accepts a legacy mainnet prefix', () => {

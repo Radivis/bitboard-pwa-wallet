@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { scheduleBackgroundBumperWalletSync } from '@/lib/arkade/background-bumper-wallet-sync'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import { selectionCoveredByCompletionEstimate } from '@/lib/arkade/arkade-exit-utils'
 import {
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
@@ -73,8 +72,13 @@ export function useCompleteUnilateralExitFlow() {
     () => selectedInProgressRows.reduce((total, row) => total + row.amountSats, 0),
     [selectedInProgressRows],
   )
-  const selectedReadyCount = useMemo(
-    () => selectedInProgressRows.filter((row) => row.canComplete).length,
+  const selectedReadyOutpointKey = useMemo(
+    () =>
+      selectedInProgressRows
+        .filter((row) => row.canComplete)
+        .map((row) => `${row.txid}:${row.vout}`)
+        .sort()
+        .join(','),
     [selectedInProgressRows],
   )
 
@@ -83,18 +87,13 @@ export function useCompleteUnilateralExitFlow() {
     vtxoOutpoints: selectedInProgressOutpoints,
     destinationAddress: completeDestination,
     feeRateSatPerVb: completionFeeRateSatPerVb,
-    readinessRevision: selectedReadyCount,
+    readinessRevision: selectedReadyOutpointKey,
   })
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
 
-  const estimateCoversSelection = selectionCoveredByCompletionEstimate({
-    selectedTotalSats: selectedInProgressTotalSats,
-    estimatedSelectedTotalSats: completionFeeQuery.data?.selectedTotalSats,
-    estimateError: completionFeeQuery.data?.estimateError,
-  })
   const allSelectedCanComplete =
     selectedInProgressRows.length > 0 &&
-    (selectedInProgressRows.every((row) => row.canComplete) || estimateCoversSelection)
+    selectedInProgressRows.every((row) => row.canComplete)
 
   useEffect(() => {
     if (currentAddress) {

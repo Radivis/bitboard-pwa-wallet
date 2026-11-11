@@ -42,6 +42,7 @@ import {
 } from '@/lib/wallet/send-review-summary'
 import { buildLabSendMutationParams } from '@/lib/lab/lab-send-submit'
 import { normalizeSendRecipient } from '@/lib/wallet/send/normalize-send-recipient'
+import { stripPastedInvisibleCharacters } from '@/lib/wallet/strip-pasted-invisible-characters'
 import { computeSendPageBalances } from '@/lib/wallet/send/send-page-balances'
 import {
   canBuildOnChainSend,
@@ -230,6 +231,13 @@ export function SendFlow() {
     () => normalizeSendRecipient(recipient),
     [recipient],
   )
+
+  useEffect(() => {
+    const strippedRecipient = stripPastedInvisibleCharacters(recipient)
+    if (strippedRecipient !== recipient) {
+      setRecipient(strippedRecipient)
+    }
+  }, [recipient, setRecipient])
 
   const {
     lightningAvailable,
@@ -761,7 +769,7 @@ export function SendFlow() {
     return (
       <SendTransactionReviewStep
         networkMode={networkMode}
-        recipient={recipient}
+        recipient={normalizedRecipient}
         amountSats={amountSats}
         effectiveFeeRate={effectiveFeeRate}
         onchainDustWarning={onchainDustWarning}

@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use bitcoin::{Address, Network};
 
-use crate::error::CryptoError;
+use crate::error::{CryptoError, INVALID_BITCOIN_ADDRESS_MESSAGE};
 
 /// Drop invisible paste marks and markdown backticks, then trim whitespace.
 pub fn sanitize_pasted_bitcoin_text(raw: &str) -> String {
@@ -46,13 +46,37 @@ fn is_pasted_invisible_or_backtick(character: char) -> bool {
 }
 
 /// Parse a user-supplied address for `network`, after paste sanitization.
+///
+/// Unknown witness versions and non-standard program lengths decode in rust-bitcoin
+/// but are not payable: `address_type()` is `None` for those outputs.
 pub fn parse_bitcoin_address(raw: &str, network: Network) -> Result<Address, CryptoError> {
     let sanitized = sanitize_pasted_bitcoin_text(raw);
-    Ok(Address::from_str(&sanitized)?.require_network(network)?)
+    let address = Address::from_str(&sanitized)?.require_network(network)?;
+    if !is_standard_payable_address(&address) {
+        return Err(CryptoError::Transaction(
+            INVALID_BITCOIN_ADDRESS_MESSAGE.to_string(),
+        ));
+    }
+    Ok(address)
+}
+
+fn is_standard_payable_address(address: &Address) -> bool {
+    matches!(
+        address.address_type(),
+        Some(
+            bitcoin::AddressType::P2pkh
+                | bitcoin::AddressType::P2sh
+                | bitcoin::AddressType::P2wpkh
+                | bitcoin::AddressType::P2wsh
+                | bitcoin::AddressType::P2tr
+        )
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::{WitnessProgram, WitnessVersion};
+
     use super::*;
     use crate::error::INVALID_BITCOIN_ADDRESS_MESSAGE;
 
@@ -83,6 +107,32 @@ mod tests {
         let parsed = parse_bitcoin_address(&polluted, Network::Signet).expect("polluted parse");
         let clean = parse_bitcoin_address(MUTINYNET_P2TR, Network::Signet).expect("clean parse");
         assert_eq!(parsed, clean);
+    }
+
+    #[test]
+    fn non_standard_witness_program_is_rejected() {
+        let short_v1 = witness_address(Network::Bitcoin, WitnessVersion::V1, &[1_u8; 20]);
+        let future_version = witness_address(Network::Bitcoin, WitnessVersion::V2, &[2_u8; 32]);
+
+        let short_v1_error =
+            parse_bitcoin_address(&short_v1, Network::Bitcoin).expect_err("20-byte v1");
+        let future_version_error =
+            parse_bitcoin_address(&future_version, Network::Bitcoin).expect_err("witness v2");
+        assert!(
+            short_v1_error
+                .to_string()
+                .contains(INVALID_BITCOIN_ADDRESS_MESSAGE)
+        );
+        assert!(
+            future_version_error
+                .to_string()
+                .contains(INVALID_BITCOIN_ADDRESS_MESSAGE)
+        );
+    }
+
+    fn witness_address(network: Network, version: WitnessVersion, program: &[u8]) -> String {
+        let witness_program = WitnessProgram::new(version, program).expect("witness program");
+        Address::from_witness_program(witness_program, network).to_string()
     }
 
     #[test]

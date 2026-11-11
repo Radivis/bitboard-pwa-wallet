@@ -1228,8 +1228,8 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb: number
-  /** Changes when listed rows become claimable so the estimate is not stuck on the not-ready error. */
-  readinessRevision?: number
+  /** Identity of selected rows WASM already marks claimable, so a swap of ready and waiting rows refetches the estimate. */
+  readinessRevision?: string
 }) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
@@ -1257,7 +1257,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
               destinationTrimmed,
               params.feeRateSatPerVb,
             ),
-            params.readinessRevision ?? 0,
+            params.readinessRevision ?? '',
           ]
         : arkadeDisabledQueryKey('unilateral-completion-fee'),
     enabled,
