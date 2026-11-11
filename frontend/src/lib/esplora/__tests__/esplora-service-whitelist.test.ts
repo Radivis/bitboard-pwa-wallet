@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   customEsploraMatchesWhitelistedBase,
+  decideEsploraMirrorResponse,
   ESPLORA_PROVIDER_BASES,
   esploraViteProxyEntries,
+  esploraFallbackUpstreamBase,
   getUpstreamBaseForEsploraProxy,
+  isEsploraUpstreamFailoverStatus,
   isKnownEsploraProviderId,
   isWhitelistedEsploraBaseUrl,
   normalizeEsploraBaseUrl,
@@ -41,6 +44,15 @@ describe('customEsploraMatchesWhitelistedBase', () => {
         'testnet',
       ),
     ).toEqual({ providerId: 'default' })
+  })
+
+  it('matches blockstream testnet4 as the blockstream provider', () => {
+    expect(
+      customEsploraMatchesWhitelistedBase(
+        'https://blockstream.info/testnet4/api/',
+        'testnet',
+      ),
+    ).toEqual({ providerId: 'blockstream' })
   })
 
   it('matches blockstream mainnet', () => {
@@ -100,8 +112,46 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(getUpstreamBaseForEsploraProxy('evil', 'mainnet')).toBeNull()
   })
 
-  it('returns null for blockstream testnet (not configured)', () => {
-    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBeNull()
+  it('resolves blockstream testnet4', () => {
+    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBe(
+      ESPLORA_PROVIDER_BASES.blockstream.testnet,
+    )
+  })
+
+  it('falls back from default testnet4 to the blockstream mirror', () => {
+    expect(esploraFallbackUpstreamBase('default', 'testnet')).toBe(
+      'https://blockstream.info/testnet4/api',
+    )
+  })
+
+  it('has no fallback for mutinynet or an explicit blockstream choice', () => {
+    expect(esploraFallbackUpstreamBase('default', 'mutinynet')).toBeNull()
+    expect(esploraFallbackUpstreamBase('blockstream', 'testnet')).toBeNull()
+  })
+
+  it('fails over on gateway errors and keeps rate limits on the preferred host', () => {
+    expect(isEsploraUpstreamFailoverStatus(429)).toBe(false)
+    expect(isEsploraUpstreamFailoverStatus(503)).toBe(true)
+    expect(isEsploraUpstreamFailoverStatus(200)).toBe(false)
+    expect(isEsploraUpstreamFailoverStatus(404)).toBe(false)
+  })
+
+  it('keeps the preferred response when the mirror is rate limited', () => {
+    expect(decideEsploraMirrorResponse(502, 429)).toEqual({
+      useFallbackResponse: false,
+      markPreferredHostDown: false,
+    })
+    expect(decideEsploraMirrorResponse(null, 429)).toEqual({
+      useFallbackResponse: true,
+      markPreferredHostDown: false,
+    })
+  })
+
+  it('moves to the mirror after a gateway failure that the mirror can serve', () => {
+    expect(decideEsploraMirrorResponse(502, 200)).toEqual({
+      useFallbackResponse: true,
+      markPreferredHostDown: true,
+    })
   })
 
   it('resolves legacy testnet and has no legacy signet row', () => {

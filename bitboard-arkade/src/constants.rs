@@ -8,7 +8,9 @@ pub const DEFAULT_TX_FEE_RATE: &str = "1";
 pub const MIN_FEE_RATE_SAT_PER_VB: f64 = 0.1;
 pub const ESPLORA_FEE_ESTIMATE_BLOCK_TARGET: u16 = 1;
 
-/// Renew VTXOs when remaining lifetime drops below this fraction of total lifetime.
+/// Last-chance renew window: remaining lifetime below this fraction of total lifetime.
+/// An operator fee program can open renewal earlier, whenever the quoted offchain-input fee
+/// for that VTXO is zero. That wider window lives in `EarlyRenewalFeeWaiver`.
 pub const VTXO_SELF_RENEW_REMAINING_FRACTION: f64 = 0.10;
 
 /// Bitcoin witness scale factor (non-witness bytes count 4× toward block weight).
@@ -72,3 +74,7 @@ pub const NETWORK_MODE_REGTEST: &str = "regtest";
 /// Matches ark-client `prepare_intent` Register `expire_at = now + 2 * 60` (ARK-UP-03).
 /// Keep the frontend `BOARDING_REGISTER_INTENT_TTL_SECS` in sync.
 pub const BOARDING_REGISTER_INTENT_TTL_SECS: i64 = 2 * 60;
+
+/// Extra hold after the registration TTL before a timed-out boarding intent may be registered
+/// again. Used when the operator did not advertise a session duration. One public-ASP round.
+pub const BOARDING_REREGISTER_MIN_HOLD_SECS: i64 = 60;

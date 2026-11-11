@@ -93,6 +93,11 @@ export const ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE = {
   text: 'Your intent is still registered, but the batch round timed out before it completed. Bitboard will not register those same coins again while that registration is live. Cancel withdraws VTXO intents when the operator supports it. Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent. Retry is shown immediately; boarding Retry stays disabled until the operator registration expires (~2 minutes).',
 } as const
 
+export const ARKADE_PENDING_BATCH_INTENT_REREGISTER_HOLD_INFOMODE = {
+  title: 'Boarding round still open',
+  text: 'This boarding output may still be in the operator\'s current round. Retry stays off until that round can finish. Registering again can fail the round with "not enough intent confirmations".',
+} as const
+
 export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE =
   ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
 
@@ -118,12 +123,12 @@ export const ARKADE_DELEGATOR_FEE_INFOMODE = {
 
 export const ARKADE_RENEW_VTXOS_INFOMODE = {
   title: 'Renew VTXOs now',
-  text: 'Each virtual balance unit (VTXO) must be renewed before it expires, or it falls back to a slower on-chain path. Use this while unlocked if you want to renew manually instead of relying on the delegator.',
+  text: 'Each virtual balance unit (VTXO) must be renewed before it expires, or it falls back to a slower on-chain path. This renews VTXOs in the last 10% of their lifetime, and earlier when the operator no longer charges an early-renewal fee. On Mutinynet that fee drops to zero about six days before expiry, so a VTXO with a day left is already in the window. Use this while unlocked if you want to renew manually instead of relying on the delegator.',
 } as const
 
 export const ARKADE_VTXO_EXPIRY_INDICATOR_INFOMODE = {
   title: 'VTXO expiry',
-  text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs. Amber text means some are already in the renewal window.',
+  text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs, even before they can be renewed. Amber text means some are already in the renewal window: the last 10% of their lifetime, or sooner when the operator no longer charges an early-renewal fee.',
 } as const
 
 export const ARKADE_OPERATOR_BATCH_WINDOW_INFOMODE = {

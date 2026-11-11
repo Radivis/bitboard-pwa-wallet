@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { DesignBanner } from '@/components/design/DesignBanner'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 
@@ -5,7 +6,7 @@ export type RailLifecycleErrorBannerBlockProps = {
   rail: DashboardRailId
   variant: 'load' | 'sync' | 'sync-warning'
   title: string
-  errorMessage: string
+  errorMessage: ReactNode
   onRetry: () => void
   isRetrying?: boolean
   retryLabel?: string

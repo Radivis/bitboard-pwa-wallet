@@ -29,6 +29,7 @@ import type { BarkEmergencyExitFeePrefs } from '@/workers/bark-api'
 import type {
   BarkExitNodeSweepKind,
   BarkExitNodeSweepVtxoItem,
+  BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 
 export type BarkEncryptedPayloadDeps = WorkerWalletPayloadDeps
@@ -153,15 +154,16 @@ export async function mergeExitChainNotice(
   )
 }
 
-/** Drops one node kind after the user dismisses that section. */
+/** Drops one spent output after the user dismisses that section. A missing output drops the kind. */
 export async function clearExitChainNotice(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
   kind: BarkExitNodeSweepKind,
+  spentOutput?: BarkExitSpentOutput | null,
 ): Promise<void> {
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
-    applyClearedExitChainNotice({ payload, network, kind }),
+    applyClearedExitChainNotice({ payload, network, kind, spentOutput }),
   )
 }
 

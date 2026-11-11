@@ -27,9 +27,9 @@ export type RailSyncControlProps = {
   syncErrorMessage?: string | null
   /** When true, caption stays short; full `syncErrorMessage` belongs in `RailSyncErrorBanner`. */
   syncErrorDetailInBanner?: boolean
-  /** Shown in caption when operator sync succeeded but left a non-blocking warning. */
-  syncWarningMessage?: string | null
-  /** When true, caption stays short; full `syncWarningMessage` belongs in `RailSyncWarningBanner`. */
+  /** Shown in caption when operator sync succeeded but left non-blocking warnings. */
+  syncWarningMessages?: readonly string[]
+  /** When true, caption stays short; the warning text belongs in `RailSyncWarningBanner`. */
   syncWarningDetailInBanner?: boolean
   secondaryAction?: ReactNode
 }
@@ -44,7 +44,7 @@ export function RailSyncControl({
   railConfigured = true,
   syncErrorMessage = null,
   syncErrorDetailInBanner = false,
-  syncWarningMessage = null,
+  syncWarningMessages = [],
   syncWarningDetailInBanner = false,
   secondaryAction,
 }: RailSyncControlProps) {
@@ -54,7 +54,7 @@ export function RailSyncControl({
 
   const isSyncing = syncPhase === 'syncing' || isSyncPending
   const isSyncError = syncPhase === 'sync-error'
-  const hasSyncWarning = syncWarningMessage != null && !isSyncError && !isSyncing
+  const hasSyncWarning = syncWarningMessages.length > 0 && !isSyncError && !isSyncing
   const lastSyncedIso =
     lastSyncedAt != null
       ? lastSyncedAt instanceof Date
@@ -96,7 +96,7 @@ export function RailSyncControl({
           : hasSyncWarning
             ? syncWarningDetailInBanner
               ? RAIL_SYNC_WARNING_CAPTION_DEFERRED
-              : syncWarningMessage
+              : syncWarningMessages.join(' ')
             : lastSyncedAt != null
               ? formatLastSyncedCaption(lastSyncedAt)
               : 'Not synced yet'}

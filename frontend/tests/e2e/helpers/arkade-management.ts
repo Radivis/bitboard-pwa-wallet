@@ -17,8 +17,7 @@ import {
 import { clickDrawerNavLink } from './drawer-nav'
 import {
   waitForArkadeLoadReady,
-  waitForDashboardArkadeBalanceAtLeast,
-  readDashboardArkadeBalanceSats,
+  readDashboardArkadeOffchainSpendableSats,
   triggerArkadeRailSync,
 } from './dashboard-arkade'
 
@@ -107,9 +106,17 @@ export async function readBoardingAddress(page: Page): Promise<string> {
  */
 const BOARDING_COOPERATIVE_SETTLE_BUDGET_MS = 25_000
 
-export async function settleBoardingUtxo(page: Page, boardSats: number): Promise<void> {
-  const minSettledSats = boardSats - Math.ceil(boardSats * 0.02)
-  let settleClicked = false
+/** Sats shown on the board page's "Ready to settle" line. `0` is not a positive amount. */
+function readyToSettleSats(readyText: string): number {
+  const match = readyText.match(/Ready to settle:\s*(\d+)/)
+  if (match == null) {
+    return 0
+  }
+  return Number(match[1])
+}
+
+export async function settleBoardingUtxo(page: Page, _boardSats: number): Promise<void> {
+  let lastSettleClickAt = 0
 
   await expect(async () => {
     const isSettling = await page.getByRole('button', { name: 'Settling…' }).isVisible()
@@ -117,15 +124,18 @@ export async function settleBoardingUtxo(page: Page, boardSats: number): Promise
       .getByText(/The Arkade server is processing your boarding/)
       .isVisible()
     const isWaitingOperator = await page.getByText('Waiting for Arkade operator').isVisible()
+    const pendingIntentBanner = page.getByTestId('arkade-pending-batch-intent-banner')
     const settleButton = page.getByRole('button', { name: 'Settle boarding UTXO' })
+    const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
+    const readyText = (await readyLine.textContent()) ?? ''
+    const readySats = readyToSettleSats(readyText)
 
-    if (!settleClicked && !isSettling && !isProcessingBoard && (await settleButton.isEnabled())) {
-      await settleButton.click()
-      settleClicked = true
-      throw new Error('Boarding settle started')
-    }
-
-    if (isSettling || isProcessingBoard || isWaitingOperator) {
+    if (
+      isSettling ||
+      isProcessingBoard ||
+      isWaitingOperator ||
+      (await pendingIntentBanner.isVisible())
+    ) {
       throw new Error('Boarding settle still in progress')
     }
 
@@ -133,47 +143,37 @@ export async function settleBoardingUtxo(page: Page, boardSats: number): Promise
       (await page.getByText('Boarding settlement completed').isVisible()) ||
       (await page.getByText('Boarding settlement submitted to operator').isVisible())
     ) {
-      await goToWalletTab(page, 'Dashboard')
-      await triggerArkadeRailSync(page, 60_000)
-      const balanceSats = await readDashboardArkadeBalanceSats(page)
-      if (balanceSats >= minSettledSats) {
-        return
-      }
-      throw new Error(
-        `Boarding settle toast seen but Arkade balance is ${balanceSats} sats (need ≥${minSettledSats})`,
-      )
-    }
-
-    const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
-    const readyText = (await readyLine.textContent()) ?? ''
-    if (/Ready to settle:\s*0(\s|$)/.test(readyText)) {
       return
     }
 
     const expiredLine = page.locator('li').filter({ hasText: 'Unilateral exit only:' })
     const expiredText = (await expiredLine.textContent()) ?? ''
     const expiredMatch = expiredText.match(/Unilateral exit only:\s*([\d,]+)/)
-    const expiredSats = expiredMatch
-      ? Number(expiredMatch[1].replace(/,/g, ''))
-      : 0
+    const expiredSats = expiredMatch ? Number(expiredMatch[1].replace(/,/g, '')) : 0
     if (expiredSats > 0) {
       throw new Error(`Boarding UTXO left cooperative settle window: ${expiredText.trim()}`)
     }
 
     const errorToast = page.locator('[data-sonner-toast]').filter({
-      hasText: /boarding|settle|intent|register|expired|fee|failed|error|timed out|batch|operator/i,
+      hasText: /failed|error|timed out|expired/i,
     })
     if (await errorToast.first().isVisible()) {
       const message = ((await errorToast.first().textContent()) ?? 'unknown').trim()
       throw new Error(`Boarding settle failed: ${message}`)
     }
 
-    if (settleClicked && (await settleButton.isEnabled())) {
-      settleClicked = false
-      throw new Error(`Retrying boarding settle (${readyText.trim()})`)
+    const settleClickCooldownElapsed = Date.now() - lastSettleClickAt > 2_000
+    if (readySats > 0 && settleClickCooldownElapsed && (await settleButton.isEnabled())) {
+      await settleButton.click()
+      lastSettleClickAt = Date.now()
+      throw new Error('Boarding settle started')
     }
 
-    throw new Error(`Waiting for boarding settle (${readyText.trim()})`)
+    if (lastSettleClickAt > 0) {
+      throw new Error(`Boarding settle still in progress (${readyText.trim()})`)
+    }
+
+    throw new Error(`Waiting for a boarding UTXO to be ready to settle (${readyText.trim()})`)
   }).toPass({ timeout: 300_000 })
 }
 
@@ -182,21 +182,22 @@ export async function fundAndBoardToArkade(
   boardSats: number,
 ): Promise<void> {
   const boardingAddress = await readBoardingAddress(page)
-  const fundStartedAt = Date.now()
   await fundRegtestAddress(boardingAddress, boardSats)
   await waitForConfirmedBalance(boardingAddress, boardSats, 20_000)
-  // Stay on the board page — avoid dashboard on-chain sync racing the Arkade worker.
+  // Window starts at confirmation. Stay on the board page so its empty-status poll
+  // can see the UTXO without a dashboard scan or a reload (reload locks the wallet).
+  const confirmedAt = Date.now()
   await expect
     .poll(
       async () => {
         const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
         const text = (await readyLine.textContent()) ?? ''
-        return /Ready to settle:\s*(?!0\s)/.test(text)
+        return readyToSettleSats(text) > 0
       },
-      { timeout: 15_000, intervals: [200, 500, 1000] },
+      { timeout: 15_000, intervals: [500, 1000, 2000] },
     )
     .toBe(true)
-  const elapsedMs = Date.now() - fundStartedAt
+  const elapsedMs = Date.now() - confirmedAt
   if (elapsedMs > BOARDING_COOPERATIVE_SETTLE_BUDGET_MS) {
     throw new Error(
       `Boarding UTXO cooperative settle window likely expired before settle (${elapsedMs}ms since fund; budget ${BOARDING_COOPERATIVE_SETTLE_BUDGET_MS}ms)`,
@@ -205,7 +206,12 @@ export async function fundAndBoardToArkade(
   await settleBoardingUtxo(page, boardSats)
   await goToWalletTab(page, 'Dashboard')
   await triggerArkadeRailSync(page, 120_000)
-  await waitForDashboardArkadeBalanceAtLeast(page, boardSats - Math.ceil(boardSats * 0.02), 120_000)
+  const minOffchainSats = boardSats - Math.ceil(boardSats * 0.02)
+  await expect(async () => {
+    await triggerArkadeRailSync(page, 120_000)
+    const offchainSats = await readDashboardArkadeOffchainSpendableSats(page)
+    expect(offchainSats).toBeGreaterThanOrEqual(minOffchainSats)
+  }).toPass({ timeout: 120_000 })
 }
 
 /**

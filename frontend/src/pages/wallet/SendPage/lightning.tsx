@@ -49,6 +49,7 @@ export function useSendFlowLightning({
   connectedLightningWallets,
   normalizedRecipient,
   amountSats,
+  onchainAddressValid,
 }: {
   isLightningEnabled: boolean
   networkMode: NetworkMode
@@ -56,6 +57,7 @@ export function useSendFlowLightning({
   connectedLightningWallets: ConnectedLightningWallet[]
   normalizedRecipient: string
   amountSats: number
+  onchainAddressValid?: boolean
 }) {
   const lightningAvailable = isLightningEnabled && isLightningSupported(networkMode)
   const [isResolvingLightningPayee, setIsResolvingLightningPayee] =
@@ -155,8 +157,9 @@ export function useSendFlowLightning({
         normalizedRecipient,
         networkMode,
         lightningAvailable,
+        onchainAddressValid,
       }),
-    [normalizedRecipient, networkMode, lightningAvailable],
+    [normalizedRecipient, networkMode, lightningAvailable, onchainAddressValid],
   )
 
   const lightningRecipientOk =

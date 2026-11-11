@@ -1,0 +1,183 @@
+//! Holds swept-coin spent marks until the seizure notice is stored.
+//!
+//! The export hold is [`crate::envelope_export_hold::EnvelopeExportHold`].
+//! This module keeps the previous coin states and puts them back when the
+//! notice is not stored. A durable exit-row write exports the whole envelope,
+//! so that export waits until the notice is stored.
+
+use std::cell::RefCell;
+
+use crate::envelope_export_hold::EnvelopeExportHold;
+use crate::exit_seizure::SweptVtxoPreviousState;
+
+struct SweptVtxoMarkHold {
+    /// Kept so its drop allows the envelope export again.
+    _deferral: EnvelopeExportHold,
+    previous: Vec<SweptVtxoPreviousState>,
+}
+
+thread_local! {
+    static SWEPT_VTXO_MARK_HOLD: RefCell<Option<SweptVtxoMarkHold>> = const { RefCell::new(None) };
+}
+
+/// Starts a hold. A second call keeps the first hold and adds the coins.
+pub(crate) fn begin(deferral: EnvelopeExportHold, previous: Vec<SweptVtxoPreviousState>) {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| {
+        let mut hold = slot.borrow_mut();
+        if let Some(existing) = hold.as_mut() {
+            existing.previous.extend(previous);
+            drop(deferral);
+            return;
+        }
+        *hold = Some(SweptVtxoMarkHold {
+            _deferral: deferral,
+            previous,
+        });
+    });
+}
+
+pub(crate) fn add_previous(previous: Vec<SweptVtxoPreviousState>) {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| {
+        if let Some(hold) = slot.borrow_mut().as_mut() {
+            hold.previous.extend(previous);
+        }
+    });
+}
+
+pub(crate) fn is_held() -> bool {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| slot.borrow().is_some())
+}
+
+/// Drops the hold and allows durable flushes again. Does not write the envelope.
+pub(crate) fn release() {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| {
+        slot.borrow_mut().take();
+    });
+}
+
+pub(crate) fn take_previous() -> Vec<SweptVtxoPreviousState> {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| {
+        slot.borrow_mut()
+            .as_mut()
+            .map(|hold| std::mem::take(&mut hold.previous))
+            .unwrap_or_default()
+    })
+}
+
+pub(crate) fn put_previous_back(previous: Vec<SweptVtxoPreviousState>) {
+    SWEPT_VTXO_MARK_HOLD.with(|slot| {
+        if let Some(hold) = slot.borrow_mut().as_mut() {
+            hold.previous = previous;
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use bark::persist::adaptor::partition;
+    use bark::persist::adaptor::{Record, SortKey, StorageAdaptor};
+
+    use super::{add_previous, begin, is_held, put_previous_back, release, take_previous};
+    use crate::exit_seizure::SweptVtxoPreviousState;
+    use crate::record_store::{NativeDurableFlushHook, SharedRecordStore};
+
+    fn spent_coin() -> SweptVtxoPreviousState {
+        SweptVtxoPreviousState {
+            vtxo_id: bark::ark::VtxoId::from_slice(&[7u8; 36]).expect("36 bytes"),
+            state: bark::vtxo::VtxoState::Spendable,
+        }
+    }
+
+    fn record(partition_id: u8, pk: &str, data: &[u8]) -> Record {
+        Record {
+            partition: partition_id,
+            pk: pk.as_bytes().to_vec(),
+            sort_key: Some(SortKey::u32_asc(1)),
+            data: data.to_vec(),
+        }
+    }
+
+    fn flush_log() -> (Arc<Mutex<Vec<String>>>, NativeDurableFlushHook) {
+        let envelopes = Arc::new(Mutex::new(Vec::new()));
+        let flushed = Arc::clone(&envelopes);
+        let hook: NativeDurableFlushHook = Arc::new(move |record_envelope| {
+            flushed.lock().expect("flush log").push(record_envelope);
+            Ok(())
+        });
+        (envelopes, hook)
+    }
+
+    fn flushed_count(envelopes: &Mutex<Vec<String>>) -> usize {
+        envelopes.lock().expect("flush log").len()
+    }
+
+    #[tokio::test]
+    async fn an_exit_row_does_not_export_a_vtxo_write_while_swept_marks_are_held() {
+        let mut store = SharedRecordStore::empty();
+        let (envelopes, hook) = flush_log();
+        store.set_durable_flush_hook(hook);
+        let deferral = store.hold_envelope_export().expect("envelope hold");
+        begin(deferral, vec![spent_coin()]);
+
+        store
+            .put(record(partition::VTXO, "swept-coin", b"spent"))
+            .await
+            .unwrap();
+        store
+            .put(record(partition::EXIT_VTXO, "exit-row", b"progress"))
+            .await
+            .unwrap();
+
+        assert_eq!(flushed_count(&envelopes), 0);
+        assert!(is_held());
+        release();
+        assert!(!is_held());
+        assert_eq!(flushed_count(&envelopes), 0);
+
+        store
+            .put(record(partition::EXIT_VTXO, "later-exit", b"later"))
+            .await
+            .unwrap();
+
+        let encoded_envelope = {
+            let flushed = envelopes.lock().expect("flush log");
+            assert_eq!(flushed.len(), 1);
+            flushed[0].clone()
+        };
+        let restored =
+            SharedRecordStore::from_encoded_envelope(&encoded_envelope).expect("flushed envelope");
+        let swept = restored
+            .get(partition::VTXO, b"swept-coin")
+            .await
+            .unwrap()
+            .expect("spent mark is in the later export");
+        assert_eq!(swept.data, b"spent");
+    }
+
+    #[tokio::test]
+    async fn a_failed_restore_keeps_the_hold_so_the_exit_row_does_not_export() {
+        let mut store = SharedRecordStore::empty();
+        let (envelopes, hook) = flush_log();
+        store.set_durable_flush_hook(hook);
+        let deferral = store.hold_envelope_export().expect("envelope hold");
+        begin(deferral, vec![spent_coin()]);
+
+        add_previous(vec![spent_coin()]);
+        let previous = take_previous();
+        assert_eq!(previous.len(), 2);
+        assert_eq!(previous[0].vtxo_id, spent_coin().vtxo_id);
+        assert_eq!(previous[0].state, bark::vtxo::VtxoState::Spendable);
+        assert!(is_held());
+        put_previous_back(previous);
+        store
+            .put(record(partition::EXIT_VTXO, "exit-row", b"progress"))
+            .await
+            .unwrap();
+
+        assert_eq!(flushed_count(&envelopes), 0);
+        assert!(is_held());
+        release();
+    }
+}

@@ -29,6 +29,8 @@ export type CanBuildOnChainSendInput = {
   isLabWithNoBalance: boolean
   useCustomFee: boolean
   customFeeParsed: number | null
+  /** Combined segwit and worker result. Omitted callers use the synchronous segwit check. */
+  onchainAddressValid?: boolean
 }
 
 export function canBuildOnChainSend({
@@ -42,13 +44,16 @@ export function canBuildOnChainSend({
   isLabWithNoBalance,
   useCustomFee,
   customFeeParsed,
+  onchainAddressValid,
 }: CanBuildOnChainSendInput): boolean {
+  const addressValid =
+    onchainAddressValid ?? isValidAddress(normalizedRecipient, networkMode)
   return (
     !isLightningSendMode &&
     !isArkadeSendMode &&
     !isBarkSendMode &&
     normalizedRecipient.length > 0 &&
-    isValidAddress(normalizedRecipient, networkMode) &&
+    addressValid &&
     isValidSendAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
     !isLabWithNoBalance &&

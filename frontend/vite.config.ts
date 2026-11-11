@@ -5,6 +5,7 @@ import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version.ts'
 import { arkOperatorViteProxyEntries } from './src/lib/arkade/arkade-operator-proxy.ts'
 import { e2eArkadeOperatorMockPlugin } from './src/lib/arkade/e2e/vite-e2e-arkade-operator-mock-plugin.ts'
+import { esploraDevProxyPlugin } from './src/lib/esplora/esplora-dev-proxy-plugin.ts'
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist.ts'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist.ts'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions.ts'
@@ -201,6 +202,7 @@ export default defineConfig({
     lnurlViteDevProxyPlugin(),
     barkServerNoticeVitePlugin(),
     e2eArkadeOperatorMockPlugin(),
+    esploraDevProxyPlugin(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

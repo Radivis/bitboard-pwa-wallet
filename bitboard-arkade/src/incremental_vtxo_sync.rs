@@ -16,6 +16,15 @@ pub fn user_facing_operator_sync_uses_light_fetch(snapshot: Option<&OffchainVtxo
     snapshot.is_some()
 }
 
+/// User-facing sync calls `discover_keys` only for bootstrap, when no snapshot exists (ARK-SYNC-08).
+///
+/// Signer migration does not use this predicate. It still calls `sync_offchain_keys` itself.
+pub fn user_facing_operator_sync_runs_key_discovery(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+) -> bool {
+    !user_facing_operator_sync_uses_light_fetch(snapshot)
+}
+
 /// Background full list is due when a snapshot exists and the caller asked to schedule one,
 /// or `full_listed_at` is older than [`FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS`].
 ///
@@ -51,25 +60,58 @@ pub fn send_coin_selection_may_use_offchain_snapshot(
     !full_vtxo_list_reconcile_due(snapshot, now, false)
 }
 
+/// Revealed receive indices included in the light VTXO address fetch.
+///
+/// Wider than the key-discovery gap of 20, so a receive on an older revealed address
+/// is included without a full list. `discover_keys` still stops on that gap.
+pub const LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT: u32 = 60;
+
 /// Inclusive lower bound of HD indices included in the recent-script light fetch.
-pub fn recent_offchain_derivation_index_floor(next_index: u32, gap_limit: u32) -> u32 {
-    next_index.saturating_sub(gap_limit)
+pub fn recent_offchain_derivation_index_floor(next_index: u32, window_size: u32) -> u32 {
+    next_index.saturating_sub(window_size)
 }
 
 pub fn derivation_index_is_in_recent_sync_window(
     derivation_index: u32,
     next_index: u32,
-    gap_limit: u32,
+    window_size: u32,
 ) -> bool {
-    derivation_index >= recent_offchain_derivation_index_floor(next_index, gap_limit)
+    derivation_index >= recent_offchain_derivation_index_floor(next_index, window_size)
+}
+
+/// Whether a light VTXO fetch must include `derivation_index`.
+///
+/// User-facing sync passes `restored_index_floor: None` and keeps the recent window.
+/// The catch-up after `discover_keys` passes the cursor from before that restore.
+/// Indices at or above that cursor and below `next_index` were just found. They are
+/// not in the previous snapshot, and the recent window drops them when the cursor
+/// jumps by more than `window_size`.
+pub fn offchain_index_included_in_light_merge(
+    derivation_index: u32,
+    next_index: u32,
+    window_size: u32,
+    restored_index_floor: Option<u32>,
+) -> bool {
+    if derivation_index >= next_index {
+        return false;
+    }
+    if derivation_index_is_in_recent_sync_window(derivation_index, next_index, window_size) {
+        return true;
+    }
+    let Some(floor) = restored_index_floor else {
+        return false;
+    };
+    derivation_index >= floor && derivation_index < next_index
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS, derivation_index_is_in_recent_sync_window,
-        full_vtxo_list_reconcile_due, recent_offchain_derivation_index_floor,
-        send_coin_selection_may_use_offchain_snapshot, user_facing_operator_sync_uses_light_fetch,
+        FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS, LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT,
+        derivation_index_is_in_recent_sync_window, full_vtxo_list_reconcile_due,
+        offchain_index_included_in_light_merge, recent_offchain_derivation_index_floor,
+        send_coin_selection_may_use_offchain_snapshot,
+        user_facing_operator_sync_runs_key_discovery, user_facing_operator_sync_uses_light_fetch,
     };
     use crate::persistence::OffchainVtxoSnapshot;
     use std::collections::BTreeMap;
@@ -85,13 +127,81 @@ mod tests {
     }
 
     #[test]
-    fn recent_script_window_includes_only_indices_at_or_after_next_minus_gap() {
-        assert_eq!(recent_offchain_derivation_index_floor(185, 20), 165);
-        assert!(derivation_index_is_in_recent_sync_window(165, 185, 20));
-        assert!(derivation_index_is_in_recent_sync_window(184, 185, 20));
-        assert!(!derivation_index_is_in_recent_sync_window(164, 185, 20));
-        assert_eq!(recent_offchain_derivation_index_floor(10, 20), 0);
-        assert!(derivation_index_is_in_recent_sync_window(0, 10, 20));
+    fn recent_script_window_includes_the_latest_60_revealed_indices() {
+        let window = LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT;
+        assert_eq!(window, 60);
+        assert_eq!(recent_offchain_derivation_index_floor(185, window), 125);
+        assert!(derivation_index_is_in_recent_sync_window(125, 185, window));
+        assert!(derivation_index_is_in_recent_sync_window(184, 185, window));
+        assert!(!derivation_index_is_in_recent_sync_window(124, 185, window));
+        assert_eq!(recent_offchain_derivation_index_floor(40, window), 0);
+        assert!(derivation_index_is_in_recent_sync_window(0, 40, window));
+    }
+
+    #[test]
+    fn post_discovery_merge_includes_restored_indices_outside_the_recent_window() {
+        let window = LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT;
+        let cursor_before = 10;
+        let cursor_after = 201;
+        assert!(!derivation_index_is_in_recent_sync_window(
+            cursor_before,
+            cursor_after,
+            window
+        ));
+        assert!(offchain_index_included_in_light_merge(
+            cursor_before,
+            cursor_after,
+            window,
+            Some(cursor_before),
+        ));
+        assert!(offchain_index_included_in_light_merge(
+            140,
+            cursor_after,
+            window,
+            Some(cursor_before),
+        ));
+        assert!(offchain_index_included_in_light_merge(
+            200,
+            cursor_after,
+            window,
+            Some(cursor_before),
+        ));
+        assert!(!offchain_index_included_in_light_merge(
+            9,
+            cursor_after,
+            window,
+            Some(cursor_before),
+        ));
+        assert!(!offchain_index_included_in_light_merge(
+            cursor_after,
+            cursor_after,
+            window,
+            Some(cursor_before),
+        ));
+        assert!(!offchain_index_included_in_light_merge(
+            cursor_before,
+            cursor_after,
+            window,
+            None,
+        ));
+    }
+
+    #[test]
+    fn unchanged_cursor_does_not_fetch_the_unrevealed_next_index() {
+        let window = LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT;
+        let cursor = 40;
+        assert!(offchain_index_included_in_light_merge(
+            0,
+            cursor,
+            window,
+            Some(cursor)
+        ));
+        assert!(!offchain_index_included_in_light_merge(
+            cursor,
+            cursor,
+            window,
+            Some(cursor),
+        ));
     }
 
     #[test]
@@ -108,6 +218,15 @@ mod tests {
     #[test]
     fn user_facing_sync_is_full_when_snapshot_missing() {
         assert!(!user_facing_operator_sync_uses_light_fetch(None));
+    }
+
+    #[test]
+    fn user_facing_sync_skips_key_discovery_when_snapshot_exists() {
+        let snapshot = snapshot_with_full_listed_at(1);
+        assert!(!user_facing_operator_sync_runs_key_discovery(Some(
+            &snapshot
+        )));
+        assert!(user_facing_operator_sync_runs_key_discovery(None));
     }
 
     #[test]

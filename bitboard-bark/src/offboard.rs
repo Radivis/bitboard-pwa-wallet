@@ -96,7 +96,8 @@ pub async fn bark_send_onchain(address: String, amount_sats: u64) -> Result<Stri
         let ids_before = pending_offboard_ids(&wallet).await?;
         let result = wallet
             .send_onchain(destination, bitcoin::Amount::from_sat(amount_sats))
-            .await;
+            .await
+            .map(|offboard| offboard.txid);
         offboard_txid_or_parked(&wallet, ids_before, result).await
     }
     .await;
@@ -127,7 +128,10 @@ pub async fn bark_offboard_all(address: String) -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         let ids_before = pending_offboard_ids(&wallet).await?;
-        let result = wallet.offboard_all(destination).await;
+        let result = wallet
+            .offboard_all(destination)
+            .await
+            .map(|offboard| offboard.txid);
         offboard_txid_or_parked(&wallet, ids_before, result).await
     }
     .await;

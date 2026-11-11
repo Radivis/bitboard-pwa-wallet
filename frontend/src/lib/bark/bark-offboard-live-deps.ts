@@ -9,6 +9,7 @@ export function barkOffboardReviewDeps(): ReviewBarkOffboardDeps {
     estimateSendOnchain: (address, amountSats) =>
       getBarkWorker().estimateSendOnchain(address, amountSats),
     estimateOffboardAll: (address) => getBarkWorker().estimateOffboardAll(address),
+    readBalance: () => getBarkWorker().readSpendableBalance(),
   }
 }
 

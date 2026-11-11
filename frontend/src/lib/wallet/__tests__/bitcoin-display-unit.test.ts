@@ -28,6 +28,23 @@ describe('bitcoin-display-unit', () => {
     }
   })
 
+  it('parses 0.00493086 BTC as 493086 sats', () => {
+    // Float multiply-and-floor reads this display as 493085.
+    expect(parseAmountToSatsFromBitcoinDisplayUnit('0.00493086', 'BTC')).toBe(493_086)
+    expect(
+      parseAmountToSatsFromBitcoinDisplayUnit(
+        formatAmountInBitcoinDisplayUnit(493_086, 'BTC'),
+        'BTC',
+      ),
+    ).toBe(493_086)
+    expect(
+      parseAmountToSatsFromBitcoinDisplayUnit(
+        formatAmountInBitcoinDisplayUnit(493_085, 'BTC'),
+        'BTC',
+      ),
+    ).toBe(493_085)
+  })
+
   it('parseAmountToSatsFromBitcoinDisplayUnit returns 0 for empty or invalid', () => {
     expect(parseAmountToSatsFromBitcoinDisplayUnit('', 'BTC')).toBe(0)
     expect(parseAmountToSatsFromBitcoinDisplayUnit('  ', 'sat')).toBe(0)

@@ -190,7 +190,7 @@ impl ArkNote {
 
         let script_pubkey = tr_script_pubkey(&spend_info);
 
-        Ok(intent::Input::new_with_extra_witness(
+        let mut input = intent::Input::new_with_extra_witness(
             self.outpoint(),
             Sequence::MAX,
             None,
@@ -204,7 +204,9 @@ impl ArkNote {
             false, // not swept
             Vec::new(),
             vec![self.preimage.to_vec()],
-        ))
+        );
+        input.omit_from_intent_fee();
+        Ok(input)
     }
 }
 

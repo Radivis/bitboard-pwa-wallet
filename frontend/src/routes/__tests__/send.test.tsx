@@ -67,18 +67,20 @@ vi.mock('@/lib/library/article-shared', () => ({
   ArticleLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }))
 
-vi.mock('@/lib/wallet/bitcoin-utils', () => ({
-  MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
-  SATS_PER_BTC: 100_000_000,
-  isValidAddress: (address: string, network: string) => {
-    if (network === 'signet') return address.startsWith('tb1')
-    return false
-  },
-  truncateAddress: (addr: string) =>
-    addr.length > 16 ? `${addr.slice(0, 8)}...${addr.slice(-8)}` : addr,
-  getEsploraUrl: () => 'http://localhost:3002',
-  toBitcoinNetwork: (mode: string) => mode,
-}))
+vi.mock('@/lib/wallet/bitcoin-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet/bitcoin-utils')>()
+  return {
+    ...actual,
+    isValidAddress: (address: string, network: string) => {
+      if (network === 'signet') return address.startsWith('tb1')
+      return false
+    },
+    truncateAddress: (addr: string) =>
+      addr.length > 16 ? `${addr.slice(0, 8)}...${addr.slice(-8)}` : addr,
+    getEsploraUrl: () => 'http://localhost:3002',
+    toBitcoinNetwork: (mode: string) => mode,
+  }
+})
 
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),

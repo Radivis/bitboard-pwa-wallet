@@ -10,8 +10,9 @@
 //! Only the branch through a swept output is left out of the hop seizure
 //! check. A branch through another output of that same transaction is still
 //! checked. Every recorded outcome marks those coins spent before
-//! refresh. The VTXO outpoint itself is never watched: Bark treats a spend of
-//! that output as the user's claim.
+//! refresh and keeps the transaction id of that spend. That spent mark is
+//! saved only after the notice is stored. The VTXO outpoint itself
+//! is never watched: Bark treats a spend of that output as the user's claim.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -41,15 +42,16 @@ pub struct ExitHop {
     pub role: ExitHopRole,
 }
 
-/// Role of one hop. `prefix_len` is the number of tree transactions before
-/// later hops. A checkpoint script wins over that position. The last tree
+/// Role of one hop. `tree_len` is the number of tree transactions before later
+/// hops. A checkpoint script wins over that position. The last tree
 /// transaction is the leaf. Every other non-checkpoint hop is an internal
-/// node, including a hop after the tree.
-pub fn hop_role(is_checkpoint: bool, index: usize, prefix_len: usize) -> ExitHopRole {
+/// node, including a hop after the tree. `None` means the tree length could
+/// not be measured, so no hop is a leaf.
+pub fn hop_role(is_checkpoint: bool, index: usize, tree_len: Option<usize>) -> ExitHopRole {
     if is_checkpoint {
         return ExitHopRole::Checkpoint;
     }
-    if index + 1 == prefix_len {
+    if tree_len == Some(index + 1) {
         return ExitHopRole::Leaf;
     }
     ExitHopRole::Internal
@@ -196,79 +198,166 @@ fn seizure_outcome(role: ExitHopRole, outpoint: OutPoint) -> ExitChainOutcome {
     }
 }
 
+/// A confirmed foreign spend of one watched exit output, and the transaction that spent it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ExitChainForeignSpend {
+    pub outcome: ExitChainOutcome,
+    pub spender: Txid,
+}
+
+/// One VTXO named by a sweep or seizure, the transaction that spent the node, and that outpoint.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ExitChainNoticeItem {
+    pub vtxo_id: String,
+    pub spender: Txid,
+    pub spend_outpoint: OutPoint,
+}
+
 /// Confirmed spends whose transaction is not the allowed next exit transaction.
+/// The spender txid is kept with the outcome.
 pub fn exit_outcomes_from_spends(
     watched: &[WatchedExitOutput],
     spends: &BTreeMap<OutPoint, ExitOutputSpend>,
-) -> Vec<ExitChainOutcome> {
-    let mut outcomes = BTreeSet::new();
+) -> Vec<ExitChainForeignSpend> {
+    let mut foreign_spends = BTreeSet::new();
     for output in watched {
         let Some(ExitOutputSpend::Confirmed { spender }) = spends.get(&output.outpoint) else {
             continue;
         };
         if *spender != output.allowed_spend {
-            outcomes.insert(output.outcome);
+            foreign_spends.insert(ExitChainForeignSpend {
+                outcome: output.outcome,
+                spender: *spender,
+            });
         }
     }
-    outcomes.into_iter().collect()
+    foreign_spends.into_iter().collect()
 }
 
 /// Anchor sweeps and hop seizures as separate lists. A history whose anchor was
 /// swept is left out of the seizure lists. One history can appear in more than
-/// one seizure list when more than one of its hops was seized. Each list is
-/// ordered by VTXO id.
+/// one seizure list when more than one of its hops was seized. Two spends of
+/// the same kind on one history stay two items, distinguished by the spent output.
+/// Each list is ordered by VTXO id, then spender, then spent output.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExitChainNotices {
-    pub anchor_sweep_vtxo_ids: Vec<String>,
-    pub checkpoint_seizure_vtxo_ids: Vec<String>,
-    pub leaf_seizure_vtxo_ids: Vec<String>,
-    pub internal_seizure_vtxo_ids: Vec<String>,
+    pub anchor_sweeps: Vec<ExitChainNoticeItem>,
+    pub checkpoint_seizures: Vec<ExitChainNoticeItem>,
+    pub leaf_seizures: Vec<ExitChainNoticeItem>,
+    pub internal_seizures: Vec<ExitChainNoticeItem>,
 }
 
 pub fn split_exit_notices(
     histories: &[VtxoExitHistory],
-    outcomes: &[ExitChainOutcome],
+    foreign_spends: &[ExitChainForeignSpend],
 ) -> ExitChainNotices {
-    let mut anchor_sweep_vtxo_ids = BTreeSet::new();
-    let mut checkpoint_seizure_vtxo_ids = BTreeSet::new();
-    let mut leaf_seizure_vtxo_ids = BTreeSet::new();
-    let mut internal_seizure_vtxo_ids = BTreeSet::new();
+    let mut anchor_sweeps = BTreeSet::new();
+    let mut checkpoint_seizures = BTreeSet::new();
+    let mut leaf_seizures = BTreeSet::new();
+    let mut internal_seizures = BTreeSet::new();
     for history in histories {
-        let mut anchor_swept = false;
-        let mut checkpoint_seized = false;
-        let mut leaf_seized = false;
-        let mut internal_seized = false;
-        for outcome in outcomes {
-            if !history_matches_outcome(history, *outcome) {
-                continue;
-            }
-            match outcome {
-                ExitChainOutcome::AnchorSweep(_) => anchor_swept = true,
-                ExitChainOutcome::CheckpointSeizure(_) => checkpoint_seized = true,
-                ExitChainOutcome::LeafSeizure(_) => leaf_seized = true,
-                ExitChainOutcome::InternalSeizure(_) => internal_seized = true,
-            }
-        }
-        if anchor_swept {
-            anchor_sweep_vtxo_ids.insert(history.vtxo_id.clone());
+        let matched = foreign_spends
+            .iter()
+            .copied()
+            .filter(|foreign_spend| history_matches_outcome(history, foreign_spend.outcome))
+            .collect::<Vec<_>>();
+        let anchor_spends = recorded_spends_of_kind(&matched, ExitChainOutcomeKind::Anchor);
+        if !anchor_spends.is_empty() {
+            insert_notice_items(&mut anchor_sweeps, &history.vtxo_id, &anchor_spends);
             continue;
         }
-        if checkpoint_seized {
-            checkpoint_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-        }
-        if leaf_seized {
-            leaf_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-        }
-        if internal_seized {
-            internal_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-        }
+        insert_notice_items(
+            &mut checkpoint_seizures,
+            &history.vtxo_id,
+            &recorded_spends_of_kind(&matched, ExitChainOutcomeKind::Checkpoint),
+        );
+        insert_notice_items(
+            &mut leaf_seizures,
+            &history.vtxo_id,
+            &recorded_spends_of_kind(&matched, ExitChainOutcomeKind::Leaf),
+        );
+        insert_notice_items(
+            &mut internal_seizures,
+            &history.vtxo_id,
+            &recorded_spends_of_kind(&matched, ExitChainOutcomeKind::Internal),
+        );
     }
     ExitChainNotices {
-        anchor_sweep_vtxo_ids: anchor_sweep_vtxo_ids.into_iter().collect(),
-        checkpoint_seizure_vtxo_ids: checkpoint_seizure_vtxo_ids.into_iter().collect(),
-        leaf_seizure_vtxo_ids: leaf_seizure_vtxo_ids.into_iter().collect(),
-        internal_seizure_vtxo_ids: internal_seizure_vtxo_ids.into_iter().collect(),
+        anchor_sweeps: anchor_sweeps.into_iter().collect(),
+        checkpoint_seizures: checkpoint_seizures.into_iter().collect(),
+        leaf_seizures: leaf_seizures.into_iter().collect(),
+        internal_seizures: internal_seizures.into_iter().collect(),
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExitChainOutcomeKind {
+    Anchor,
+    Checkpoint,
+    Leaf,
+    Internal,
+}
+
+fn outcome_kind(outcome: ExitChainOutcome) -> ExitChainOutcomeKind {
+    match outcome {
+        ExitChainOutcome::AnchorSweep(_) => ExitChainOutcomeKind::Anchor,
+        ExitChainOutcome::CheckpointSeizure(_) => ExitChainOutcomeKind::Checkpoint,
+        ExitChainOutcome::LeafSeizure(_) => ExitChainOutcomeKind::Leaf,
+        ExitChainOutcome::InternalSeizure(_) => ExitChainOutcomeKind::Internal,
+    }
+}
+
+fn spend_outpoint_of(outcome: ExitChainOutcome) -> OutPoint {
+    match outcome {
+        ExitChainOutcome::AnchorSweep(spent)
+        | ExitChainOutcome::CheckpointSeizure(spent)
+        | ExitChainOutcome::LeafSeizure(spent)
+        | ExitChainOutcome::InternalSeizure(spent) => spent,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct RecordedSpend {
+    spender: Txid,
+    spend_outpoint: OutPoint,
+}
+
+fn recorded_spends_of_kind(
+    matched: &[ExitChainForeignSpend],
+    kind: ExitChainOutcomeKind,
+) -> Vec<RecordedSpend> {
+    let mut spends = BTreeSet::new();
+    for foreign_spend in matched {
+        if outcome_kind(foreign_spend.outcome) != kind {
+            continue;
+        }
+        spends.insert(RecordedSpend {
+            spender: foreign_spend.spender,
+            spend_outpoint: spend_outpoint_of(foreign_spend.outcome),
+        });
+    }
+    spends.into_iter().collect()
+}
+
+fn insert_notice_items(
+    items: &mut BTreeSet<ExitChainNoticeItem>,
+    vtxo_id: &str,
+    spends: &[RecordedSpend],
+) {
+    for spend in spends {
+        items.insert(ExitChainNoticeItem {
+            vtxo_id: vtxo_id.to_owned(),
+            spender: spend.spender,
+            spend_outpoint: spend.spend_outpoint,
+        });
+    }
+}
+
+/// State of a swept coin before it was marked spent, so a failed sync can put it back.
+#[derive(Clone)]
+pub(crate) struct SweptVtxoPreviousState {
+    pub vtxo_id: bark::ark::VtxoId,
+    pub state: bark::vtxo::VtxoState,
 }
 
 fn history_matches_outcome(history: &VtxoExitHistory, outcome: ExitChainOutcome) -> bool {
@@ -293,7 +382,7 @@ mod scan {
     use serde::Serialize;
 
     use super::{
-        ExitHop, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
+        ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
         hop_outputs_after_anchor_check, split_exit_notices, watched_anchor_outputs,
     };
 
@@ -303,6 +392,12 @@ mod scan {
         vtxo_id: String,
         #[serde(rename = "nodeKind")]
         node_kind: &'static str,
+        #[serde(rename = "spenderTxid")]
+        spender_txid: String,
+        #[serde(rename = "spentTxid")]
+        spent_txid: String,
+        #[serde(rename = "spentVout")]
+        spent_vout: u32,
     }
 
     #[derive(Clone, Serialize)]
@@ -336,14 +431,23 @@ mod scan {
     }
 
     /// Best-effort. A wallet-store failure, or a chain read that does not cover
-    /// every watched output, leaves the previous lists in place and does not
-    /// mark any VTXO spent. A chain error is neither a sweep nor a seizure.
-    pub(crate) async fn record_exit_chain_notices(wallet: &bark::Wallet) {
+    /// every watched output, leaves the previous lists in place and returns no
+    /// coins to mark. A chain error is neither a sweep nor a seizure.
+    /// The caller marks the returned coins spent after durable flushes are held.
+    pub(crate) async fn record_exit_chain_notices(
+        wallet: &bark::Wallet,
+    ) -> Vec<super::SweptVtxoPreviousState> {
         match scan_exit_chain_notices(wallet).await {
-            Ok(recorded) => remember(recorded),
-            Err(err) => warn(&format!(
-                "Bark could not scan exit outputs for a sweep or seizure: {err}"
-            )),
+            Ok((recorded, previous)) => {
+                remember(recorded);
+                previous
+            }
+            Err(err) => {
+                warn(&format!(
+                    "Bark could not scan exit outputs for a sweep or seizure: {err}"
+                ));
+                Vec::new()
+            }
         }
     }
 
@@ -353,7 +457,7 @@ mod scan {
 
     async fn scan_exit_chain_notices(
         wallet: &bark::Wallet,
-    ) -> Result<RecordedExitChainNotices, String> {
+    ) -> Result<(RecordedExitChainNotices, Vec<super::SweptVtxoPreviousState>), String> {
         let unspent = wallet.vtxos().await.map_err(|err| err.to_string())?;
         let full_vtxos = wallet
             .get_full_vtxos(&unspent)
@@ -363,19 +467,92 @@ mod scan {
             .iter()
             .map(history_from_full_vtxo)
             .collect::<Vec<_>>();
-        let confirmed_next_hops = confirmed_next_hop_txids(wallet, &histories).await;
-        let anchor_watched = watched_anchor_outputs(&histories);
+        let recorded = notices_for_histories(wallet, &histories).await?;
+        let spent_ids = recorded
+            .exit_node_sweep_vtxo_items
+            .iter()
+            .map(|item| item.vtxo_id.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        Ok((recorded, previous_states(&unspent, &spent_ids)))
+    }
+
+    fn previous_states(
+        unspent: &[bark::vtxo::WalletVtxo],
+        ids: &[String],
+    ) -> Vec<super::SweptVtxoPreviousState> {
+        unspent
+            .iter()
+            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
+            .map(|vtxo| super::SweptVtxoPreviousState {
+                vtxo_id: vtxo.id(),
+                state: vtxo.state.clone(),
+            })
+            .collect()
+    }
+
+    /// Marks the coins whose previous states were returned by the scan.
+    pub(crate) async fn mark_swept_vtxos(
+        wallet: &bark::Wallet,
+        previous: &[super::SweptVtxoPreviousState],
+    ) -> Result<(), String> {
+        if previous.is_empty() {
+            return Ok(());
+        }
+        wallet
+            .mark_vtxos_as_spent(previous.iter().map(|coin| coin.vtxo_id))
+            .await
+            .map_err(|err| err.to_string())
+    }
+
+    /// Fills in the spent output for VTXOs already stored on a notice. Those coins
+    /// are already marked spent, so the unspent scan never sees them again.
+    /// A missing VTXO is skipped. A chain read that does not cover every watched
+    /// output returns an error and leaves the stored notice unchanged.
+    pub(crate) async fn backfill_exit_chain_notices_json(
+        wallet: &bark::Wallet,
+        vtxo_ids: &[String],
+    ) -> Result<String, String> {
+        let histories = histories_for_stored_vtxo_ids(wallet, vtxo_ids).await;
+        let recorded = notices_for_histories(wallet, &histories).await?;
+        serde_json::to_string(&recorded).map_err(|err| err.to_string())
+    }
+
+    async fn histories_for_stored_vtxo_ids(
+        wallet: &bark::Wallet,
+        vtxo_ids: &[String],
+    ) -> Vec<VtxoExitHistory> {
+        let mut histories = Vec::new();
+        for vtxo_id in vtxo_ids {
+            let Ok(parsed) = vtxo_id.parse::<bark::ark::VtxoId>() else {
+                continue;
+            };
+            let Ok(full) = wallet.get_full_vtxo(parsed).await else {
+                continue;
+            };
+            histories.push(history_from_full_vtxo(&full));
+        }
+        histories
+    }
+
+    async fn notices_for_histories(
+        wallet: &bark::Wallet,
+        histories: &[VtxoExitHistory],
+    ) -> Result<RecordedExitChainNotices, String> {
+        let confirmed_next_hops = confirmed_next_hop_txids(wallet, histories).await;
+        let anchor_watched = watched_anchor_outputs(histories);
         let anchor_spends = spend_by_outpoint(wallet, &anchor_watched).await?;
         let anchor_outcomes = exit_outcomes_from_spends(&anchor_watched, &anchor_spends);
-        let anchor_notices = split_exit_notices(&histories, &anchor_outcomes);
+        let anchor_notices = split_exit_notices(histories, &anchor_outcomes);
+        let swept_anchor_ids = anchor_notices
+            .anchor_sweeps
+            .iter()
+            .map(|item| item.vtxo_id.as_str())
+            .collect::<BTreeSet<_>>();
         let remaining = histories
             .iter()
-            .filter(|history| {
-                !anchor_notices
-                    .anchor_sweep_vtxo_ids
-                    .iter()
-                    .any(|id| id == &history.vtxo_id)
-            })
+            .filter(|history| !swept_anchor_ids.contains(history.vtxo_id.as_str()))
             .cloned()
             .collect::<Vec<_>>();
         let anchor_outpoints = anchor_watched
@@ -387,17 +564,6 @@ mod scan {
         let hop_spends = spend_by_outpoint(wallet, &hop_watched).await?;
         let hop_outcomes = exit_outcomes_from_spends(&hop_watched, &hop_spends);
         let hop_notices = split_exit_notices(&remaining, &hop_outcomes);
-        let spent_ids = anchor_notices
-            .anchor_sweep_vtxo_ids
-            .iter()
-            .cloned()
-            .chain(hop_notices.checkpoint_seizure_vtxo_ids.iter().cloned())
-            .chain(hop_notices.leaf_seizure_vtxo_ids.iter().cloned())
-            .chain(hop_notices.internal_seizure_vtxo_ids.iter().cloned())
-            .collect::<Vec<_>>();
-        if !spent_ids.is_empty() {
-            mark_ids_spent(wallet, &unspent, &spent_ids).await?;
-        }
         Ok(RecordedExitChainNotices {
             exit_node_sweep_vtxo_items: recorded_items(&anchor_notices, &hop_notices),
         })
@@ -408,77 +574,35 @@ mod scan {
         hop_notices: &super::ExitChainNotices,
     ) -> Vec<RecordedExitNodeSweepVtxoItem> {
         let mut items = Vec::new();
-        push_recorded_items(&mut items, &anchor_notices.anchor_sweep_vtxo_ids, "anchor");
-        push_recorded_items(
-            &mut items,
-            &hop_notices.internal_seizure_vtxo_ids,
-            "internal",
-        );
-        push_recorded_items(&mut items, &hop_notices.leaf_seizure_vtxo_ids, "leaf");
-        push_recorded_items(
-            &mut items,
-            &hop_notices.checkpoint_seizure_vtxo_ids,
-            "checkpoint",
-        );
+        push_recorded_items(&mut items, &anchor_notices.anchor_sweeps, "anchor");
+        push_recorded_items(&mut items, &hop_notices.internal_seizures, "internal");
+        push_recorded_items(&mut items, &hop_notices.leaf_seizures, "leaf");
+        push_recorded_items(&mut items, &hop_notices.checkpoint_seizures, "checkpoint");
         items
     }
 
     fn push_recorded_items(
         items: &mut Vec<RecordedExitNodeSweepVtxoItem>,
-        vtxo_ids: &[String],
+        notices: &[super::ExitChainNoticeItem],
         node_kind: &'static str,
     ) {
-        for vtxo_id in vtxo_ids {
+        for notice in notices {
             items.push(RecordedExitNodeSweepVtxoItem {
-                vtxo_id: vtxo_id.clone(),
+                vtxo_id: notice.vtxo_id.clone(),
                 node_kind,
+                spender_txid: notice.spender.to_string(),
+                spent_txid: notice.spend_outpoint.txid.to_string(),
+                spent_vout: notice.spend_outpoint.vout,
             });
         }
     }
 
     fn history_from_full_vtxo(vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full>) -> VtxoExitHistory {
-        let items = vtxo.transactions().collect::<Vec<_>>();
-        let continuation_scripts = items
-            .iter()
-            .map(|item| {
-                item.tx
-                    .output
-                    .get(item.output_idx)
-                    .map(|output| output.script_pubkey.clone())
-                    .unwrap_or_else(bitcoin::ScriptBuf::new)
-            })
-            .collect::<Vec<_>>();
-        let arkoor_pubkeys = vtxo.past_arkoor_pubkeys();
-        let tx_types = crate::emergency_exit::exit_graph_tx_types(
-            &continuation_scripts,
-            &arkoor_pubkeys,
-            vtxo.server_pubkey(),
-            vtxo.exit_delta(),
-            vtxo.expiry_height(),
-        );
-        let prefix_len = if arkoor_pubkeys.len() > items.len() {
-            items.len()
-        } else {
-            items.len() - arkoor_pubkeys.len()
-        };
-        let hops = items
-            .iter()
-            .zip(tx_types)
-            .enumerate()
-            .map(|(index, (item, tx_type))| ExitHop {
-                txid: item.tx.compute_txid(),
-                output_index: item.output_idx as u32,
-                role: super::hop_role(
-                    tx_type == crate::emergency_exit::ExitGraphTxType::Checkpoint,
-                    index,
-                    prefix_len,
-                ),
-            })
-            .collect();
+        let chain = crate::emergency_exit::walk_vtxo_exit_chain(vtxo);
         VtxoExitHistory {
             vtxo_id: vtxo.id().to_string(),
             anchor: vtxo.chain_anchor(),
-            hops,
+            hops: chain.hops,
         }
     }
 
@@ -515,11 +639,16 @@ mod scan {
     ) -> Result<BTreeMap<OutPoint, ExitOutputSpend>, String> {
         let mut spends = BTreeMap::new();
         for output in watched {
-            match wallet
+            // Bark 0.8 deprecates this for bitcoind, where it scans blocks.
+            // This WASM session uses Esplora, where the call is one outspend
+            // lookup. It is still the only ChainSource method that returns the
+            // spender txid, including a mempool spend.
+            #[allow(deprecated)]
+            let spending_inputs = wallet
                 .chain()
-                .txs_spending_inputs([output.outpoint], 0)
-                .await
-            {
+                .txs_spending_inputs([output.outpoint], 0u32.into())
+                .await;
+            match spending_inputs {
                 Ok(result) => {
                     spends.insert(
                         output.outpoint,
@@ -550,24 +679,6 @@ mod scan {
         }
     }
 
-    async fn mark_ids_spent(
-        wallet: &bark::Wallet,
-        unspent: &[bark::vtxo::WalletVtxo],
-        ids: &[String],
-    ) -> Result<(), String> {
-        let matched = unspent
-            .iter()
-            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
-            .collect::<Vec<_>>();
-        if matched.is_empty() {
-            return Ok(());
-        }
-        wallet
-            .mark_vtxos_as_spent(matched)
-            .await
-            .map_err(|err| err.to_string())
-    }
-
     #[wasm_bindgen::prelude::wasm_bindgen]
     extern "C" {
         #[wasm_bindgen(js_namespace = console, js_name = warn)]
@@ -581,15 +692,16 @@ mod scan {
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) use scan::{
-    clear_exit_chain_notices, exit_chain_notices_json, record_exit_chain_notices,
+    backfill_exit_chain_notices_json, clear_exit_chain_notices, exit_chain_notices_json,
+    mark_swept_vtxos, record_exit_chain_notices,
 };
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ExitChainNotices, ExitChainOutcome, ExitHop, ExitHopRole, ExitOutputSpend, VtxoExitHistory,
-        exit_outcomes_from_spends, hop_outputs_after_anchor_check, hop_role, split_exit_notices,
-        watched_exit_outputs,
+        ExitChainForeignSpend, ExitChainNoticeItem, ExitChainNotices, ExitChainOutcome, ExitHop,
+        ExitHopRole, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
+        hop_outputs_after_anchor_check, hop_role, split_exit_notices, watched_exit_outputs,
     };
     use bitcoin::hashes::Hash;
     use bitcoin::{OutPoint, Txid};
@@ -616,20 +728,36 @@ mod tests {
         }
     }
 
-    fn notices(
-        anchor: &[&str],
-        checkpoint: &[&str],
-        leaf: &[&str],
-        internal: &[&str],
-    ) -> ExitChainNotices {
-        fn owned(ids: &[&str]) -> Vec<String> {
-            ids.iter().map(|id| (*id).to_owned()).collect()
+    fn foreign_spend(outcome: ExitChainOutcome, spender_byte: u8) -> ExitChainForeignSpend {
+        ExitChainForeignSpend {
+            outcome,
+            spender: txid(spender_byte),
         }
+    }
+
+    fn notice_item(
+        vtxo_id: &str,
+        spender_byte: u8,
+        spend_outpoint: OutPoint,
+    ) -> ExitChainNoticeItem {
+        ExitChainNoticeItem {
+            vtxo_id: vtxo_id.to_owned(),
+            spender: txid(spender_byte),
+            spend_outpoint,
+        }
+    }
+
+    fn notices(
+        anchor: &[ExitChainNoticeItem],
+        checkpoint: &[ExitChainNoticeItem],
+        leaf: &[ExitChainNoticeItem],
+        internal: &[ExitChainNoticeItem],
+    ) -> ExitChainNotices {
         ExitChainNotices {
-            anchor_sweep_vtxo_ids: owned(anchor),
-            checkpoint_seizure_vtxo_ids: owned(checkpoint),
-            leaf_seizure_vtxo_ids: owned(leaf),
-            internal_seizure_vtxo_ids: owned(internal),
+            anchor_sweeps: anchor.to_vec(),
+            checkpoint_seizures: checkpoint.to_vec(),
+            leaf_seizures: leaf.to_vec(),
+            internal_seizures: internal.to_vec(),
         }
     }
 
@@ -730,7 +858,14 @@ mod tests {
 
         assert_eq!(
             exit_outcomes_from_spends(&watched, &spends),
-            vec![ExitChainOutcome::CheckpointSeizure(outpoint(20, 1))]
+            vec![foreign_spend(
+                ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)),
+                99
+            )]
+        );
+        assert_eq!(
+            split_exit_notices(&histories, &exit_outcomes_from_spends(&watched, &spends)),
+            notices(&[], &[notice_item("probed", 99, outpoint(20, 1))], &[], &[])
         );
     }
 
@@ -766,11 +901,22 @@ mod tests {
         );
         let unrelated = history("other", outpoint(3, 0), vec![hop(50, 0, ExitHopRole::Leaf)]);
         let histories = [probed, locked_sibling, unrelated];
-        let outcomes = [ExitChainOutcome::CheckpointSeizure(outpoint(20, 1))];
+        let foreign_spends = [foreign_spend(
+            ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)),
+            99,
+        )];
 
         assert_eq!(
-            split_exit_notices(&histories, &outcomes),
-            notices(&[], &["locked-sibling", "probed"], &[], &[])
+            split_exit_notices(&histories, &foreign_spends),
+            notices(
+                &[],
+                &[
+                    notice_item("locked-sibling", 99, outpoint(20, 1)),
+                    notice_item("probed", 99, outpoint(20, 1)),
+                ],
+                &[],
+                &[],
+            )
         );
     }
 
@@ -794,11 +940,19 @@ mod tests {
                 hop(40, 0, ExitHopRole::Leaf),
             ],
         );
-        let outcomes = [ExitChainOutcome::CheckpointSeizure(outpoint(20, 0))];
+        let foreign_spends = [foreign_spend(
+            ExitChainOutcome::CheckpointSeizure(outpoint(20, 0)),
+            99,
+        )];
 
         assert_eq!(
-            split_exit_notices(&[swept_destination, change_destination], &outcomes),
-            notices(&[], &["swept-destination"], &[], &[])
+            split_exit_notices(&[swept_destination, change_destination], &foreign_spends),
+            notices(
+                &[],
+                &[notice_item("swept-destination", 99, outpoint(20, 0))],
+                &[],
+                &[],
+            )
         );
     }
 
@@ -810,11 +964,19 @@ mod tests {
             history("second", shared, vec![hop(11, 0, ExitHopRole::Leaf)]),
             history("other", outpoint(3, 0), vec![hop(50, 0, ExitHopRole::Leaf)]),
         ];
-        let outcomes = [ExitChainOutcome::AnchorSweep(shared)];
+        let foreign_spends = [foreign_spend(ExitChainOutcome::AnchorSweep(shared), 99)];
 
         assert_eq!(
-            split_exit_notices(&histories, &outcomes),
-            notices(&["first", "second"], &[], &[], &[])
+            split_exit_notices(&histories, &foreign_spends),
+            notices(
+                &[
+                    notice_item("first", 99, outpoint(1, 0)),
+                    notice_item("second", 99, outpoint(1, 0)),
+                ],
+                &[],
+                &[],
+                &[],
+            )
         );
     }
 
@@ -838,15 +1000,20 @@ mod tests {
                 hop(60, 0, ExitHopRole::Leaf),
             ],
         );
-        let outcomes = [
-            ExitChainOutcome::AnchorSweep(outpoint(1, 0)),
-            ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)),
-            ExitChainOutcome::CheckpointSeizure(outpoint(50, 1)),
+        let foreign_spends = [
+            foreign_spend(ExitChainOutcome::AnchorSweep(outpoint(1, 0)), 99),
+            foreign_spend(ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)), 98),
+            foreign_spend(ExitChainOutcome::CheckpointSeizure(outpoint(50, 1)), 97),
         ];
 
         assert_eq!(
-            split_exit_notices(&[swept_branch, sibling_branch], &outcomes),
-            notices(&["swept-branch"], &["sibling-branch"], &[], &[])
+            split_exit_notices(&[swept_branch, sibling_branch], &foreign_spends),
+            notices(
+                &[notice_item("swept-branch", 99, outpoint(1, 0))],
+                &[notice_item("sibling-branch", 97, outpoint(50, 1))],
+                &[],
+                &[],
+            )
         );
     }
 
@@ -871,15 +1038,20 @@ mod tests {
                 hop(60, 0, ExitHopRole::Leaf),
             ],
         );
-        let outcomes = [
-            ExitChainOutcome::AnchorSweep(shared_anchor),
-            ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)),
-            ExitChainOutcome::CheckpointSeizure(outpoint(50, 1)),
+        let foreign_spends = [
+            foreign_spend(ExitChainOutcome::AnchorSweep(shared_anchor), 99),
+            foreign_spend(ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)), 98),
+            foreign_spend(ExitChainOutcome::CheckpointSeizure(outpoint(50, 1)), 97),
         ];
 
         assert_eq!(
-            split_exit_notices(&[anchor_coin, checkpoint_coin], &outcomes),
-            notices(&["anchor-coin"], &["checkpoint-coin"], &[], &[])
+            split_exit_notices(&[anchor_coin, checkpoint_coin], &foreign_spends),
+            notices(
+                &[notice_item("anchor-coin", 99, shared_anchor)],
+                &[notice_item("checkpoint-coin", 97, outpoint(50, 1))],
+                &[],
+                &[],
+            )
         );
     }
 
@@ -995,11 +1167,19 @@ mod tests {
 
         assert_eq!(
             exit_outcomes_from_spends(&watched, &spends),
-            vec![ExitChainOutcome::InternalSeizure(outpoint(10, 0))]
+            vec![foreign_spend(
+                ExitChainOutcome::InternalSeizure(outpoint(10, 0)),
+                99
+            )]
         );
         assert_eq!(
             split_exit_notices(&histories, &exit_outcomes_from_spends(&watched, &spends)),
-            notices(&[], &[], &[], &["tree-coin"])
+            notices(
+                &[],
+                &[],
+                &[],
+                &[notice_item("tree-coin", 99, outpoint(10, 0))]
+            )
         );
     }
 
@@ -1022,11 +1202,19 @@ mod tests {
 
         assert_eq!(
             exit_outcomes_from_spends(&watched, &spends),
-            vec![ExitChainOutcome::LeafSeizure(outpoint(15, 1))]
+            vec![foreign_spend(
+                ExitChainOutcome::LeafSeizure(outpoint(15, 1)),
+                99
+            )]
         );
         assert_eq!(
             split_exit_notices(&histories, &exit_outcomes_from_spends(&watched, &spends)),
-            notices(&[], &[], &["tree-coin"], &[])
+            notices(
+                &[],
+                &[],
+                &[notice_item("tree-coin", 99, outpoint(15, 1))],
+                &[]
+            )
         );
     }
 
@@ -1052,33 +1240,107 @@ mod tests {
         assert_eq!(
             split_exit_notices(
                 &[swept, sibling],
-                &[ExitChainOutcome::InternalSeizure(outpoint(10, 0))]
+                &[foreign_spend(
+                    ExitChainOutcome::InternalSeizure(outpoint(10, 0)),
+                    99
+                )]
             ),
-            notices(&[], &[], &[], &["swept-child"])
+            notices(
+                &[],
+                &[],
+                &[],
+                &[notice_item("swept-child", 99, outpoint(10, 0))]
+            )
         );
     }
 
     #[test]
     fn a_history_records_every_seized_hop_without_preferring_one() {
         let histories = [chain_with_hot_checkpoint()];
-        let outcomes = [
-            ExitChainOutcome::InternalSeizure(outpoint(10, 0)),
-            ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)),
+        let foreign_spends = [
+            foreign_spend(ExitChainOutcome::InternalSeizure(outpoint(10, 0)), 99),
+            foreign_spend(ExitChainOutcome::CheckpointSeizure(outpoint(20, 1)), 98),
         ];
 
         assert_eq!(
-            split_exit_notices(&histories, &outcomes),
-            notices(&[], &["probed"], &[], &["probed"])
+            split_exit_notices(&histories, &foreign_spends),
+            notices(
+                &[],
+                &[notice_item("probed", 98, outpoint(20, 1))],
+                &[],
+                &[notice_item("probed", 99, outpoint(10, 0))],
+            )
+        );
+    }
+
+    #[test]
+    fn two_seized_hops_of_the_same_kind_stay_two_items() {
+        let histories = [history(
+            "tree-coin",
+            outpoint(1, 0),
+            vec![
+                hop(10, 0, ExitHopRole::Internal),
+                hop(12, 0, ExitHopRole::Internal),
+                hop(15, 1, ExitHopRole::Leaf),
+            ],
+        )];
+        let foreign_spends = [
+            foreign_spend(ExitChainOutcome::InternalSeizure(outpoint(10, 0)), 99),
+            foreign_spend(ExitChainOutcome::InternalSeizure(outpoint(12, 0)), 98),
+        ];
+
+        assert_eq!(
+            split_exit_notices(&histories, &foreign_spends),
+            notices(
+                &[],
+                &[],
+                &[],
+                &[
+                    notice_item("tree-coin", 98, outpoint(12, 0)),
+                    notice_item("tree-coin", 99, outpoint(10, 0)),
+                ],
+            )
+        );
+    }
+
+    #[test]
+    fn two_spent_outputs_stay_two_items_when_the_spender_matches() {
+        let histories = [history(
+            "tree-coin",
+            outpoint(1, 0),
+            vec![
+                hop(10, 0, ExitHopRole::Internal),
+                hop(12, 1, ExitHopRole::Internal),
+                hop(15, 0, ExitHopRole::Leaf),
+            ],
+        )];
+        let foreign_spends = [
+            foreign_spend(ExitChainOutcome::InternalSeizure(outpoint(10, 0)), 99),
+            foreign_spend(ExitChainOutcome::InternalSeizure(outpoint(12, 1)), 99),
+        ];
+
+        assert_eq!(
+            split_exit_notices(&histories, &foreign_spends),
+            notices(
+                &[],
+                &[],
+                &[],
+                &[
+                    notice_item("tree-coin", 99, outpoint(10, 0)),
+                    notice_item("tree-coin", 99, outpoint(12, 1)),
+                ],
+            )
         );
     }
 
     #[test]
     fn the_last_tree_transaction_is_a_leaf_and_other_non_checkpoint_hops_are_internal_nodes() {
-        assert_eq!(hop_role(true, 0, 3), ExitHopRole::Checkpoint);
-        assert_eq!(hop_role(false, 0, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 1, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 2, 3), ExitHopRole::Leaf);
-        assert_eq!(hop_role(false, 3, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(true, 3, 3), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(true, 0, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 1, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 2, Some(3)), ExitHopRole::Leaf);
+        assert_eq!(hop_role(false, 3, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(true, 3, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, None), ExitHopRole::Internal);
     }
 }

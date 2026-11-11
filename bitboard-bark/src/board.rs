@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 
 use bitcoin::key::Keypair;
+use bitcoin_ext::BlockHeight;
 use wasm_bindgen::prelude::*;
 
 use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
@@ -16,7 +17,7 @@ thread_local! {
 #[derive(Clone)]
 struct PreparedBoardFunding {
     user_keypair: Keypair,
-    expiry_height: u32,
+    expiry_height: BlockHeight,
     funding_address: String,
 }
 
@@ -55,7 +56,7 @@ fn copy_prepared_board_funding() -> Result<PreparedBoardFunding, String> {
 #[wasm_bindgen]
 pub struct BarkPreparedBoardFunding {
     funding_address: String,
-    expiry_height: u32,
+    expiry_height: BlockHeight,
 }
 
 #[wasm_bindgen]
@@ -67,7 +68,7 @@ impl BarkPreparedBoardFunding {
 
     #[wasm_bindgen(getter)]
     pub fn expiry_height(&self) -> u32 {
-        self.expiry_height
+        self.expiry_height.to_u32()
     }
 }
 

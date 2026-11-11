@@ -40,7 +40,9 @@ export function useCompleteUnilateralExitFlow() {
   const { effectiveFeeRate: completionFeeRateSatPerVb, ...completionFeeRateUi } =
     completionFeeSelection
 
-  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
+  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true, {
+    refreshWhileUnfocused: true,
+  })
   const timelockQuery = useArkadeUnilateralExitTimelockQuery(true)
   const bumperInfoQuery = { data: timelockQuery.data }
 
@@ -53,14 +55,6 @@ export function useCompleteUnilateralExitFlow() {
       networkMode,
     })
   }, [activeWalletId, networkMode])
-
-  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
-    enabled: true,
-    vtxoOutpoints: selectedInProgressOutpoints,
-    destinationAddress: completeDestination,
-    feeRateSatPerVb: completionFeeRateSatPerVb,
-  })
-  const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
 
   const selectedInProgressRows = useMemo(
     () =>
@@ -78,6 +72,24 @@ export function useCompleteUnilateralExitFlow() {
     () => selectedInProgressRows.reduce((total, row) => total + row.amountSats, 0),
     [selectedInProgressRows],
   )
+  const selectedReadyOutpointKey = useMemo(
+    () =>
+      selectedInProgressRows
+        .filter((row) => row.canComplete)
+        .map((row) => `${row.txid}:${row.vout}`)
+        .sort()
+        .join(','),
+    [selectedInProgressRows],
+  )
+
+  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
+    enabled: true,
+    vtxoOutpoints: selectedInProgressOutpoints,
+    destinationAddress: completeDestination,
+    feeRateSatPerVb: completionFeeRateSatPerVb,
+    readinessRevision: selectedReadyOutpointKey,
+  })
+  const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
 
   const allSelectedCanComplete =
     selectedInProgressRows.length > 0 &&
@@ -113,8 +125,11 @@ export function useCompleteUnilateralExitFlow() {
         destinationAddress: completeDestination.trim(),
         feeRateSatPerVb: completionFeeRateSatPerVb,
       })
-      .then(() => {
-        void navigate({ to: '/wallet/management' })
+      .then((sweepTxid) => {
+        void navigate({
+          to: '/wallet/management',
+          search: { completedExitTxid: sweepTxid },
+        })
       })
       .catch(() => {
         // Toast is handled by useArkadeCompleteUnilateralExitMutation.

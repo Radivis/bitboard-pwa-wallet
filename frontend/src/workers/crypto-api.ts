@@ -276,6 +276,12 @@ export interface CryptoService {
 
   buildTransaction(params: BuildTransactionParams): Promise<string>;
 
+  /**
+   * Checksum, network, and standard-type check used by the signer.
+   * The send form calls this for legacy base58. Segwit is checked on the page.
+   */
+  bitcoinAddressIsValid(address: string, network: BitcoinNetwork): Promise<boolean>;
+
   prepareOnchainSendTransaction(
     params: PrepareOnchainSendParams,
   ): Promise<PrepareOnchainSendResult>;

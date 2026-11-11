@@ -23,7 +23,11 @@ mod sync_gate;
 mod vtxo_list;
 
 #[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
+mod envelope_export_hold;
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
 mod record_store;
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
+mod recovery_open;
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod exit_seizure;
@@ -33,6 +37,8 @@ mod refresh;
 pub mod regtest_session;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod required_sync;
+#[cfg(any(test, target_arch = "wasm32"))]
+mod swept_vtxo_mark_hold;
 
 #[cfg(target_arch = "wasm32")]
 mod arkoor;

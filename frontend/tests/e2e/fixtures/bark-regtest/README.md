@@ -4,7 +4,7 @@ Local captaind on the existing arkade-regtest chain. Arkade-only start does not 
 
 | | |
 |---|---|
-| Image | `docker.io/secondark/captaind:0.7.1` |
+| Image | `docker.io/secondark/captaind:0.8.0` |
 | Public RPC | `http://localhost:3535` |
 | Esplora | `http://localhost:7030/api` |
 | Container | `bitboard-regtest-captaind` |
@@ -29,13 +29,14 @@ npm run test:e2e:bark-exit-regtest
 npm run test:e2e:bark-refresh-regtest
 ```
 
-`test:e2e:bark-regtest` writes `frontend/test-results/bark-boarded-fixture.json` after two spendable VTXOs. The offboard, spent-input, and claim Rust tests load that file. The rejected-board test does not.
+`test:e2e:bark-regtest` writes `frontend/test-results/bark-boarded-fixture.json` after two spendable VTXOs. The offboard, spent-input, and claim Rust tests load that file. The rejected-board and past-gap recovery tests do not.
 
 From `bitboard-bark/`, against a default-config stack that is already up:
 
 ```bash
 BARK_REGTEST_RUN=1 cargo test --features regtest-support --test sync_while_server_stopped_regtest -- --ignored --test-threads=1
 BARK_REGTEST_RUN=1 cargo test --features regtest-support --test board_submission_rejected_regtest -- --ignored --test-threads=1
+BARK_REGTEST_RUN=1 cargo test --features regtest-support --test seed_recovery_past_gap_regtest -- --ignored --test-threads=1
 BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test offboard_while_server_stopped_regtest -- --ignored --test-threads=1
 BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test exit_input_already_spent_regtest -- --ignored --test-threads=1
 BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test emergency_exit_claim_before_observation_regtest -- --ignored --test-threads=1

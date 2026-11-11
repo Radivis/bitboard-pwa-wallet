@@ -6,7 +6,7 @@ This crate contains generated REST API bindings plus a Rust client wrapper for A
 
 ## Bitboard fork
 
-Vendored from [ark-rest 0.9.3](https://github.com/arkade-os/rust-sdk/tree/master/crates/ark-rest), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
+Vendored from [ark-rest 0.12.0](https://github.com/arkade-os/rust-sdk/tree/v0.12.0/ark-rest), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
 
 Regenerating from OpenAPI (`just merge-swagger generate`) can overwrite hand-edited API files — re-apply the patches below and run regressions.
 
@@ -19,7 +19,7 @@ Regenerating from OpenAPI (`just merge-swagger generate`) can overwrite hand-edi
 | **Query array encoding** | openapi-generator Rust client comma-joins `style: simple` array params (`?scripts=a,b`). arkd expects repeated keys (`?scripts=a&scripts=b`) and rejects comma-joined script/outpoint/topic lists. | `repeated_simple_query_pairs` used in generated API call sites; source tests forbid `match "csv"` regressions. | `src/openapi_query_arrays.rs`, `src/apis/indexer_service_api.rs`, `src/apis/ark_service_api.rs` | `cargo test -p ark-rest openapi_query_encoding`, `bitboard-arkade/tests/ark_rest_query_encoding_regression.rs` |
 | **Mutually exclusive `list_vtxos` params** | Sending both `scripts` and `outpoints`, or conflicting filter flags, caused indexer errors. | High-level `Client::list_vtxos` maps `GetVtxosRequest` to exactly one reference type and one filter mode. | `src/client.rs` | Ark session integration tests |
 | **Digest mismatch recovery** | Server config digest changes (e.g. after restart) invalidate in-flight clients. | `guarded` requests refresh server info and rebuild the HTTP client on digest mismatch. | `src/client.rs` | Manual / reconnect flows |
-| **SSE streaming (WASM)** | Chunk-oriented parsers dropped or mis-parsed events when `data:` lines were split across HTTP reads (common in browser streaming). | Incremental `SseEventParser` accumulates lines until a blank line terminates an event. | `src/sse_stream.rs` | Boarding settle (SSE batch events); `cargo test -p ark-rest --target wasm32-unknown-unknown` |
+| **SSE streaming (WASM)** | Chunk-oriented parsers dropped or mis-parsed events when `data:` lines were split across HTTP reads (common in browser streaming). Upstream REST conversion also dropped `treeNonces`, so the browser never submitted batch-tree signatures (arkd: collected 0/1). | Incremental `SseEventParser` accumulates lines until a blank line terminates an event. `treeNonces` maps to `StreamEvent::TreeNonces`. | `src/sse_stream.rs`, `src/conversions/stream.rs` | `tree_nonces_sse_event_is_mapped`; boarding settle; `cargo test -p ark-rest --target wasm32-unknown-unknown` |
 | **Error display chain** | `ark_rest::Error` and `apis::Error::ResponseError` dropped HTTP status/body detail before WASM/UI (`request failed: request failed`). | `display_chain()` walks `source()`; response errors include truncated body snippet. | `src/error.rs`, `src/apis/mod.rs` | `cargo test -p ark-rest`; bitboard-arkade `client_join_batch_event_stream_error_surfaces_status_in_wasm_payload` |
 
 Upstream contribution target: [arkade-os/rust-sdk](https://github.com/arkade-os/rust-sdk) (`ark-rest`).
@@ -30,7 +30,7 @@ Internal maintainer docs for regeneration: [`ARK-REST-README.md`](ARK-REST-READM
 
 ```toml
 [dependencies]
-ark-rest = "0.9.3"
+ark-rest = "0.12.0"
 ```
 
 ## Notes

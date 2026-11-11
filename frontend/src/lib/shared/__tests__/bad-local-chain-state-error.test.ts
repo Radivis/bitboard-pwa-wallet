@@ -4,6 +4,10 @@ import {
   asBadLocalChainStateError,
   isBadLocalChainStateMessage,
 } from '@/lib/shared/bad-local-chain-state-error'
+import {
+  WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH,
+  WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH,
+} from '@/lib/shared/wasm-crypto-error'
 
 describe('isBadLocalChainStateMessage', () => {
   it('matches Esplora header hash error from WASM Blockchain error string', () => {
@@ -48,6 +52,29 @@ describe('asBadLocalChainStateError', () => {
 
   it('returns null when message does not match', () => {
     expect(asBadLocalChainStateError(new Error('timeout'))).toBeNull()
+  })
+
+  it('recognises the esplora_chain_mismatch WASM error code', () => {
+    const inner = new Error(
+      JSON.stringify({
+        code: WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH,
+        message: 'Esplora chain mismatch: update forks from the saved chain at genesis',
+      }),
+    )
+    const out = asBadLocalChainStateError(inner)
+    expect(out).toBeInstanceOf(BadLocalChainStateError)
+    expect(out?.message).toContain('Full rescan')
+    expect(out?.cause).toBe(inner)
+  })
+
+  it('does not treat esplora_network_mismatch as bad local chain state', () => {
+    const inner = new Error(
+      JSON.stringify({
+        code: WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH,
+        message: 'Esplora server is on Mutinynet, but this wallet is on Signet.',
+      }),
+    )
+    expect(asBadLocalChainStateError(inner)).toBeNull()
   })
 })
 

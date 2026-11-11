@@ -5,6 +5,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   ARKADE_INFOMODE_IDS,
   ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE,
+  ARKADE_PENDING_BATCH_INTENT_REREGISTER_HOLD_INFOMODE,
   ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import {
@@ -18,6 +19,7 @@ import {
   pendingBatchIntentDurationHint,
   pendingBatchIntentKey,
   pendingBatchIntentProcessingMessage,
+  pendingBatchIntentReregisterHoldMessage,
   pendingBatchIntentSucceededMessage,
   pendingBatchIntentTimedOutMessage,
   pendingIntentAllowsCancel,
@@ -37,9 +39,25 @@ import type { ArkadePendingBatchIntent } from '@/workers/arkade-api'
 import { toast } from 'sonner'
 
 function pendingIntentBannerInfomode(intent: ArkadePendingBatchIntent) {
-  return pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.processing
-    ? ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE
-    : ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
+  const phase = pendingIntentBannerPhase(intent)
+  if (phase === ARKADE_INTENT_LIFECYCLE_PHASES.processing) {
+    return ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE
+  }
+  if (phase === ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold) {
+    return ARKADE_PENDING_BATCH_INTENT_REREGISTER_HOLD_INFOMODE
+  }
+  return ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
+}
+
+function pendingIntentBannerBody(intent: ArkadePendingBatchIntent): string {
+  const phase = pendingIntentBannerPhase(intent)
+  if (phase === ARKADE_INTENT_LIFECYCLE_PHASES.processing) {
+    return `${pendingBatchIntentProcessingMessage(intent.kind)} ${pendingBatchIntentDurationHint()}`
+  }
+  if (phase === ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold) {
+    return pendingBatchIntentReregisterHoldMessage()
+  }
+  return pendingBatchIntentTimedOutMessage(intent.kind)
 }
 
 function PendingBatchIntentDestinationLine({
@@ -183,11 +201,7 @@ export function ArkadePendingBatchIntentBanner() {
                 </span>
               </InfomodeWrapper>
             }
-            description={
-              isProcessing
-                ? `${pendingBatchIntentProcessingMessage(pendingIntent.kind)} ${pendingBatchIntentDurationHint()}`
-                : pendingBatchIntentTimedOutMessage(pendingIntent.kind)
-            }
+            description={pendingIntentBannerBody(pendingIntent)}
             optionalContent={
               destinationAddress ? (
                 <PendingBatchIntentDestinationLine destinationAddress={destinationAddress} />

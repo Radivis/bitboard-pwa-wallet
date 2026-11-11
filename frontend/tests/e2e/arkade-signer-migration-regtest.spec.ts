@@ -10,7 +10,7 @@ import { restartArkadeOperator } from './helpers/regtest'
 import { prepareSignerMigrationScenario } from './helpers/arkade-regtest-scenarios'
 import {
   triggerArkadeRailSync,
-  waitForDashboardArkadeBalanceAtLeast,
+  waitForDashboardArkadeOffchainSpendableAtLeast,
 } from './helpers/dashboard-arkade'
 import { goToWalletTab } from './helpers/wallet-nav'
 
@@ -52,6 +52,6 @@ test.describe('Arkade signer migration regtest @arkade-signer-regtest', () => {
     })
 
     const minExpectedBalance = Math.max(1, balanceBeforeMigrate - Math.ceil(balanceBeforeMigrate * 0.05))
-    await waitForDashboardArkadeBalanceAtLeast(page, minExpectedBalance, 180_000)
+    await waitForDashboardArkadeOffchainSpendableAtLeast(page, minExpectedBalance, 180_000)
   })
 })

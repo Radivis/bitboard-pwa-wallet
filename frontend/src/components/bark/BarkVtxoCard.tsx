@@ -18,6 +18,7 @@ interface BarkVtxoCardProps {
   pendingActions?: readonly BarkPendingAction[]
   movements?: readonly BarkMovementRow[]
   emergencyExitPhaseLine?: string | null
+  emergencyExitPhaseTitle?: string | null
   now?: Date
 }
 
@@ -28,6 +29,7 @@ export function BarkVtxoCard({
   pendingActions = [],
   movements = [],
   emergencyExitPhaseLine = null,
+  emergencyExitPhaseTitle = null,
   now = new Date(),
 }: BarkVtxoCardProps) {
   const [copied, setCopied] = useState(false)
@@ -86,8 +88,9 @@ export function BarkVtxoCard({
         ) : null}
         {emergencyExitPhaseLine != null ? (
           <div
-            className="design-type-regular text-muted-foreground"
+            className="design-type-regular break-all text-muted-foreground"
             data-testid={`bark-vtxo-exit-phase-${row.id}`}
+            title={emergencyExitPhaseTitle ?? undefined}
           >
             {emergencyExitPhaseLine}
           </div>

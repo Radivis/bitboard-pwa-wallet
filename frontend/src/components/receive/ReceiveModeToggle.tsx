@@ -1,5 +1,6 @@
-import { Bitcoin, Dog, Zap } from 'lucide-react'
+import { Bitcoin, Zap } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import { BarkIcon } from '@/components/icons/BarkIcon'
 import { cn } from '@/lib/shared/utils'
 import { ReceiveModeArkadeInfomodeContent } from '@/components/arkade/infomode/ReceiveModeArkadeInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -81,7 +82,7 @@ export function ReceiveModeToggle({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Dog className="h-5 w-5" aria-hidden />
+            <BarkIcon className="h-5 w-5" />
             Bark
           </button>
         ) : null}

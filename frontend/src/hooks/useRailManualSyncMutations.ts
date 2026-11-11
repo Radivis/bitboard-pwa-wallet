@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { e2eBarkSyncSettlesExits } from '@/lib/bark/e2e/bark-regtest-env'
 import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { orchestrateLightningSyncThenSave } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { collectLightningDashboardSyncPatches } from '@/lib/lightning/lightning-dashboard-sync'
@@ -42,6 +43,7 @@ export function useBarkManualSyncMutation() {
         walletId: activeWalletId,
         networkMode,
         throwOnError: true,
+        settleExits: e2eBarkSyncSettlesExits(),
       })
     },
     onError: logBarkManualSyncError,

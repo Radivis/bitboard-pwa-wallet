@@ -652,6 +652,7 @@ pub(crate) fn virtual_tx_outpoint_from_record(
                 })
             })
             .collect::<Result<Vec<_>, ArkWasmError>>()?,
+        depth: 0,
     })
 }
 
@@ -726,6 +727,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1050,6 +1052,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1119,6 +1122,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1172,6 +1176,7 @@ mod tests {
                     settled_by: None,
                     ark_txid: None,
                     assets: vec![],
+                    depth: 0,
                 },
                 VirtualTxOutPoint {
                     outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 1),
@@ -1188,6 +1193,7 @@ mod tests {
                     settled_by: None,
                     ark_txid: None,
                     assets: vec![],
+                    depth: 0,
                 },
             ],
         );
@@ -1246,6 +1252,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1274,6 +1281,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1302,6 +1310,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1358,6 +1367,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                depth: 0,
             }],
         );
 
@@ -1426,6 +1436,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
@@ -1471,6 +1482,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
@@ -1532,6 +1544,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
@@ -1607,6 +1620,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",

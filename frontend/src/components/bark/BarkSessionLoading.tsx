@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Dog } from 'lucide-react'
+import { BarkIcon } from '@/components/icons/BarkIcon'
 import {
   BARK_SESSION_LOADING_COMMENTS,
   BARK_SESSION_LOADING_COMMENT_ROTATION_MS,
@@ -31,9 +31,8 @@ export function BarkSessionLoading({ embedded = false }: { embedded?: boolean })
 
   return (
     <div className={barkSessionStatusClassName(embedded)} data-testid="bark-session-loading">
-      <Dog
+      <BarkIcon
         className={`size-24 animate-spin ${BARK_SESSION_LOADING_SPIN_DURATION_CLASS}`}
-        aria-hidden
       />
       <h1 className="design-type-screen-heading">Establishing Bark session</h1>
       <p className="design-type-regular max-w-xl text-muted-foreground" data-testid="bark-session-loading-comment">

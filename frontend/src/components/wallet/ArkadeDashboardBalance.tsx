@@ -87,7 +87,7 @@ export function ArkadeDashboardBalance() {
             railConfigured={arkadeRail.loadPhase !== 'not-configured'}
             syncErrorMessage={arkadeSyncSnapshot.errorMessage}
             syncErrorDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
-            syncWarningMessage={arkadeSyncSnapshot.warningMessage}
+            syncWarningMessages={arkadeSyncSnapshot.warningMessages}
             syncWarningDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
           />
         </div>
@@ -98,7 +98,11 @@ export function ArkadeDashboardBalance() {
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
-          <ArkadeSessionLoadError embedded errorMessage={arkadeLoadSnapshot.errorMessage} />
+          <ArkadeSessionLoadError
+            embedded
+            errorMessage={arkadeLoadSnapshot.errorMessage}
+            networkMode={arkadeLoadSnapshot.networkMode}
+          />
         ) : arkadeLoadSnapshot.loadPhase === 'loading' && balance == null ? (
           <ArkadeSessionLoading embedded />
         ) : isLoading ? (
@@ -116,7 +120,7 @@ export function ArkadeDashboardBalance() {
               rail="arkade"
               syncPhase={arkadeSyncSnapshot.syncPhase}
               loadPhase={arkadeLoadSnapshot.loadPhase}
-              warningMessage={arkadeSyncSnapshot.warningMessage}
+              warningMessages={arkadeSyncSnapshot.warningMessages}
               onRetry={() => arkadeManualSync.mutate()}
               isRetrying={
                 arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending

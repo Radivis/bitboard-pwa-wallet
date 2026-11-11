@@ -1,4 +1,4 @@
-import { Dog } from 'lucide-react'
+import { BarkIcon } from '@/components/icons/BarkIcon'
 import {
   BARK_SESSION_LOAD_ERROR_TILT_CLASS,
   barkSessionStatusClassName,
@@ -18,9 +18,8 @@ export function BarkSessionLoadError({
 
   return (
     <div className={barkSessionStatusClassName(embedded)} data-testid="bark-session-load-error">
-      <Dog
+      <BarkIcon
         className={`size-24 ${BARK_SESSION_LOAD_ERROR_TILT_CLASS} text-red-600 dark:text-red-500`}
-        aria-hidden
       />
       <h1 className="design-type-screen-heading">Bark session could not be established</h1>
       {sanitizedErrorMessage !== '' ? (

@@ -32,6 +32,7 @@ import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import { isSyncSupersededError } from '@/lib/shared/wasm-crypto-error'
 
 export type {
   OnchainSyncKind,
@@ -109,6 +110,26 @@ function onchainSyncTargetsActiveWallet(walletId: number): boolean {
   return useWalletStore.getState().activeWalletId === walletId
 }
 
+function onchainSyncMatchesLoadedDescriptor(
+  params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId'>,
+): boolean {
+  const state = useWalletStore.getState()
+  return (
+    state.activeWalletId === params.walletId &&
+    state.networkMode === params.networkMode &&
+    state.addressType === params.addressType &&
+    state.accountId === params.accountId
+  )
+}
+
+/** Lock ends the session. A scan that settles afterwards must not toast or save. */
+function onchainSyncStillForUnlockedDescriptor(
+  params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId'>,
+): boolean {
+  if (!onchainSyncMatchesLoadedDescriptor(params)) return false
+  return walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)
+}
+
 function clearOnchainSyncSnapshotIfItBelongsToWallet(walletId: number): void {
   if (snapshot.descriptorScope?.walletId !== walletId) {
     return
@@ -180,6 +201,11 @@ export async function abandonInFlightOnchainSync(): Promise<void> {
   void inFlightSync.promise.catch(() => undefined)
 }
 
+/** True while a scan's HTTP call is still running, even if lock cleared the snapshot. */
+export function isOnchainSyncInFlight(): boolean {
+  return inFlightSyncTracker.getCurrent() != null
+}
+
 /** Drop a sync snapshot that still describes a wallet the user has left. */
 export function detachOnchainSyncSnapshotIfDifferentWallet(nextWalletId: number): void {
   const scopeWalletId = snapshot.descriptorScope?.walletId
@@ -212,7 +238,10 @@ export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorSc
 }
 
 export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
+  // A locked wallet must not keep `syncing` just because the HTTP call is still
+  // open. That snapshot was treated as an active session and hid the unlock dialog.
   if (
+    lockPhase !== 'locked' &&
     shouldSkipRailLifecycleResetForLockPhase(
       lockPhase,
       inFlightSyncTracker.getCurrent() != null,
@@ -253,19 +282,21 @@ export async function orchestrateOnchainSyncThenSave(
     setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
 
     try {
+      // Esplora HTTP stays outside the writer lock so a network switch can load
+      // another descriptor while a public indexer is stalled.
       await runEsploraSyncBody(params)
       if (onchainSyncAttemptWasAbandoned(attemptId)) return
-      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+      if (!onchainSyncStillForUnlockedDescriptor(params)) {
         clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
         return
       }
+      setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
       await withWalletWriterLock(async () => {
         if (onchainSyncAttemptWasAbandoned(attemptId)) return
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+        if (!onchainSyncStillForUnlockedDescriptor(params)) {
           clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
           return
         }
-        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
         try {
           await orchestrateOnchainSave(toSaveParams(params))
         } catch (saveError) {
@@ -276,7 +307,10 @@ export async function orchestrateOnchainSyncThenSave(
       })
     } catch (error) {
       if (onchainSyncAttemptWasAbandoned(attemptId)) return
-      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+      if (
+        !onchainSyncStillForUnlockedDescriptor(params) ||
+        isSyncSupersededError(error)
+      ) {
         clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
         return
       }

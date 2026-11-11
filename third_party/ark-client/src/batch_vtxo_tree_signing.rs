@@ -1,11 +1,12 @@
 //! VTXO batch-tree musig2 signing (nonce submission + partial signatures).
 //!
-//! Shared by [`super::Client::join_next_batch`] and [`super::Client::settle_delegate`].
+//! 0.12 signs from `TreeNonces` inside `join_next_batch`, so this state machine is not called.
+//! It stays compiled so the double-sign guard can be wired again without reconstructing it.
+#![allow(dead_code, clippy::collapsible_if, clippy::too_many_arguments)]
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use crate::error::ErrorContext as _;
-use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
 use crate::Blockchain;
 use crate::Client;
@@ -88,12 +89,11 @@ impl VtxoBatchTreeSigningState {
     }
 }
 
-impl<B, W, S, K> Client<B, W, S, K>
+impl<B, W, S> Client<B, W, S>
 where
     B: Blockchain,
-    W: BoardingWallet + OnchainWallet,
+    W: OnchainWallet,
     S: SwapStorage + 'static,
-    K: crate::KeyProvider,
 {
     pub(super) async fn handle_vtxo_tree_tx_chunk<R>(
         &self,

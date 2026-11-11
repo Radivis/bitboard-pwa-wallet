@@ -1,12 +1,9 @@
 import { DesignBanner } from '@/components/design/DesignBanner'
 import {
-  BARK_ANCHOR_SWEEP_WARNING,
-  BARK_CHECKPOINT_SEIZURE_WARNING,
-  BARK_EXIT_NODE_SWEEP_KINDS,
-  BARK_INTERNAL_SEIZURE_WARNING,
-  BARK_LEAF_SEIZURE_WARNING,
-  vtxoIdsForExitNodeSweepKind,
-  type BarkExitNodeSweepKind,
+  barkExitSeizureWarningParts,
+  seizureBannerSections,
+  type BarkExitSeizureSection,
+  type BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
@@ -16,13 +13,6 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 import type { NetworkMode } from '@/stores/walletStore'
 
 const EMPTY_NOTICE_ITEMS: readonly [] = []
-
-const SEIZURE_NOTICE_BY_KIND: Record<BarkExitNodeSweepKind, { warning: string; testId: string }> = {
-  anchor: { warning: BARK_ANCHOR_SWEEP_WARNING, testId: 'bark-exit-anchor-sweep' },
-  internal: { warning: BARK_INTERNAL_SEIZURE_WARNING, testId: 'bark-exit-internal-seizure' },
-  leaf: { warning: BARK_LEAF_SEIZURE_WARNING, testId: 'bark-exit-leaf-seizure' },
-  checkpoint: { warning: BARK_CHECKPOINT_SEIZURE_WARNING, testId: 'bark-exit-checkpoint-seizure' },
-}
 
 /** Stays until the user dismisses each section. Lock and later syncs do not remove a list. */
 export function BarkExitSeizureBanner() {
@@ -35,12 +25,7 @@ export function BarkExitSeizureBanner() {
     walletId != null && notice?.walletId === walletId && notice.networkMode === networkMode
       ? notice
       : null
-  const exitNodeSweepVtxoItems = shownNotice?.exitNodeSweepVtxoItems ?? EMPTY_NOTICE_ITEMS
-  const noticeSections = BARK_EXIT_NODE_SWEEP_KINDS.map((kind) => ({
-    kind,
-    ...SEIZURE_NOTICE_BY_KIND[kind],
-    vtxoIds: vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, kind),
-  })).filter((section) => section.vtxoIds.length > 0)
+  const noticeSections = seizureBannerSections(shownNotice?.exitNodeSweepVtxoItems ?? EMPTY_NOTICE_ITEMS)
 
   if (
     walletId == null ||
@@ -60,13 +45,10 @@ export function BarkExitSeizureBanner() {
     >
       {noticeSections.map((section) => (
         <NoticeSection
-          key={section.kind}
-          kind={section.kind}
+          key={section.testId}
           walletId={walletId}
           networkMode={networkMode}
-          warning={section.warning}
-          vtxoIds={section.vtxoIds}
-          testId={section.testId}
+          section={section}
         />
       ))}
     </div>
@@ -74,33 +56,33 @@ export function BarkExitSeizureBanner() {
 }
 
 function NoticeSection(props: {
-  kind: BarkExitNodeSweepKind
   walletId: number
   networkMode: NetworkMode
-  warning: string
-  vtxoIds: readonly string[]
-  testId: string
+  section: BarkExitSeizureSection
 }) {
+  const spentOutput = spentOutputOfSection(props.section)
   return (
     <DesignBanner
       status="error"
       role="alert"
-      data-testid={props.testId}
-      title={props.warning}
+      data-testid={props.section.testId}
+      title={<SeizureWarning section={props.section} />}
       optionalContent={
-        <ul className="list-disc pl-5" data-testid={`${props.testId}-ids`}>
-          {props.vtxoIds.map((vtxoId) => (
-            <li key={vtxoId}>{vtxoId}</li>
+        <ul className="list-disc pl-5" data-testid={`${props.section.testId}-ids`}>
+          {props.section.vtxoIds.map((vtxoId) => (
+            <li key={vtxoId} className="break-all font-mono">
+              {vtxoId}
+            </li>
           ))}
         </ul>
       }
       secondaryAction={{
         label: 'Dismiss',
-        testId: `${props.testId}-dismiss`,
+        testId: `${props.section.testId}-dismiss`,
         onClick: () => {
           void useBarkExitChainNoticeStore
             .getState()
-            .dismissNotice(props.walletId, props.networkMode, props.kind)
+            .dismissNotice(props.walletId, props.networkMode, props.section.kind, spentOutput)
             .catch(() => {
               // The Bark account still has this list, so the section stays.
             })
@@ -108,4 +90,20 @@ function NoticeSection(props: {
       }}
     />
   )
+}
+
+function SeizureWarning(props: { section: BarkExitSeizureSection }) {
+  const parts = barkExitSeizureWarningParts(props.section)
+  return (
+    <>
+      {parts.beforeTxid}
+      {parts.txid != null ? <span className="break-all font-mono">{parts.txid}</span> : null}
+      {parts.afterTxid}
+    </>
+  )
+}
+
+function spentOutputOfSection(section: BarkExitSeizureSection): BarkExitSpentOutput | null {
+  if (section.spentTxid == null || section.spentVout == null) return null
+  return { spentTxid: section.spentTxid, spentVout: section.spentVout }
 }

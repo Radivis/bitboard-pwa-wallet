@@ -278,6 +278,22 @@ pub async fn arkade_sync_with_operator(schedule_background_full: bool) -> Result
 }
 
 #[wasm_bindgen]
+pub async fn arkade_background_key_discovery(
+    include_full_reconcile: bool,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async move {
+        let result = with_session_async(move |session| async move {
+            session
+                .background_key_discovery(include_full_reconcile)
+                .await
+        })
+        .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
 pub async fn arkade_reconcile_full_offchain_vtxo_list() -> Result<JsValue, JsValue> {
     map_js_async(async {
         let result = with_session_async(|session| async move {
@@ -367,6 +383,21 @@ fn arkade_export_persistence_json_internal() -> ArkResult<String> {
 pub async fn arkade_get_balance() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.balance().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_get_persisted_dashboard() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.persisted_dashboard()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_live_dashboard() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.live_dashboard().await }).await
     })
     .await
 }

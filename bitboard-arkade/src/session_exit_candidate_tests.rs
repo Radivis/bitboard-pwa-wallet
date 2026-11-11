@@ -27,6 +27,7 @@ mod exit_candidate_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 

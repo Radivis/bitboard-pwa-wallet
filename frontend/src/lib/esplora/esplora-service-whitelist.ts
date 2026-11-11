@@ -12,13 +12,15 @@ type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
+    /** Testnet4. Blockstream's unauthenticated cap (700 requests/hour) 429s a full scan. */
     testnet: 'https://mempool.space/testnet4/api',
     signet: 'https://mempool.space/signet/api',
     mutinynet: 'https://mutinynet.com/api',
   },
-  /** Public Blockstream Esplora mirrors (no testnet4 row — chain differs from app testnet). */
+  /** Public Blockstream Esplora mirrors. Testnet here is testnet4, not legacy testnet3. */
   blockstream: {
     mainnet: 'https://blockstream.info/api',
+    testnet: 'https://blockstream.info/testnet4/api',
     signet: 'https://blockstream.info/signet/api',
   },
   /**
@@ -129,6 +131,75 @@ export function getUpstreamBaseForEsploraProxy(
 
 export function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
   return id === 'default' || id === 'blockstream' || id === 'legacy'
+}
+
+const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([502, 503, 504])
+
+/** Blockstream's unauthenticated cap. A 429 stays on the host that sent it. */
+export const ESPLORA_RATE_LIMIT_STATUS = 429
+
+/**
+ * Gateway failures only. HTTP 429 stays on the host that sent it: Blockstream's
+ * unauthenticated cap is 700 requests per hour, so a full scan moved there fails
+ * with Blockstream's rate-limit notice.
+ */
+export function isEsploraUpstreamFailoverStatus(status: number): boolean {
+  return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
+}
+
+export type EsploraMirrorDecision = {
+  /** When false, keep the preferred response. */
+  useFallbackResponse: boolean
+  markPreferredHostDown: boolean
+}
+
+/**
+ * Which response wins once both hosts have answered, and whether the preferred
+ * host goes on cooldown. `preferredStatus` is null when that host did not answer.
+ * A rate-limited mirror does not replace a failed preferred response and does
+ * not start the cooldown.
+ *
+ * Inlined in `frontend/api/esplora/[...path].ts` because Vercel functions cannot
+ * import this module. Keep that copy in sync.
+ */
+export function decideEsploraMirrorResponse(
+  preferredStatus: number | null,
+  fallbackStatus: number,
+): EsploraMirrorDecision {
+  const fallbackIsRateLimited = fallbackStatus === ESPLORA_RATE_LIMIT_STATUS
+  if (preferredStatus == null) {
+    return {
+      useFallbackResponse: true,
+      markPreferredHostDown: !fallbackIsRateLimited,
+    }
+  }
+  if (!isEsploraUpstreamFailoverStatus(preferredStatus)) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  if (fallbackIsRateLimited) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  return { useFallbackResponse: true, markPreferredHostDown: true }
+}
+
+/**
+ * Same-chain mirror when the preferred host does not connect or its gateway fails.
+ * Mempool is preferred for testnet4 (Blockstream's 700/hour cap 429s a full scan).
+ * Blockstream is the mirror when Mempool itself is unreachable. A 429 stays on
+ * the host that sent it, so a rate-limited mirror does not replace Mempool.
+ */
+export function esploraFallbackUpstreamBase(
+  providerId: string,
+  network: string,
+): string | null {
+  if (providerId !== 'default' || !isEsploraProxyNetwork(network)) return null
+  const preferredBase = ESPLORA_PROVIDER_BASES.default[network]
+  const blockstreamBase = ESPLORA_PROVIDER_BASES.blockstream[network]
+  if (preferredBase == null || blockstreamBase == null) return null
+  if (normalizeEsploraBaseUrl(preferredBase) === normalizeEsploraBaseUrl(blockstreamBase)) {
+    return null
+  }
+  return blockstreamBase
 }
 
 export type EsploraViteProxyEntry = {

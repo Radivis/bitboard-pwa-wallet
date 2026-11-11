@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
+import { SIGNET_ARKADE_SESSION_START_APPENDIX } from '@/lib/arkade/signet-arkade-session-start-note'
 
 describe('ArkadeSessionGate', () => {
   it('shows the loading screen while the session is opening', () => {
@@ -37,6 +38,18 @@ describe('ArkadeSessionGate', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('operator down')).toBeInTheDocument()
     expect(screen.queryByText('ready')).not.toBeInTheDocument()
+  })
+
+  it('appends the Signet reliability note on the error screen', () => {
+    render(
+      <ArkadeSessionGate loadPhase="load-error" errorMessage="operator down" networkMode="signet">
+        <p>ready</p>
+      </ArkadeSessionGate>,
+    )
+
+    expect(screen.getByTestId('arkade-session-load-error-message')).toHaveTextContent(
+      `operator down: ${SIGNET_ARKADE_SESSION_START_APPENDIX}`,
+    )
   })
 
   it('renders children when the session is loaded', () => {

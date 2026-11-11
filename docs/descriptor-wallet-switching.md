@@ -183,6 +183,35 @@ First load after password entry uses [`orchestrateBootstrapUnlock` / `orchestrat
 - `refreshWalletStoreFromLoadedBdk`
 - `syncActiveWalletAndUpdateState` / changeset persist
 
+## Signet and Mutinynet share a genesis block
+
+Public Signet and Mutinynet both use the signet genesis block and both map to BDK `Network::Signet`. Their descriptors are identical (coin type 1), so BDK cannot tell their histories apart, and a changeset from one network can load under the other label without any error. The app tells them apart by **block height**: Mutinynet is far above `SIGNET_MUTINYNET_HEIGHT_BOUNDARY` (`1_000_000`), public Signet far below. The constant is defined twice, once per language, and each definition names the other location:
+
+- TypeScript: [`signet-mutinynet-chain-classifier.ts`](../frontend/src/lib/wallet/signet-mutinynet-chain-classifier.ts)
+- Rust: [`esplora_network_identity.rs`](../crypto/src/esplora_network_identity.rs)
+
+### Chain repair migration (`signet-mutinynet-chain-repair`)
+
+v0.3.6 split Signet from Mutinynet and relabeled descriptor rows. Rows could end up holding the other network's chain, and later syncs mixed both chains in one changeset, which left every transaction pending. The wallet data migration `signet-mutinynet-chain-repair` runs once per wallet on unlock, after `signet-network-split`:
+
+- It reads `local_chain.blocks` and `tx_graph.anchors` from each `signet` / `mutinynet` descriptor row's changeset. The highest non-null local block is the tip, and each anchor height counts on its own. A tip of 0 (genesis only) counts for nothing.
+- A row **contradicts** its label if any of those heights falls on the other side of the boundary. Rows that cannot be read are **unknown** and never contradict.
+- Contradicting rows are **dropped**. Nothing is moved or swapped between labels, and the network selector is not changed.
+- Other networks, Arkade accounts, and Lightning connections are not touched.
+
+A dropped row is recreated on demand by `findOrCreateDescriptorWalletRow` with `fullScanDone: false`, so the next unlock or switch onto that network runs a full Esplora scan and rebuilds the history from the descriptors. No funds or keys are lost, because descriptors are derived from the wallet secrets, not stored only in the row.
+
+### Sync guards in crypto
+
+Two checks keep the wrong chain out of a changeset going forward. Both run in the crypto WASM before BDK applies an Esplora update:
+
+| Guard | Where | Error code | Frontend handling |
+|-------|-------|------------|-------------------|
+| **Esplora network identity**: the update's tip height must be on the loaded network's side of the boundary (only for `signet` / `mutinynet`). | `sync_wallet` / `full_scan_wallet` via `sync::apply_esplora_update` | `esplora_network_mismatch` | "Wrong Esplora network" toast that points at the Esplora URL in Settings. No Full rescan, because the server is wrong, not the local chain. |
+| **Fork at genesis**: a wallet with confirmed transactions must keep at least one saved checkpoint above genesis after the update. BDK `CannotConnectError` uses the same code. | `sync::apply_update` (also covers the anchor reconcile pass) | `esplora_chain_mismatch` | Treated as bad local chain state: Full rescan reloads the wallet with an empty chain once and scans again. |
+
+A one-block reorg of the newest anchor is still accepted, because the older saved checkpoints remain. A sparse local chain whose only non-genesis block is reorged is rejected and is recovered with Full rescan.
+
 ## File map
 
 | Role | File |
@@ -204,10 +233,15 @@ First load after password entry uses [`orchestrateBootstrapUnlock` / `orchestrat
 | WASM load/sync/export | [`cryptoStore.ts`](../frontend/src/stores/cryptoStore.ts) + crypto worker |
 | Encrypted payload CAS | [`wallet-persistence.ts`](../frontend/src/db/wallet-persistence.ts) |
 | Unlock bootstrap query | [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) |
+| Signet / Mutinynet changeset classifier | [`signet-mutinynet-chain-classifier.ts`](../frontend/src/lib/wallet/signet-mutinynet-chain-classifier.ts) |
+| Signet / Mutinynet repair migration | [`signet-network-split-migration.ts`](../frontend/src/lib/wallet/signet-network-split-migration.ts) — `dropDescriptorWalletsContradictingTheirNetwork` |
+| Esplora network identity check | [`esplora_network_identity.rs`](../crypto/src/esplora_network_identity.rs) |
+| Fork-at-genesis guard | [`sync.rs`](../crypto/src/sync.rs) — `apply_update` |
 
 ## Error contracts (live switch)
 
 - **Load phase fails** (resolve, decrypt, `loadWallet`): `switchDescriptorWallet` rejects; toast; caller must **not** treat the new network as committed (orchestrators rely on commit happening only after successful load inside the same function).
 - **Esplora phase fails** after successful load: function **resolves**; `walletStatus` returns to `unlocked`; BDK-local balance/txs remain; stale banner may show using persisted `lastSuccessfulEsploraSyncAt`.
+- **Esplora serves another network** (`esplora_network_mismatch`): same as an Esplora phase failure. The update is not applied, the changeset stays unchanged, and the toast points at the Esplora URL in Settings.
 
 See also [`doc/SECURITY.md`](../doc/SECURITY.md) for how decrypted payload scope relates to descriptor wallets at rest.

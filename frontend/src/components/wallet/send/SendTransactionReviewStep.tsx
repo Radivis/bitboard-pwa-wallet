@@ -251,7 +251,9 @@ export function SendTransactionReviewStep({
           <div className="design-type-regular space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Recipient</span>
-              <span className="design-type-addresses">{truncateAddress(recipient)}</span>
+              <span className="design-type-addresses [unicode-bidi:isolate]">
+                {truncateAddress(recipient)}
+              </span>
             </div>
             <ReviewAmountRow
               label="Amount to send"

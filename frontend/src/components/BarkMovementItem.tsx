@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Dog } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { BarkIcon } from '@/components/icons/BarkIcon'
 import { format, formatDistanceToNow } from 'date-fns'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
@@ -54,7 +55,7 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
           <div className="flex flex-wrap items-center gap-2">
             <p className="design-type-emphasis">{STATUS_LABEL[movement.status]}</p>
             <DashboardActivityRailBadge
-              icon={Dog}
+              icon={BarkIcon}
               label={barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}
             />
           </div>

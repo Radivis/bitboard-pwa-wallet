@@ -72,6 +72,7 @@ export function SendTransactionEntryCard({
   recipient,
   onRecipientChange,
   recipientFormatValid,
+  onchainAddressCheckPending = false,
   lightningAvailable,
   hasAnyLightningConnection,
   lightningRecipientOk,
@@ -132,6 +133,7 @@ export function SendTransactionEntryCard({
   recipient: string
   onRecipientChange: (value: string) => void
   recipientFormatValid: boolean
+  onchainAddressCheckPending?: boolean
   lightningAvailable: boolean
   hasAnyLightningConnection: boolean
   lightningRecipientOk: boolean
@@ -304,6 +306,7 @@ export function SendTransactionEntryCard({
               <DesignInput
                 id="recipient-address"
                 leadingIcon={Wallet}
+                className="[unicode-bidi:isolate]"
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={sendRecipientPlaceholder({
@@ -316,7 +319,7 @@ export function SendTransactionEntryCard({
                 })}
                 disabled={isPending}
               />
-              {recipient && !recipientFormatValid && (
+              {recipient && !recipientFormatValid && !onchainAddressCheckPending && (
                 <p className="design-type-regular text-destructive">
                   {sendRecipientFormatErrorMessage({
                     isLightningSendMode,

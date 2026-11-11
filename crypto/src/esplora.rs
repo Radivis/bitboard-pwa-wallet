@@ -9,31 +9,48 @@ use crate::wasm_sleep::WasmSleeper;
 
 /// Per-request timeout for incremental sync and broadcast (seconds).
 pub const ESPLORA_SYNC_HTTP_TIMEOUT_SECS: u64 = 5;
-/// Per-request timeout for full scan (seconds). Full scans issue many sequential fetches.
+/// Per-request timeout for full scan (seconds).
+///
+/// A hung request fails that attempt and is not retried inside the client.
+/// Internal esplora-client retries (default 6) kept a stalled `/blocks` open for
+/// minutes and pinned the dev proxy when many browsers scanned at once.
+/// 30s is enough for a slow public indexer response during a real history scan.
 pub const ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS: u64 = 30;
+pub const ESPLORA_FULL_SCAN_MAX_TRANSPORT_RETRIES: usize = 0;
 
 pub struct EsploraClient {
     async_client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
 }
 
 impl EsploraClient {
-    fn new_with_timeout(url: &str, timeout_secs: u64) -> Result<Self, CryptoError> {
+    fn new_with_timeout(
+        url: &str,
+        timeout_secs: u64,
+        max_transport_retries: Option<usize>,
+    ) -> Result<Self, CryptoError> {
         if url.is_empty() {
             return Err(CryptoError::Blockchain("URL must not be empty".to_string()));
         }
-        let async_client = bdk_esplora::esplora_client::Builder::new(url)
-            .timeout(timeout_secs)
+        let mut builder = bdk_esplora::esplora_client::Builder::new(url).timeout(timeout_secs);
+        if let Some(max_transport_retries) = max_transport_retries {
+            builder = builder.max_retries(max_transport_retries);
+        }
+        let async_client = builder
             .build_async_with_sleeper::<WasmSleeper>()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
         Ok(Self { async_client })
     }
 
     pub fn for_sync(url: &str) -> Result<Self, CryptoError> {
-        Self::new_with_timeout(url, ESPLORA_SYNC_HTTP_TIMEOUT_SECS)
+        Self::new_with_timeout(url, ESPLORA_SYNC_HTTP_TIMEOUT_SECS, None)
     }
 
     pub fn for_full_scan(url: &str) -> Result<Self, CryptoError> {
-        Self::new_with_timeout(url, ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS)
+        Self::new_with_timeout(
+            url,
+            ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS,
+            Some(ESPLORA_FULL_SCAN_MAX_TRANSPORT_RETRIES),
+        )
     }
 
     /// Default client for tests and single-shot calls (sync timeout).

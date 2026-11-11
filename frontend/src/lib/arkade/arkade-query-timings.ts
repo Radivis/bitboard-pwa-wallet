@@ -9,8 +9,15 @@ export const ARKADE_DASHBOARD_STALE_MS = 30_000
 /** Boarding status, exit candidates, bumper info — session-bound data that changes during flows. */
 export const ARKADE_SESSION_POLL_STALE_MS = 15_000
 
-/** Boarding status background poll interval. */
+/** Boarding status background poll once UTXOs are already visible. */
 export const ARKADE_BOARDING_STATUS_REFETCH_MS = 30_000
+
+/**
+ * While the board page is open and no boarding UTXO is visible yet.
+ * arkd's cooperative window is about 30s of wall clock after confirmation, so a
+ * 30s poll would show the UTXO only after that window has closed.
+ */
+export const ARKADE_BOARDING_STATUS_EMPTY_POLL_MS = 2_000
 
 /** While a RegisterIntent is waiting for the operator, poll boarding/balance until spend. */
 export const ARKADE_PENDING_BATCH_INTENT_POLL_MS = 8_000
@@ -32,6 +39,28 @@ export const ARKADE_BUMPER_FUNDING_POLL_MS = 4_000
  * lets the user start an unroll the operator will reject as "not eligible").
  */
 export const ARKADE_EXIT_CANDIDATES_POLL_MS = 5_000
+
+/**
+ * Complete-page VTXO readiness refresh. Claimability changes as the CSV elapses, and the
+ * global QueryClient does not refetch on focus, so this list keeps polling while the page
+ * is open even if the window is not focused. The completion fee estimate is not polled;
+ * it runs again when this list reports that more selected rows can be completed.
+ */
+export function unilateralExitInProgressRefreshOptions(
+  queryEnabled: boolean,
+  refreshWhileUnfocused: boolean,
+): {
+  refetchInterval: number | false
+  refetchIntervalInBackground: boolean
+  refetchOnWindowFocus: boolean
+} {
+  const refreshWhileThisPageIsOpen = queryEnabled && refreshWhileUnfocused
+  return {
+    refetchInterval: queryEnabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
+    refetchIntervalInBackground: refreshWhileThisPageIsOpen,
+    refetchOnWindowFocus: refreshWhileThisPageIsOpen,
+  }
+}
 
 /** Rarely changing metadata (boarding address, delegator info). */
 export const ARKADE_SLOW_METADATA_STALE_MS = 300_000

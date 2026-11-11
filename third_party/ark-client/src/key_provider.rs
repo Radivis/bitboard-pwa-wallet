@@ -1,9 +1,4 @@
 use crate::error::Error;
-use bitcoin::bip32::DerivationPath;
-use bitcoin::bip32::Xpriv;
-use bitcoin::key::Keypair;
-use bitcoin::secp256k1::Secp256k1;
-use std::sync::Arc;
 
 /// Maps `Bip32KeyProvider::next_index` to the index shown for receive (mirrors BDK `last_reveal`).
 pub fn display_receive_derivation_index(next_index: u32) -> u32 {
@@ -13,6 +8,11 @@ pub fn display_receive_derivation_index(next_index: u32) -> u32 {
         0
     }
 }
+use bitcoin::bip32::DerivationPath;
+use bitcoin::bip32::Xpriv;
+use bitcoin::key::Keypair;
+use bitcoin::secp256k1::Secp256k1;
+use std::sync::Arc;
 
 pub enum KeypairIndex {
     /// Increments the index and returns a new keypair
@@ -83,74 +83,46 @@ pub trait KeyProvider: Send + Sync {
     ///
     /// A vector of X-only public keys known to this provider
     fn get_cached_pks(&self) -> Result<Vec<bitcoin::XOnlyPublicKey>, Error>;
+}
 
-    /// Returns true if this provider supports key discovery
-    ///
-    /// HD wallets return true since they can derive and discover previously used keys.
-    /// Static key providers return false (single key, nothing to discover).
-    fn supports_discovery(&self) -> bool {
-        false
-    }
-
+/// Key provider extension for index-based discovery and restore.
+pub trait DiscoverableKeyProvider: KeyProvider {
     /// Get the derivation index for a cached public key.
-    ///
-    /// Returns `None` if the provider doesn't support index-based derivation
-    /// or if the key is not in the cache.
-    fn get_derivation_index_for_pk(&self, _pk: &bitcoin::XOnlyPublicKey) -> Option<u32> {
-        None
-    }
+    fn get_derivation_index_for_pk(&self, pk: &bitcoin::XOnlyPublicKey) -> Option<u32>;
 
-    /// Derive a keypair at a specific index without caching
-    ///
-    /// This is used during discovery to check keys without affecting the provider's state.
-    /// Returns `None` if the provider doesn't support index-based derivation.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - The derivation index (appended to base path for HD wallets)
-    fn derive_at_discovery_index(&self, _index: u32) -> Result<Option<Keypair>, Error> {
-        Ok(None)
-    }
+    /// Derive a keypair at a specific index without caching.
+    fn derive_at_discovery_index(&self, index: u32) -> Result<Option<Keypair>, Error>;
 
-    /// Cache a discovered keypair at the given index
+    /// Cache a discovered keypair at the given index.
     ///
     /// This is called after discovery determines a key is "used" (has VTXOs).
-    /// Also updates next_index if index >= current next_index to avoid collisions.
-    ///
-    /// No-op for providers that don't support discovery.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - The derivation index
-    /// * `keypair` - The keypair to cache
-    fn cache_discovered_keypair(&self, _index: u32, _keypair: Keypair) -> Result<(), Error> {
-        Ok(())
-    }
+    /// Implementations should also advance receive-key state to avoid reuse.
+    fn cache_discovered_keypair(&self, index: u32, kp: Keypair) -> Result<(), Error>;
 
-    fn mark_as_used(&self, _pk: &bitcoin::XOnlyPublicKey) -> Result<(), Error> {
-        Ok(())
-    }
-
-    /// Next derivation index to assign on reveal (`KeypairIndex::New`).
+    /// Derive and cache the keypair at a persisted derivation index.
     ///
-    /// Default `Ok(None)` is for [`StaticKeyProvider`] (`OfflineClient::new_with_keypair`): one
-    /// fixed keypair, no derivation cursor. [`Bip32KeyProvider`] overrides with `Some(next_index)`.
-    /// Bitboard (`bitboard-arkade`) always uses `new_with_bip32_at_index`, so callers there always
-    /// see `Some` — the `None` branch exists for generic `Client<K: KeyProvider>` only.
+    /// This is used after loading persisted contracts so HD wallets can sign for stored
+    /// contracts immediately after restart, without running a full restore scan.
+    /// Implementations must not advance receive-key discovery state here.
+    fn cache_keypair_at_index(&self, index: u32) -> Result<(), Error>;
+
+    fn mark_as_used(&self, pk: &bitcoin::XOnlyPublicKey) -> Result<(), Error>;
+
+    /// Next derivation index this provider would assign, when it tracks one.
     fn peek_next_derivation_index(&self) -> Result<Option<u32>, Error> {
         Ok(None)
     }
 
-    /// Derive and cache a keypair at `index` without incrementing `next_index` or consulting `used`.
+    /// Derive and cache indices `0..up_to_exclusive` without operator calls.
+    fn warm_local_derivation_indices(&self, _up_to_exclusive: u32) -> Result<(), Error> {
+        Ok(())
+    }
+
+    /// Cache the key at `index` without advancing the receive cursor.
     fn ensure_keypair_cached_at_index(&self, _index: u32) -> Result<Keypair, Error> {
         Err(Error::ad_hoc(
             "index-based key caching is not supported by this key provider",
         ))
-    }
-
-    /// Locally derive and cache indices `0..up_to_exclusive` (no operator calls).
-    fn warm_local_derivation_indices(&self, _up_to_exclusive: u32) -> Result<(), Error> {
-        Ok(())
     }
 }
 
@@ -160,45 +132,41 @@ pub trait KeyProvider: Send + Sync {
 /// the original single-keypair design.
 #[derive(Clone)]
 pub struct StaticKeyProvider {
-    keypair: Keypair,
+    kp: Keypair,
 }
 
 impl StaticKeyProvider {
     /// Create a new static key provider
-    pub fn new(keypair: Keypair) -> Self {
-        Self { keypair }
+    pub fn new(kp: Keypair) -> Self {
+        Self { kp }
     }
 }
 
 impl KeyProvider for StaticKeyProvider {
     fn get_next_keypair(&self, _: KeypairIndex) -> Result<Keypair, Error> {
         // Static provider always returns the same keypair
-        Ok(self.keypair)
-    }
-
-    fn ensure_keypair_cached_at_index(&self, _index: u32) -> Result<Keypair, Error> {
-        Ok(self.keypair)
+        Ok(self.kp)
     }
 
     fn get_keypair_for_path(&self, _path: &[u32]) -> Result<Keypair, Error> {
         // Static provider always returns the same keypair
-        Ok(self.keypair)
+        Ok(self.kp)
     }
 
     fn get_keypair_for_pk(&self, pk: &bitcoin::XOnlyPublicKey) -> Result<Keypair, Error> {
         // Verify that the requested public key matches our keypair
-        let stored_x_only_public_key = self.keypair.x_only_public_key().0;
-        if &stored_x_only_public_key == pk {
-            Ok(self.keypair)
+        let our_pk = self.kp.x_only_public_key().0;
+        if &our_pk == pk {
+            Ok(self.kp)
         } else {
             Err(Error::ad_hoc(format!(
-                "Public key mismatch: requested {pk}, but only have {stored_x_only_public_key}"
+                "Public key mismatch: requested {pk}, but only have {our_pk}"
             )))
         }
     }
 
     fn get_cached_pks(&self) -> Result<Vec<bitcoin::XOnlyPublicKey>, Error> {
-        Ok(vec![self.keypair.public_key().into()])
+        Ok(vec![self.kp.public_key().into()])
     }
 }
 
@@ -232,7 +200,7 @@ impl KeyProvider for StaticKeyProvider {
 ///
 /// // Or derive a specific keypair by path
 /// let custom_path = vec![84 + 0x8000_0000, 0x8000_0000, 0x8000_0000, 0, 5];
-/// let keypair = provider.get_keypair_for_path(&custom_path)?;
+/// let kp = provider.get_keypair_for_path(&custom_path)?;
 /// # Ok(())
 /// # }
 /// ```
@@ -241,7 +209,7 @@ pub struct Bip32KeyProvider {
     base_path: DerivationPath,
     // Using std::sync::Mutex for interior mutability across Send + Sync
     next_index: Arc<std::sync::Mutex<u32>>,
-    // Cache of derived keys: x-only public key -> (derivation_index, keypair, used)
+    // Cache of derived keys: pk -> (path_index, keypair, used)
     // The `used` flag indicates whether this keypair has been used (has VTXOs)
     key_cache:
         Arc<std::sync::RwLock<std::collections::HashMap<bitcoin::XOnlyPublicKey, KeyCacheValue>>>,
@@ -249,8 +217,8 @@ pub struct Bip32KeyProvider {
 
 #[derive(Clone, Copy)]
 pub struct KeyCacheValue {
-    derivation_index: u32,
-    keypair: Keypair,
+    path_index: u32,
+    kp: Keypair,
     /// Indicates whether this keypair has been used (has VTXOs).
     used: bool,
 }
@@ -316,6 +284,39 @@ impl Bip32KeyProvider {
             .map_err(|e| Error::ad_hoc(format!("Failed to lock next_index: {e}")))?;
         Ok(*next_derivation_index)
     }
+
+    pub fn peek_next_derivation_index(&self) -> Result<Option<u32>, Error> {
+        Ok(Some(self.peek_next_derivation_index_value()?))
+    }
+
+    /// Cache the key at `index` without advancing `next_index`.
+    pub fn ensure_keypair_cached_at_index(&self, index: u32) -> Result<Keypair, Error> {
+        {
+            let cache = self
+                .key_cache
+                .read()
+                .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
+            if let Some(entry) = cache.values().find(|entry| entry.path_index == index) {
+                return Ok(entry.kp);
+            }
+        }
+
+        let kp = self.derive_at_index(index)?;
+        let pk = kp.x_only_public_key().0;
+        let mut cache = self
+            .key_cache
+            .write()
+            .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
+        cache.insert(
+            pk,
+            KeyCacheValue {
+                path_index: index,
+                kp,
+                used: false,
+            },
+        );
+        Ok(kp)
+    }
 }
 
 impl KeyProvider for Bip32KeyProvider {
@@ -323,64 +324,50 @@ impl KeyProvider for Bip32KeyProvider {
         match keypair_index {
             KeypairIndex::New => {
                 // Get and increment the next index
-                let derivation_index = {
-                    let mut next_derivation_index = self
+                let index = {
+                    let mut next_index = self
                         .next_index
                         .lock()
                         .map_err(|e| Error::ad_hoc(format!("Failed to lock next_index: {e}")))?;
-                    let assigned_derivation_index = *next_derivation_index;
-                    *next_derivation_index = next_derivation_index
+                    let current = *next_index;
+                    *next_index = next_index
                         .checked_add(1)
                         .ok_or_else(|| Error::ad_hoc("Key derivation index overflow"))?;
-                    assigned_derivation_index
+                    current
                 };
 
                 // Derive the keypair at this index
-                let keypair = self.derive_at_index(derivation_index)?;
+                let kp = self.derive_at_index(index)?;
 
                 // Cache it for later lookup (marked as unused)
-                let x_only_public_key = keypair.x_only_public_key().0;
+                let pk = kp.x_only_public_key().0;
                 {
                     let mut cache = self
                         .key_cache
                         .write()
                         .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
                     cache.insert(
-                        x_only_public_key,
+                        pk,
                         KeyCacheValue {
-                            derivation_index,
-                            keypair,
+                            path_index: index,
+                            kp,
                             used: false,
                         },
                     );
                 }
 
-                Ok(keypair)
+                Ok(kp)
             }
             KeypairIndex::LastUnused => {
-                // First, try to find an unused keypair in the cache
-                {
-                    let cache = self
-                        .key_cache
-                        .read()
-                        .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-
-                    // Find the unused keypair with the lowest index
-                    let lowest_unused_cache_entry = cache
-                        .values()
-                        .filter(|KeyCacheValue { used, .. }| !used)
-                        .min_by_key(
-                            |KeyCacheValue {
-                                 derivation_index, ..
-                             }| *derivation_index,
-                        );
-
-                    if let Some(KeyCacheValue { keypair, .. }) = lowest_unused_cache_entry {
-                        return Ok(*keypair);
-                    }
+                // The current receive key is `next_index - 1`. Discovery and contract hydrate mark
+                // that key used, but boarding and change must not mint a new one: the cursor is
+                // what we persist, and a silent increment changes the address across unlock.
+                // A new receive key is only assigned by `KeypairIndex::New`.
+                let next_index = self.peek_next_derivation_index_value()?;
+                if next_index > 0 {
+                    return self.ensure_keypair_cached_at_index(next_index - 1);
                 }
 
-                // No unused keypair found, derive a new one
                 self.get_next_keypair(KeypairIndex::New)
             }
         }
@@ -411,46 +398,46 @@ impl KeyProvider for Bip32KeyProvider {
                 .key_cache
                 .read()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-            if let Some(KeyCacheValue { keypair, .. }) = cache.get(pk) {
-                return Ok(*keypair);
+            if let Some(KeyCacheValue { kp, .. }) = cache.get(pk) {
+                return Ok(*kp);
             }
         }
 
-        // If not in cache, search indices below the next derivation index.
-        let next_derivation_index = {
-            let next_derivation_index_guard = self
+        // If not in cache, we need to search. For now, we'll search up to the current index
+        let current_index = {
+            let next_index = self
                 .next_index
                 .lock()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock next_index: {e}")))?;
-            *next_derivation_index_guard
+            *next_index
         };
 
-        // Search through derived keys up to next_derivation_index (exclusive).
-        for derivation_index in 0..next_derivation_index {
-            let keypair = self.derive_at_index(derivation_index)?;
-            let derived_x_only_public_key = keypair.x_only_public_key().0;
+        // Search through derived keys up to current index
+        for i in 0..current_index {
+            let kp = self.derive_at_index(i)?;
+            let derived_pk = kp.x_only_public_key().0;
 
-            if &derived_x_only_public_key == pk {
+            if &derived_pk == pk {
                 // Cache it for next time (assume used since we're looking it up for signing)
                 let mut cache = self
                     .key_cache
                     .write()
                     .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
                 cache.insert(
-                    derived_x_only_public_key,
+                    derived_pk,
                     KeyCacheValue {
-                        derivation_index,
-                        keypair,
+                        path_index: i,
+                        kp,
                         used: true,
                     },
                 );
-                return Ok(keypair);
+                return Ok(kp);
             }
         }
 
         Err(Error::ad_hoc(format!(
             "Public key {pk} not found in HD wallet. \
-            Searched indices 0..{next_derivation_index}. \
+            Searched indices 0..{current_index}. \
             The key may have been generated outside this provider."
         )))
     }
@@ -463,24 +450,20 @@ impl KeyProvider for Bip32KeyProvider {
 
         Ok(cache.keys().copied().collect())
     }
+}
 
-    fn supports_discovery(&self) -> bool {
-        true
-    }
-
+impl DiscoverableKeyProvider for Bip32KeyProvider {
     fn get_derivation_index_for_pk(&self, pk: &bitcoin::XOnlyPublicKey) -> Option<u32> {
         let cache = self.key_cache.read().ok()?;
-        cache
-            .get(pk)
-            .map(|cache_entry| cache_entry.derivation_index)
+        cache.get(pk).map(|v| v.path_index)
     }
 
     fn derive_at_discovery_index(&self, index: u32) -> Result<Option<Keypair>, Error> {
         self.derive_at_index(index).map(Some)
     }
 
-    fn cache_discovered_keypair(&self, index: u32, keypair: Keypair) -> Result<(), Error> {
-        let x_only_public_key = keypair.x_only_public_key().0;
+    fn cache_discovered_keypair(&self, index: u32, kp: Keypair) -> Result<(), Error> {
+        let pk = kp.x_only_public_key().0;
 
         // Add to cache (marked as used since it was discovered with VTXOs)
         {
@@ -489,10 +472,10 @@ impl KeyProvider for Bip32KeyProvider {
                 .write()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
             cache.insert(
-                x_only_public_key,
+                pk,
                 KeyCacheValue {
-                    derivation_index: index,
-                    keypair,
+                    path_index: index,
+                    kp,
                     used: true,
                 },
             );
@@ -500,12 +483,12 @@ impl KeyProvider for Bip32KeyProvider {
 
         // Update next_index if needed (set to index + 1 if >= current)
         {
-            let mut next_derivation_index = self
+            let mut next = self
                 .next_index
                 .lock()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock next_index: {e}")))?;
-            if index >= *next_derivation_index {
-                *next_derivation_index = index
+            if index >= *next {
+                *next = index
                     .checked_add(1)
                     .ok_or_else(|| Error::ad_hoc("Key derivation index overflow"))?;
             }
@@ -514,10 +497,47 @@ impl KeyProvider for Bip32KeyProvider {
         Ok(())
     }
 
+    fn cache_keypair_at_index(&self, index: u32) -> Result<(), Error> {
+        let kp = self.derive_at_index(index)?;
+        let pk = kp.x_only_public_key().0;
+        // Hydrate and warm reload keys that were not marked used in memory. The current receive
+        // index (`next_index - 1`) must stay unused, or `LastUnused` mints a new address on unlock.
+        let next_index = self.peek_next_derivation_index_value()?;
+        let is_current_receive_key = next_index > 0 && index + 1 == next_index;
+        let mut cache = self
+            .key_cache
+            .write()
+            .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
+        cache.insert(
+            pk,
+            KeyCacheValue {
+                path_index: index,
+                kp,
+                used: !is_current_receive_key,
+            },
+        );
+        Ok(())
+    }
+
+    fn peek_next_derivation_index(&self) -> Result<Option<u32>, Error> {
+        Bip32KeyProvider::peek_next_derivation_index(self)
+    }
+
+    fn ensure_keypair_cached_at_index(&self, index: u32) -> Result<Keypair, Error> {
+        Bip32KeyProvider::ensure_keypair_cached_at_index(self, index)
+    }
+
+    fn warm_local_derivation_indices(&self, up_to_exclusive: u32) -> Result<(), Error> {
+        for index in 0..up_to_exclusive {
+            self.cache_keypair_at_index(index)?;
+        }
+        Ok(())
+    }
+
     fn mark_as_used(&self, pk: &bitcoin::XOnlyPublicKey) -> Result<(), Error> {
         // First check the cache
         {
-            let cached_entry = {
+            let maybe_kp = {
                 let cache = self
                     .key_cache
                     .read()
@@ -525,10 +545,10 @@ impl KeyProvider for Bip32KeyProvider {
                 cache.get(pk).copied()
             };
 
-            match cached_entry {
+            match maybe_kp {
                 Some(KeyCacheValue {
-                    derivation_index,
-                    keypair,
+                    path_index,
+                    kp,
                     used: false,
                 }) => {
                     let mut cache = self
@@ -538,8 +558,8 @@ impl KeyProvider for Bip32KeyProvider {
                     cache.insert(
                         *pk,
                         KeyCacheValue {
-                            derivation_index,
-                            keypair,
+                            path_index,
+                            kp,
                             used: true,
                         },
                     );
@@ -549,34 +569,37 @@ impl KeyProvider for Bip32KeyProvider {
                     // already marked as used
                     return Ok(());
                 }
-                None => {}
+                _ => {
+                    // no found
+                }
             }
         }
 
-        // If not in cache, search indices below the next derivation index.
-        let next_derivation_index = {
-            let next_derivation_index_guard = self
+        // If not in cache, we need to search. For now, we'll search up to the current index
+        let current_index = {
+            let next_index = self
                 .next_index
                 .lock()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock next_index: {e}")))?;
-            *next_derivation_index_guard
+            *next_index
         };
 
-        // Search through derived keys up to next_derivation_index (exclusive).
-        for derivation_index in 0..next_derivation_index {
-            let keypair = self.derive_at_index(derivation_index)?;
-            let derived_x_only_public_key = keypair.x_only_public_key().0;
+        // Search through derived keys up to current index
+        for i in 0..current_index {
+            let kp = self.derive_at_index(i)?;
+            let derived_pk = kp.x_only_public_key().0;
 
-            if &derived_x_only_public_key == pk {
+            if &derived_pk == pk {
+                // Cache it for next time (assume used since we're looking it up for signing)
                 let mut cache = self
                     .key_cache
                     .write()
                     .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
                 cache.insert(
-                    derived_x_only_public_key,
+                    derived_pk,
                     KeyCacheValue {
-                        derivation_index,
-                        keypair,
+                        path_index: i,
+                        kp,
                         used: true,
                     },
                 );
@@ -586,56 +609,14 @@ impl KeyProvider for Bip32KeyProvider {
 
         Err(Error::ad_hoc(format!(
             "Public key {pk} not found in HD wallet. \
-            Searched indices 0..{next_derivation_index}. \
+            Searched indices 0..{current_index}. \
             The key may have been generated outside this provider."
         )))
-    }
-
-    fn peek_next_derivation_index(&self) -> Result<Option<u32>, Error> {
-        Ok(Some(self.peek_next_derivation_index_value()?))
-    }
-
-    fn ensure_keypair_cached_at_index(&self, index: u32) -> Result<Keypair, Error> {
-        {
-            let cache = self
-                .key_cache
-                .read()
-                .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-            if let Some(KeyCacheValue { keypair, .. }) = cache.values().find(
-                |KeyCacheValue {
-                     derivation_index, ..
-                 }| *derivation_index == index,
-            ) {
-                return Ok(*keypair);
-            }
-        }
-
-        let keypair = self.derive_at_index(index)?;
-        let x_only_public_key = keypair.x_only_public_key().0;
-        {
-            let mut cache = self
-                .key_cache
-                .write()
-                .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-            cache.entry(x_only_public_key).or_insert(KeyCacheValue {
-                derivation_index: index,
-                keypair,
-                used: false,
-            });
-        }
-        Ok(keypair)
-    }
-
-    fn warm_local_derivation_indices(&self, up_to_exclusive: u32) -> Result<(), Error> {
-        for index in 0..up_to_exclusive {
-            self.ensure_keypair_cached_at_index(index)?;
-        }
-        Ok(())
     }
 }
 
 // Implement KeyProvider for Arc<T> where T: KeyProvider
-impl<T: KeyProvider> KeyProvider for Arc<T> {
+impl<T: KeyProvider + ?Sized> KeyProvider for Arc<T> {
     fn get_next_keypair(&self, keypair_index: KeypairIndex) -> Result<Keypair, Error> {
         (**self).get_next_keypair(keypair_index)
     }
@@ -651,11 +632,9 @@ impl<T: KeyProvider> KeyProvider for Arc<T> {
     fn get_cached_pks(&self) -> Result<Vec<bitcoin::XOnlyPublicKey>, Error> {
         (**self).get_cached_pks()
     }
+}
 
-    fn supports_discovery(&self) -> bool {
-        (**self).supports_discovery()
-    }
-
+impl<T: DiscoverableKeyProvider + ?Sized> DiscoverableKeyProvider for Arc<T> {
     fn get_derivation_index_for_pk(&self, pk: &bitcoin::XOnlyPublicKey) -> Option<u32> {
         (**self).get_derivation_index_for_pk(pk)
     }
@@ -664,8 +643,12 @@ impl<T: KeyProvider> KeyProvider for Arc<T> {
         (**self).derive_at_discovery_index(index)
     }
 
-    fn cache_discovered_keypair(&self, index: u32, keypair: Keypair) -> Result<(), Error> {
-        (**self).cache_discovered_keypair(index, keypair)
+    fn cache_discovered_keypair(&self, index: u32, kp: Keypair) -> Result<(), Error> {
+        (**self).cache_discovered_keypair(index, kp)
+    }
+
+    fn cache_keypair_at_index(&self, index: u32) -> Result<(), Error> {
+        (**self).cache_keypair_at_index(index)
     }
 
     fn mark_as_used(&self, pk: &bitcoin::XOnlyPublicKey) -> Result<(), Error> {
@@ -676,11 +659,52 @@ impl<T: KeyProvider> KeyProvider for Arc<T> {
         (**self).peek_next_derivation_index()
     }
 
+    fn warm_local_derivation_indices(&self, up_to_exclusive: u32) -> Result<(), Error> {
+        (**self).warm_local_derivation_indices(up_to_exclusive)
+    }
+
     fn ensure_keypair_cached_at_index(&self, index: u32) -> Result<Keypair, Error> {
         (**self).ensure_keypair_cached_at_index(index)
     }
+}
 
-    fn warm_local_derivation_indices(&self, up_to_exclusive: u32) -> Result<(), Error> {
-        (**self).warm_local_derivation_indices(up_to_exclusive)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::Network;
+    use std::str::FromStr;
+
+    #[test]
+    fn cache_keypair_at_index_hydrates_hd_lookup_after_restart() {
+        let seed = [7_u8; 32];
+        let master = Xpriv::new_master(Network::Regtest, &seed).unwrap();
+        let base_path = DerivationPath::from_str("m/86'/1'/0'/0").unwrap();
+
+        let original = Bip32KeyProvider::new(master, base_path.clone());
+        let expected = original.derive_at_discovery_index(7).unwrap().unwrap();
+        let expected_pk = expected.x_only_public_key().0;
+        let first_receive_pk = original
+            .derive_at_discovery_index(0)
+            .unwrap()
+            .unwrap()
+            .x_only_public_key()
+            .0;
+
+        let restarted = Bip32KeyProvider::new(master, base_path);
+        assert!(restarted.get_keypair_for_pk(&expected_pk).is_err());
+
+        restarted.cache_keypair_at_index(7).unwrap();
+        let actual = restarted.get_keypair_for_pk(&expected_pk).unwrap();
+
+        assert_eq!(actual.x_only_public_key().0, expected_pk);
+        assert_eq!(restarted.get_derivation_index_for_pk(&expected_pk), Some(7));
+        assert_eq!(
+            restarted
+                .get_next_keypair(KeypairIndex::LastUnused)
+                .unwrap()
+                .x_only_public_key()
+                .0,
+            first_receive_pk
+        );
     }
 }

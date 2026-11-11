@@ -39,6 +39,15 @@ impl ArkadeSession {
             return Ok(completed_without_txid());
         };
         let resolution = self.pending_batch_intent_resolution(&record).await?;
+        if matches!(
+            resolution,
+            PendingBatchIntentResolution::BoardingReregisterHold
+        ) && is_boarding_only_pending_record(&record)
+        {
+            return Err(crate::error::ArkWasmError::Boarding(
+                BOARDING_REREGISTER_WHILE_INTENT_LIVE.to_string(),
+            ));
+        }
         if !should_delete_operator_intent_on_cancel(&resolution) {
             self.drop_pending_intent_record(&record);
             return Ok(completed_without_txid());
@@ -91,7 +100,11 @@ impl ArkadeSession {
             return Ok(completed_without_txid());
         };
         let resolution = self.pending_batch_intent_resolution(&record).await?;
-        match pending_intent_retry_decision(&resolution, &record) {
+        match pending_intent_retry_decision(
+            &resolution,
+            &record,
+            self.boarding_round_duration_seconds(),
+        ) {
             PendingIntentRetryDecision::CompleteWithoutRetry => {
                 self.drop_pending_intent_record(&record);
                 Ok(completed_without_txid())
@@ -233,12 +246,23 @@ fn should_clear_collaborative_exit_deduction_on_cancel(
 fn pending_intent_retry_decision(
     resolution: &PendingBatchIntentResolution,
     record: &PendingBatchIntentRecord,
+    session_duration_seconds: i64,
 ) -> PendingIntentRetryDecision {
+    if matches!(
+        resolution,
+        PendingBatchIntentResolution::BoardingReregisterHold
+    ) {
+        return PendingIntentRetryDecision::RefuseBoardingReregister;
+    }
     if !matches!(resolution, PendingBatchIntentResolution::StillPending) {
         return PendingIntentRetryDecision::CompleteWithoutRetry;
     }
     if is_boarding_only_pending_record(record) {
-        if should_refuse_boarding_reregister(record) {
+        if should_refuse_boarding_reregister(
+            record,
+            crate::session::mappers::current_unix_timestamp(),
+            session_duration_seconds,
+        ) {
             return PendingIntentRetryDecision::RefuseBoardingReregister;
         }
         return PendingIntentRetryDecision::RetryWithoutDelete;
@@ -265,7 +289,7 @@ fn migrate_retry_join_result(
 mod tests {
     use super::*;
     use crate::api_types::BATCH_JOIN_STATUS_WAITING;
-    use crate::constants::BOARDING_REGISTER_INTENT_TTL_SECS;
+    use crate::constants::{BOARDING_REGISTER_INTENT_TTL_SECS, BOARDING_REREGISTER_MIN_HOLD_SECS};
     use crate::persistence::{PendingBatchIntentLifecyclePhase, PendingBatchOutpointRecord};
     use crate::session::mappers::current_unix_timestamp;
 
@@ -334,14 +358,23 @@ mod tests {
         ));
     }
 
+    fn retry_decision(
+        resolution: &PendingBatchIntentResolution,
+        record: &PendingBatchIntentRecord,
+        session_duration_seconds: i64,
+    ) -> PendingIntentRetryDecision {
+        pending_intent_retry_decision(resolution, record, session_duration_seconds)
+    }
+
     #[test]
     fn spent_vtxo_intent_completes_without_retry() {
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::Spent {
                     spend_txid: "commitment".into(),
                 },
                 &sample_vtxo_pending_record(),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
             ),
             PendingIntentRetryDecision::CompleteWithoutRetry
         );
@@ -350,9 +383,22 @@ mod tests {
     #[test]
     fn boarding_window_expired_completes_without_retry() {
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::BoardingWindowExpired,
                 &sample_boarding_pending_record(1),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
+            ),
+            PendingIntentRetryDecision::CompleteWithoutRetry
+        );
+    }
+
+    #[test]
+    fn boarding_registration_expired_completes_without_retry() {
+        assert_eq!(
+            retry_decision(
+                &PendingBatchIntentResolution::BoardingRegistrationExpired,
+                &sample_boarding_pending_record(1),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
             ),
             PendingIntentRetryDecision::CompleteWithoutRetry
         );
@@ -361,11 +407,12 @@ mod tests {
     #[test]
     fn spent_boarding_intent_completes_without_retry() {
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::Spent {
                     spend_txid: "commitment".into(),
                 },
                 &sample_boarding_pending_record(current_unix_timestamp()),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
             ),
             PendingIntentRetryDecision::CompleteWithoutRetry
         );
@@ -374,9 +421,10 @@ mod tests {
     #[test]
     fn still_pending_vtxo_intent_retries_after_delete() {
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::StillPending,
                 &sample_vtxo_pending_record(),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
             ),
             PendingIntentRetryDecision::RetryAfterDelete
         );
@@ -385,21 +433,53 @@ mod tests {
     #[test]
     fn still_pending_boarding_within_register_ttl_refuses_reregister() {
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::StillPending,
                 &sample_boarding_pending_record(current_unix_timestamp()),
+                BOARDING_REREGISTER_MIN_HOLD_SECS * 2,
             ),
             PendingIntentRetryDecision::RefuseBoardingReregister
         );
     }
 
     #[test]
-    fn still_pending_boarding_after_register_ttl_retries_without_delete() {
-        let expired_at = current_unix_timestamp() - BOARDING_REGISTER_INTENT_TTL_SECS - 1;
+    fn still_pending_boarding_during_reregister_hold_refuses() {
+        let session_duration_seconds = BOARDING_REREGISTER_MIN_HOLD_SECS * 2;
+        let registered_at = current_unix_timestamp()
+            - BOARDING_REGISTER_INTENT_TTL_SECS
+            - BOARDING_REREGISTER_MIN_HOLD_SECS;
         assert_eq!(
-            pending_intent_retry_decision(
+            retry_decision(
                 &PendingBatchIntentResolution::StillPending,
-                &sample_boarding_pending_record(expired_at),
+                &sample_boarding_pending_record(registered_at),
+                session_duration_seconds,
+            ),
+            PendingIntentRetryDecision::RefuseBoardingReregister
+        );
+    }
+
+    #[test]
+    fn reregister_hold_resolution_refuses_without_deleting() {
+        assert_eq!(
+            retry_decision(
+                &PendingBatchIntentResolution::BoardingReregisterHold,
+                &sample_boarding_pending_record(1),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
+            ),
+            PendingIntentRetryDecision::RefuseBoardingReregister
+        );
+    }
+
+    #[test]
+    fn still_pending_boarding_after_session_hold_retries_without_delete() {
+        let registered_at = current_unix_timestamp()
+            - BOARDING_REGISTER_INTENT_TTL_SECS
+            - BOARDING_REREGISTER_MIN_HOLD_SECS;
+        assert_eq!(
+            retry_decision(
+                &PendingBatchIntentResolution::StillPending,
+                &sample_boarding_pending_record(registered_at),
+                BOARDING_REREGISTER_MIN_HOLD_SECS,
             ),
             PendingIntentRetryDecision::RetryWithoutDelete
         );

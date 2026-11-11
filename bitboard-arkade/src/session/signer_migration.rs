@@ -28,11 +28,7 @@ impl ArkadeSession {
                 false,
             ));
         }
-        if let Some(key_discovery_warning) = self.sync_offchain_keys().await {
-            return Err(ArkWasmError::Client(ark_client::Error::wallet(
-                key_discovery_warning,
-            )));
-        }
+        abort_signer_migration_when_key_discovery_fails(self.sync_offchain_keys().await)?;
 
         let mut rng = OsRng;
         let mut vtxo_total = SignerMigrationLegAccum::default();
@@ -115,7 +111,8 @@ impl ArkadeSession {
         }
 
         if migration_complete {
-            let server_signer: XOnlyPublicKey = self.client.server_info()?.signer_pk.into();
+            let server_signer: XOnlyPublicKey =
+                self.client.server_info_snapshot()?.signer_pk.into();
             self.set_persisted_operator_identity(operator_identity_for_connected_signer(
                 server_signer,
                 self.network(),
@@ -133,6 +130,17 @@ impl ArkadeSession {
     }
 }
 
+/// `discover_keys` failed. Do not join a migration batch.
+///
+/// The paused-operator regtest `migrate_fails_fast_when_discover_keys_cannot_run` checks
+/// that `migrate_deprecated_signer_vtxos` calls this before it changes operator identity.
+fn abort_signer_migration_when_key_discovery_fails(warning: Option<String>) -> ArkResult<()> {
+    if let Some(warning) = warning {
+        return Err(ArkWasmError::Client(ark_client::Error::wallet(warning)));
+    }
+    Ok(())
+}
+
 fn migration_leg_error_message(report: &DeprecatedSignerMigrationReport) -> String {
     if let Some(error) = report.vtxo.error.as_ref() {
         return format!("VTXO migration leg failed: {error}");
@@ -145,7 +153,7 @@ fn migration_leg_error_message(report: &DeprecatedSignerMigrationReport) -> Stri
 
 #[cfg(test)]
 mod tests {
-    use super::migration_leg_error_message;
+    use super::{abort_signer_migration_when_key_discovery_fails, migration_leg_error_message};
     use ark_client::{DeprecatedSignerMigrationReport, MigrationLegReport};
 
     #[test]
@@ -171,5 +179,15 @@ mod tests {
             },
         };
         assert!(migration_leg_error_message(&report).contains("vtxo settle failed"));
+    }
+
+    #[test]
+    fn key_discovery_failure_aborts_migration_before_a_batch_join() {
+        let error = abort_signer_migration_when_key_discovery_fails(Some(
+            "Offchain receive keys could not be refreshed: indexer timeout".to_string(),
+        ))
+        .expect_err("discovery failure aborts");
+        assert!(error.to_string().contains("indexer timeout"));
+        assert!(abort_signer_migration_when_key_discovery_fails(None).is_ok());
     }
 }

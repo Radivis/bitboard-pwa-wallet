@@ -2,9 +2,10 @@ use std::str::FromStr;
 
 use bdk_wallet::{KeychainKind, Wallet};
 use bitcoin::absolute;
-use bitcoin::{Address, Amount, Network, OutPoint, Psbt, ScriptBuf, Transaction, Txid};
+use bitcoin::{Amount, Network, OutPoint, Psbt, ScriptBuf, Transaction, Txid};
 use serde::{Deserialize, Serialize};
 
+use crate::address_input::parse_bitcoin_address;
 use crate::error::CryptoError;
 use crate::validation;
 
@@ -200,9 +201,7 @@ pub fn prepare_onchain_send(
         raised_to_min_dust = true;
     }
 
-    let address = Address::from_str(to_address)?
-        .require_network(network)
-        .map_err(|e| CryptoError::Transaction(e.to_string()))?;
+    let address = parse_bitcoin_address(to_address, network)?;
     let recipient_script_pubkey = address.script_pubkey();
 
     let fee_rate = validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb)?;
