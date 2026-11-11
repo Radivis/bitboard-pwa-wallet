@@ -167,7 +167,7 @@ mod tests {
         let stripped: BTreeSet<u32> = (0..=0x10FFFF)
             .filter_map(char::from_u32)
             .filter(|character| is_pasted_invisible_or_backtick(*character))
-            .map(|character| u32::from(character))
+            .map(u32::from)
             .collect();
         assert_eq!(stripped, expected);
 
