@@ -53,6 +53,33 @@ describe('DesignSwitch', () => {
     expect(screen.queryByText('Dark mode')).not.toBeInTheDocument()
   })
 
+  it('wraps options within the parent width', () => {
+    render(
+      <DesignSwitch
+        aria-label="Fee rate"
+        wrap
+        value="low"
+        onValueChange={vi.fn()}
+        options={[
+          { value: 'low', label: 'Low (0.50)' },
+          { value: 'medium', label: 'Medium (2.00)' },
+          { value: 'high', label: 'High (10.00)' },
+          { value: 'custom', label: 'Custom' },
+        ]}
+      />,
+    )
+
+    const group = screen.getByRole('group', { name: 'Fee rate' })
+    expect(group.className).toContain('flex-wrap')
+    expect(group.className).toContain('w-full')
+    expect(group.className).not.toContain('w-fit')
+    const low = screen.getByRole('button', { name: 'Low (0.50)' })
+    expect(low.className).toContain('w-full')
+    expect(low.parentElement?.className).toContain('min-w-max')
+    expect(low.parentElement?.className).toContain('shrink-0')
+    expect(low.parentElement?.className).toContain('grow')
+  })
+
   it('disables every option', () => {
     render(
       <DesignSwitch

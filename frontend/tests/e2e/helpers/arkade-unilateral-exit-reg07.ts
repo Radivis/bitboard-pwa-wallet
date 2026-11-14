@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { ensureOnChainBumperFunds } from './arkade-management'
+import { designOnOffButton, designOnOffIsOn, turnDesignOnOffOn } from './design-on-off-switch'
 import { formatUnilateralExitFailure } from './esplora-unilateral-exit-diagnostics'
 import { mineRegtestBlocks, reorgExcludingMempool } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
@@ -333,10 +334,10 @@ export async function selectAllUnilateralExitLeafNodes(page: Page): Promise<numb
   for (let index = 0; index < leafCount; index += 1) {
     await leafNodes.nth(index).click()
     const leafSelectSwitch = page.getByTestId('unilateral-exit-leaf-select-switch')
-    if (!(await leafSelectSwitch.isChecked())) {
-      await leafSelectSwitch.click()
+    if (!(await designOnOffIsOn(leafSelectSwitch))) {
+      await designOnOffButton(leafSelectSwitch, 'On').click()
     }
-    await expect(leafSelectSwitch).toBeChecked()
+    await expect(designOnOffButton(leafSelectSwitch, 'On')).toHaveAttribute('aria-pressed', 'true')
   }
 
   return leafCount
@@ -394,10 +395,8 @@ export async function assertIntermediateNodesShowExitableOutpointsButAreNotLeafS
 async function ensureAutomaticUnilateralExitMode(page: Page): Promise<void> {
   const autoSwitch = page.getByTestId('unilateral-exit-proceed-automatically')
   await expect(autoSwitch).toBeVisible({ timeout: 60_000 })
-  if (!(await autoSwitch.isChecked())) {
-    await autoSwitch.click()
-  }
-  await expect(autoSwitch).toBeChecked()
+  await turnDesignOnOffOn(autoSwitch)
+  await expect(designOnOffButton(autoSwitch, 'On')).toHaveAttribute('aria-pressed', 'true')
 
   const balanceSats = await readBumperBalanceSatsWithRefresh(page)
   const needsFunding =
@@ -553,7 +552,9 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
       sawProceedingAutomatically = true
     }
 
-    const automationOn = await page.getByTestId('unilateral-exit-proceed-automatically').isChecked()
+    const automationOn = await designOnOffIsOn(
+      page.getByTestId('unilateral-exit-proceed-automatically'),
+    )
     if (
       automationOn &&
       (await startButton.isVisible()) &&

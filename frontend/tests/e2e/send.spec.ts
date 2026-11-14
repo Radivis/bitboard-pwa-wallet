@@ -28,6 +28,7 @@ import {
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 import { clickDrawerNavLink } from './helpers/drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './helpers/design-on-off-switch'
 
 /** Redirect follows broadcast + persistence; post-broadcast sync runs in the background (see useBroadcastTransactionMutation). */
 const POST_BROADCAST_URL_TIMEOUT_MS = E2E_IS_CI ? 45_000 : 20_000
@@ -97,11 +98,7 @@ test.describe('Send Page', () => {
       await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await openSettingsFeaturesTab(page)
-      const regtestModeSwitch = page.getByRole('switch', {
-        name: 'Enable Regtest mode for developers',
-      })
-      await regtestModeSwitch.scrollIntoViewIfNeeded()
-      await regtestModeSwitch.click()
+      await turnDesignOnOffOn(designOnOffGroup(page, 'Enable Regtest mode for developers'))
       await openSettingsMainTab(page)
 
       await settingsNetworkButton(page, 'Regtest').click()

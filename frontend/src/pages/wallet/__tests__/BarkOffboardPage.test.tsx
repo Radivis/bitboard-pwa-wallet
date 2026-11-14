@@ -285,7 +285,7 @@ describe('BarkOffboardPage', () => {
       destinationAddress: 'bc1qcurrent',
     })
     renderWithProviders(<BarkOffboardPage />)
-    expect(screen.getByRole('switch', { name: /Denomination/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Denomination' })).toBeInTheDocument()
     expect(screen.getByText('USD that should arrive on-chain')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10' } })
     fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
@@ -335,7 +335,7 @@ describe('BarkOffboardPage', () => {
     })
     reviewBarkOffboardAmount.mockResolvedValue(amountReview)
     renderWithProviders(<BarkOffboardPage />)
-    expect(screen.queryByRole('switch', { name: /Denomination/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Denomination' })).not.toBeInTheDocument()
     expect(screen.getByText('Satoshis that should arrive on-chain')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
     fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))

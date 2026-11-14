@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { BarkEmergencyExitPage } from '@/pages/wallet/BarkEmergencyExitPage'
@@ -257,14 +257,15 @@ describe('BarkEmergencyExitPage', () => {
     ).toBeInTheDocument()
 
     const toggle = await screen.findByTestId('bark-emergency-exit-proceed-automatically')
+    const turnOn = within(toggle).getByRole('button', { name: 'On' })
     expect(screen.getByTestId('bark-emergency-exit-live-card')).toContainElement(toggle)
     expect(screen.getByTestId('bark-emergency-exit-fee-card')).not.toContainElement(toggle)
-    expect(toggle).toHaveAttribute('data-state', 'unchecked')
+    expect(turnOn).toHaveAttribute('aria-pressed', 'false')
     await waitFor(() => {
-      expect(toggle).toBeEnabled()
+      expect(turnOn).toBeEnabled()
     })
 
-    await user.click(toggle)
+    await user.click(turnOn)
 
     await waitFor(() => {
       expect(barkWorker.writeProceedAutomatically).toHaveBeenCalledWith(true)

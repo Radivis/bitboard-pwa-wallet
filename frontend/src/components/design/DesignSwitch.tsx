@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 import { designFocusClassName } from '@/components/design/design-classes'
 import { designTypeClassName } from '@/components/design/design-type'
@@ -17,6 +17,14 @@ type DesignSwitchProps<Value extends string> = {
   'aria-label': string
   disabled?: boolean
   className?: string
+  'data-testid'?: string
+  /**
+   * Size the group to its parent and let options wrap onto extra rows.
+   * An option stays as wide as its label, so a narrow row wraps instead of clipping it.
+   */
+  wrap?: boolean
+  /** Wraps one option button, for example with an explainer target. The button should stay full width. */
+  frameOption?: (option: DesignSwitchOption<Value>, optionButton: ReactNode) => ReactNode
 }
 
 export function DesignSwitch<Value extends string>({
@@ -26,23 +34,27 @@ export function DesignSwitch<Value extends string>({
   'aria-label': ariaLabel,
   disabled = false,
   className,
+  'data-testid': testId,
+  wrap = false,
+  frameOption,
 }: DesignSwitchProps<Value>) {
   return (
     <div
       role="group"
       aria-label={ariaLabel}
       data-slot="design-switch"
+      data-testid={testId}
       className={cn(
-        'design-ui inline-flex w-fit gap-1 rounded-[24px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background)] p-1',
+        'design-ui gap-1 rounded-[24px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background)] p-1',
+        wrap ? 'flex w-full min-w-0 flex-wrap' : 'inline-flex w-fit',
         className,
       )}
     >
       {options.map((option) => {
         const selected = option.value === value
         const showsIcon = option.icon != null
-        return (
+        const optionButton = (
           <button
-            key={option.value}
             type="button"
             aria-pressed={selected}
             aria-label={showsIcon ? option.label : undefined}
@@ -58,10 +70,20 @@ export function DesignSwitch<Value extends string>({
               selected
                 ? 'rounded-[20px] border-[var(--design-nav-stroke)] bg-[var(--design-nav-background-selected)]'
                 : 'rounded-[10px] border-transparent bg-transparent',
+              wrap && 'w-full',
             )}
           >
             {showsIcon ? option.icon : option.label}
           </button>
+        )
+        const framedOption = frameOption ? frameOption(option, optionButton) : optionButton
+        if (!wrap) {
+          return <Fragment key={option.value}>{framedOption}</Fragment>
+        }
+        return (
+          <div key={option.value} className="flex min-w-max grow shrink-0">
+            {framedOption}
+          </div>
         )
       })}
     </div>

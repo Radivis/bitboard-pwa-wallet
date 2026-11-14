@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { clickDrawerNavLink } from './helpers/drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './helpers/design-on-off-switch'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import {
   openSettingsFeaturesTab,
@@ -36,11 +37,7 @@ test.describe('Settings Page', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await openSettingsFeaturesTab(page)
-    const segwitFeatureSwitch = page.getByRole('switch', {
-      name: 'Enable SegWit address options and labels',
-    })
-    await segwitFeatureSwitch.scrollIntoViewIfNeeded()
-    await segwitFeatureSwitch.click()
+    await turnDesignOnOffOn(designOnOffGroup(page, 'Enable SegWit address options and labels'))
     await openSettingsMainTab(page)
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
@@ -60,11 +57,7 @@ test.describe('Settings Page', () => {
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
     await openSettingsFeaturesTab(page)
-    const regtestModeSwitch = page.getByRole('switch', {
-      name: 'Enable Regtest mode for developers',
-    })
-    await regtestModeSwitch.scrollIntoViewIfNeeded()
-    await regtestModeSwitch.click()
+    await turnDesignOnOffOn(designOnOffGroup(page, 'Enable Regtest mode for developers'))
     await openSettingsMainTab(page)
 
     await settingsNetworkButton(page, 'Regtest').click()

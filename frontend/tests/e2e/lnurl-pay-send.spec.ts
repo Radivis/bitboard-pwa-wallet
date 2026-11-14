@@ -4,6 +4,11 @@ import { createWalletViaUI } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
 import { clickDrawerNavLink } from './helpers/drawer-nav'
 import {
+  designOnOffButton,
+  designOnOffGroup,
+  designOnOffIsOn,
+} from './helpers/design-on-off-switch'
+import {
   openSettingsFeaturesTab,
   settingsNetworkButton,
   waitForSettingsNetworkModeButtonSelected,
@@ -33,12 +38,10 @@ async function switchToSignetWithLightning(page: Page) {
   await waitForSettingsNetworkModeButtonSelected(page, 'Signet')
 
   await openSettingsFeaturesTab(page)
-  const lightningToggle = page.getByRole('switch', {
-    name: 'Enable Lightning Network',
-  })
-  if ((await lightningToggle.getAttribute('aria-checked')) !== 'true') {
-    await lightningToggle.click()
-    await expect(lightningToggle).toHaveAttribute('aria-checked', 'true')
+  const lightningToggle = designOnOffGroup(page, 'Enable Lightning Network')
+  if (!(await designOnOffIsOn(lightningToggle))) {
+    await designOnOffButton(lightningToggle, 'On').click()
+    await expect(designOnOffButton(lightningToggle, 'On')).toHaveAttribute('aria-pressed', 'true')
   }
 }
 

@@ -382,7 +382,7 @@ describe('BarkBoardPage', () => {
       grossAmountSats: 10_000,
     })
     renderWithProviders(<BarkBoardPage />)
-    expect(screen.getByRole('switch', { name: /Denomination/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Denomination' })).toBeInTheDocument()
     expect(screen.getByText('Amount (USD)')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10' } })
     fireEvent.click(screen.getByTestId('bark-board-review'))
@@ -439,7 +439,7 @@ describe('BarkBoardPage', () => {
       grossAmountSats: 10_000,
     })
     renderWithProviders(<BarkBoardPage />)
-    expect(screen.queryByRole('switch', { name: /Denomination/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Denomination' })).not.toBeInTheDocument()
     expect(screen.getByText('Satoshis')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
     fireEvent.click(screen.getByTestId('bark-board-review'))

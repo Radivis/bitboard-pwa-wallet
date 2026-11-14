@@ -6,8 +6,7 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { DesignCheckbox } from '@/components/design/DesignCheckbox'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { AutomatedFeeCapControls } from '@/components/wallet/AutomatedFeeCapControls'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { BarkEmergencyExitFundingBanner } from '@/components/bark/BarkEmergencyExitFundingBanner'
@@ -401,18 +400,25 @@ function ProceedAutomaticallySwitch({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-1">
-        <Label htmlFor="bark-emergency-exit-proceed-automatically" className="design-type-emphasis">
-          Proceed automatically
-        </Label>
+        <p className="design-type-emphasis">Proceed automatically</p>
         <p className="design-type-regular text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
       </div>
-      <Switch
-        id="bark-emergency-exit-proceed-automatically"
-        checked={proceedAutomatically}
-        disabled={disabled}
-        onCheckedChange={onProceedAutomaticallyChange}
+      <DesignSwitch
         aria-label="Proceed automatically"
+        className="shrink-0"
         data-testid="bark-emergency-exit-proceed-automatically"
+        disabled={disabled}
+        value={proceedAutomatically ? 'on' : 'off'}
+        onValueChange={(next) => {
+          const nextEnabled = next === 'on'
+          if (nextEnabled !== proceedAutomatically) {
+            onProceedAutomaticallyChange(nextEnabled)
+          }
+        }}
+        options={[
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ]}
       />
     </div>
   )

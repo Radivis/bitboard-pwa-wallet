@@ -1,5 +1,6 @@
 import { type Page, expect } from '@playwright/test'
 import { clickDrawerNavLink } from './drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './design-on-off-switch'
 import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 
 /**
@@ -9,13 +10,9 @@ import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 export async function ensureUtxoSelectionFeatureOn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
-  const utxoSelectionSwitch = page.getByRole('switch', {
-    name: 'Enable manual UTXO selection on send review',
-  })
-  await utxoSelectionSwitch.scrollIntoViewIfNeeded()
-  if (!(await utxoSelectionSwitch.isChecked())) {
-    await utxoSelectionSwitch.click()
-  }
+  await turnDesignOnOffOn(
+    designOnOffGroup(page, 'Enable manual UTXO selection on send review'),
+  )
   await openSettingsMainTab(page)
 }
 

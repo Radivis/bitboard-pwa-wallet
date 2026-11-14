@@ -15,6 +15,7 @@ import {
   waitForConfirmedBalance,
 } from './regtest'
 import { clickDrawerNavLink } from './drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './design-on-off-switch'
 import {
   waitForArkadeLoadReady,
   readDashboardArkadeOffchainSpendableSats,
@@ -27,14 +28,7 @@ export async function enableRegtestDeveloperMode(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
-  const regtestModeSwitch = page.getByRole('switch', {
-    name: 'Enable Regtest mode for developers',
-  })
-  await regtestModeSwitch.scrollIntoViewIfNeeded()
-  const checked = await regtestModeSwitch.getAttribute('aria-checked')
-  if (checked !== 'true') {
-    await regtestModeSwitch.click()
-  }
+  await turnDesignOnOffOn(designOnOffGroup(page, 'Enable Regtest mode for developers'))
   await openSettingsMainTab(page)
 }
 

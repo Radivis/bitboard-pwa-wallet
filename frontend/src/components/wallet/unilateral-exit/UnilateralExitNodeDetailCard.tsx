@@ -1,8 +1,7 @@
 import { Check, Loader2 } from 'lucide-react'
 import { ArkadeSharedLeafUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeSharedLeafUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   formatUnilateralExitTxTypeLabel,
@@ -231,16 +230,24 @@ export function UnilateralExitNodeDetailCard({
                     infoComponent={ArkadeSharedLeafUnilateralExitInfomodeContent}
                     as="span"
                   >
-                    <Label htmlFor="unilateral-exit-leaf-select" className="design-type-regular">
-                      Select this leaf for exit
-                    </Label>
+                    <span className="design-type-regular">Select this leaf for exit</span>
                   </InfomodeWrapper>
-                  <Switch
-                    id="unilateral-exit-leaf-select"
+                  <DesignSwitch
+                    aria-label="Select this leaf for exit"
+                    className="shrink-0"
                     data-testid="unilateral-exit-leaf-select-switch"
-                    checked={allLeafOutpointsSelected}
                     disabled={!leafSelectEnabled}
-                    onCheckedChange={() => onToggleLeafTxGroup(exitStartLeafOutpoints)}
+                    value={allLeafOutpointsSelected ? 'on' : 'off'}
+                    onValueChange={(next) => {
+                      const nextSelected = next === 'on'
+                      if (nextSelected !== allLeafOutpointsSelected) {
+                        onToggleLeafTxGroup(exitStartLeafOutpoints)
+                      }
+                    }}
+                    options={[
+                      { value: 'off', label: 'Off' },
+                      { value: 'on', label: 'On' },
+                    ]}
                   />
                 </div>
               )}

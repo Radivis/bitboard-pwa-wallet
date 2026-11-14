@@ -1,5 +1,4 @@
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { AutomatedFeeCapControls } from '@/components/wallet/AutomatedFeeCapControls'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import { AUTOMATIC_PROCEEDING_FEE_CAP_EXCEEDED_LABEL } from '@/lib/onchain/automated-step-fee-rate'
@@ -43,22 +42,29 @@ export function UnilateralExitAutomationSection(props: {
     <div className="rounded-md border p-4 space-y-4 md:col-span-2 xl:col-span-3" data-testid="unilateral-exit-automation-section">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Label htmlFor="unilateral-exit-proceed-automatically" className="design-type-emphasis">
-            Proceed automatically
-          </Label>
+          <p className="design-type-emphasis">Proceed automatically</p>
           <p className="design-type-regular text-muted-foreground">
             Uses the selected fee rate degree (low, medium, or high) for each step. Automatic
             proceeding requires the app to be unlocked and this wallet to be selected. This process
             cannot be delegated.
           </p>
         </div>
-        <Switch
-          id="unilateral-exit-proceed-automatically"
-          checked={proceedAutomatically}
-          disabled={isPending}
-          onCheckedChange={onProceedAutomaticallyChange}
+        <DesignSwitch
           aria-label="Proceed automatically"
+          className="shrink-0"
           data-testid="unilateral-exit-proceed-automatically"
+          disabled={isPending}
+          value={proceedAutomatically ? 'on' : 'off'}
+          onValueChange={(next) => {
+            const nextEnabled = next === 'on'
+            if (nextEnabled !== proceedAutomatically) {
+              onProceedAutomaticallyChange(nextEnabled)
+            }
+          }}
+          options={[
+            { value: 'off', label: 'Off' },
+            { value: 'on', label: 'On' },
+          ]}
         />
       </div>
 

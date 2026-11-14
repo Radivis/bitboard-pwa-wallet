@@ -17,6 +17,7 @@ import {
 } from './helpers/arkade-regtest'
 import { restartArkadeOperator } from './helpers/regtest'
 import { ensureOnChainBumperFunds, goToArkadeManagementPanel } from './helpers/arkade-management'
+import { designOnOffButton } from './helpers/design-on-off-switch'
 import {
   prepareCollaborativeExitScenario,
   prepareUnilateralUnrollScenario,
@@ -68,7 +69,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByTestId('arkade-unilateral-exit-control').click()
     await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
     await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
-    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
+    await designOnOffButton(page.getByTestId('unilateral-exit-leaf-select-switch'), 'On').click()
     await ensureOnChainBumperFunds(page, 100_000)
     await runManualUnilateralUnrollUntilBranchComplete(page)
 
