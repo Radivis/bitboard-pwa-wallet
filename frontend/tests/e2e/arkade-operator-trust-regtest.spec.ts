@@ -138,7 +138,9 @@ test.describe('Arkade operator trust regtest @arkade-operator-trust-regtest', ()
     })
 
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
-    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('region', { name: 'Wallet lock privacy notice' })).toBeVisible({
+      timeout: 30_000,
+    })
     await page.getByRole('button', { name: 'Unlock wallet and go to previous page' }).click()
     await expect(page.getByRole('heading', { name: 'Unlock Wallet' })).toBeVisible({
       timeout: 15_000,

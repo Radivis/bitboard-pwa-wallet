@@ -30,7 +30,7 @@ async function waitForWalletTabUrl(page: Page, tab: WalletSubNavTab): Promise<vo
  * only rendered on wallet routes; after Settings, Lab, or Library, open Wallet
  * from the header menu first.
  *
- * After lock, the app sends users to Library; opening Wallet can show the unlock
+ * After lock, the app sends users to Start; opening Wallet can show the unlock
  * dialog whose overlay sits above the sub-nav (z-50 vs z-40), so the sub-nav is
  * not Playwright-visible even on `/wallet`. In that case we navigate by URL.
  */
