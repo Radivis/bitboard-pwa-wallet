@@ -1,8 +1,11 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 
 import { designFocusClassName } from '@/components/design/design-classes'
 import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
+
+const SELECTED_SURFACE_CLASS_NAME =
+  'pointer-events-none absolute top-0 left-0 z-0 rounded-[20px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background-selected)] transition-[transform,width,height] duration-[0.3s] ease-out motion-reduce:transition-none'
 
 export type DesignSwitchOption<Value extends string> = {
   value: Value
@@ -38,23 +41,101 @@ export function DesignSwitch<Value extends string>({
   wrap = false,
   frameOption,
 }: DesignSwitchProps<Value>) {
+  const groupRef = useRef<HTMLDivElement>(null)
+  const indicatorRef = useRef<HTMLDivElement>(null)
+  const optionElementsRef = useRef(new Map<Value, HTMLButtonElement>())
+  const valueRef = useRef(value)
+  const placeSelectedSurfaceRef = useRef<(animate: boolean) => void>(() => {})
+  const animationFrameRef = useRef<number | null>(null)
+  valueRef.current = value
+  const optionLayoutKey = options
+    .map((option) => `${option.value}\u0000${option.label}\u0000${option.icon != null}`)
+    .join('\u0001')
+
+  placeSelectedSurfaceRef.current = (animate) => {
+    const group = groupRef.current
+    const indicator = indicatorRef.current
+    const selectedOption = optionElementsRef.current.get(valueRef.current)
+    if (!group || !indicator || !selectedOption) return
+    if (animationFrameRef.current != null) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    const offset = offsetWithin(selectedOption, group)
+    const applySurface = () => {
+      indicator.style.width = `${selectedOption.offsetWidth}px`
+      indicator.style.height = `${selectedOption.offsetHeight}px`
+      indicator.style.transform = `translate(${offset.left}px, ${offset.top}px)`
+    }
+    if (!animate) {
+      indicator.style.transition = 'none'
+      applySurface()
+      return
+    }
+    indicator.style.transition = ''
+    animationFrameRef.current = requestAnimationFrame(() => {
+      animationFrameRef.current = null
+      applySurface()
+    })
+  }
+
+  useLayoutEffect(() => {
+    placeSelectedSurfaceRef.current(false)
+  }, [optionLayoutKey, wrap])
+
+  const skipInitialSelectionAnimationRef = useRef(true)
+  useEffect(() => {
+    if (skipInitialSelectionAnimationRef.current) {
+      skipInitialSelectionAnimationRef.current = false
+      return
+    }
+    placeSelectedSurfaceRef.current(true)
+  }, [value])
+
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      placeSelectedSurfaceRef.current(false)
+    })
+    observer.observe(group)
+    for (const optionElement of optionElementsRef.current.values()) {
+      observer.observe(optionElement)
+    }
+    return () => observer.disconnect()
+  }, [optionLayoutKey, wrap])
+
   return (
     <div
+      ref={groupRef}
       role="group"
       aria-label={ariaLabel}
       data-slot="design-switch"
       data-testid={testId}
       className={cn(
-        'design-ui gap-1 rounded-[24px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background)] p-1',
+        'design-ui relative gap-1 rounded-[24px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background)] p-1',
         wrap ? 'flex w-full min-w-0 flex-wrap' : 'inline-flex w-fit',
         className,
       )}
     >
+      <div
+        ref={indicatorRef}
+        aria-hidden
+        data-slot="design-switch-indicator"
+        className={SELECTED_SURFACE_CLASS_NAME}
+      />
       {options.map((option) => {
         const selected = option.value === value
         const showsIcon = option.icon != null
         const optionButton = (
           <button
+            ref={(element) => {
+              if (element) {
+                optionElementsRef.current.set(option.value, element)
+                return
+              }
+              optionElementsRef.current.delete(option.value)
+            }}
             type="button"
             aria-pressed={selected}
             aria-label={showsIcon ? option.label : undefined}
@@ -62,14 +143,11 @@ export function DesignSwitch<Value extends string>({
             onClick={() => onValueChange(option.value)}
             className={cn(
               designFocusClassName,
-              'inline-flex items-center justify-center border px-3 py-2 whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0',
+              'relative z-10 inline-flex items-center justify-center rounded-[20px] border border-transparent bg-transparent px-3 py-2 whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0',
               designTypeClassName.button,
               showsIcon
                 ? 'text-[var(--design-input-content)]'
                 : 'text-[var(--design-text-regular)]',
-              selected
-                ? 'rounded-[20px] border-[var(--design-nav-stroke)] bg-[var(--design-nav-background-selected)]'
-                : 'rounded-[10px] border-transparent bg-transparent',
               wrap && 'w-full',
             )}
           >
@@ -88,4 +166,20 @@ export function DesignSwitch<Value extends string>({
       })}
     </div>
   )
+}
+
+function offsetWithin(element: HTMLElement, ancestor: HTMLElement): { left: number; top: number } {
+  let left = 0
+  let top = 0
+  let current: HTMLElement | null = element
+  while (current && current !== ancestor) {
+    left += current.offsetLeft
+    top += current.offsetTop
+    const parent = current.offsetParent
+    if (!(parent instanceof HTMLElement) || !ancestor.contains(parent)) {
+      break
+    }
+    current = parent
+  }
+  return { left, top }
 }
