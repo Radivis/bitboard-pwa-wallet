@@ -180,6 +180,14 @@ A small label. Height 24, corner radius 12, padding 8 by 4. An optional icon is 
 
 Library tags are often links. They do not grow a separate mobile affordance. Space them apart so neighboring tags are not a single tap target.
 
+### Pagination
+
+The control for moving between pages of one list. First, previous, next, and last are icon-only Nav-Buttons in two clusters. The page trigger sits between them. Its label is the current page and the total with no spaces, such as `2/5`. The type is Button.
+
+Closed, the trigger fill is `nav-button/background/default` (`--design-nav-background`) and the stroke is `nav-button/stroke`. Open, the fill becomes `nav-button/background/active` (`--design-nav-background-active`). A 2px ring in the accent's active color wraps it, and the chevron points up. That ring follows the network. The rest of the control does not.
+
+The menu panel uses the side-drawer surface (`--design-elevation-drawer`) and the same 5px backdrop blur, with the nav-button stroke and a 20px radius. Each page row keeps the nav-button fill. The current page uses the active fill and the same ring. A hovered row uses `nav-button/background/hover`. The list scrolls after about five rows. The clusters stay visible at either end and those buttons are disabled.
+
 ## Building a screen
 
 Set the frame's theme mode and network mode. Put instances on that frame and leave them on Auto, so they inherit both modes. A component that should ignore the network still uses theme tokens only; its embedded buttons keep using accent tokens.

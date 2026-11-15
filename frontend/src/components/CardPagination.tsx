@@ -1,6 +1,5 @@
-import { Button } from '@/components/ui/button'
+import { DesignPagination } from '@/components/design/DesignPagination'
 import { cn } from '@/lib/shared/utils'
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /** Default when `pageSize` is omitted. Lab views should pass sizes from `lab-paginated-queries`. */
 const CARD_PAGINATION_DEFAULT_PAGE_SIZE = 20
@@ -14,7 +13,7 @@ export type CardPaginationProps = {
   onPageChange: (pageIndex: number) => void
   children: React.ReactNode
   className?: string
-  /** Label for the page select (accessibility). */
+  /** Accessible name for the page trigger and the page list. */
   ariaLabel?: string
 }
 
@@ -32,77 +31,18 @@ export function CardPagination({
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const safePage = Math.min(Math.max(0, pageIndex), totalPages - 1)
-  const displayPageOneBased = safePage + 1
+  const safePageIndex = Math.min(Math.max(0, pageIndex), totalPages - 1)
 
   return (
     <div className={cn('space-y-3', className)}>
       {children}
-      <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border pt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="First page"
-          disabled={safePage <= 0}
-          onClick={() => onPageChange(0)}
-        >
-          <ChevronFirst className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Previous page"
-          disabled={safePage <= 0}
-          onClick={() => onPageChange(safePage - 1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <label className="design-type-regular flex items-center gap-2 text-muted-foreground">
-          <span className="sr-only">{ariaLabel}</span>
-          <select
-            className="design-type-addresses rounded-md border border-input bg-background px-2 py-1.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={ariaLabel}
-            value={displayPageOneBased}
-            onChange={(selectChangeEvent) => {
-              const next = Number.parseInt(selectChangeEvent.target.value, 10)
-              if (!Number.isNaN(next)) onPageChange(next - 1)
-            }}
-          >
-            {Array.from({ length: totalPages }, (_, pageNumberIndex) => pageNumberIndex + 1).map(
-              (pageNumberOneBased) => (
-              <option key={pageNumberOneBased} value={pageNumberOneBased}>
-                {pageNumberOneBased} / {totalPages}
-              </option>
-            ),
-            )}
-          </select>
-        </label>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Next page"
-          disabled={safePage >= totalPages - 1}
-          onClick={() => onPageChange(safePage + 1)}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Last page"
-          disabled={safePage >= totalPages - 1}
-          onClick={() => onPageChange(totalPages - 1)}
-        >
-          <ChevronLast className="h-4 w-4" />
-        </Button>
+      <div className="flex flex-wrap items-center justify-center border-t border-border pt-3">
+        <DesignPagination
+          page={safePageIndex + 1}
+          totalPages={totalPages}
+          ariaLabel={ariaLabel}
+          onPageChange={(page) => onPageChange(page - 1)}
+        />
       </div>
     </div>
   )
