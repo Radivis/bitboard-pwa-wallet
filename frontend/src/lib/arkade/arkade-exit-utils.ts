@@ -8,6 +8,11 @@ import {
 } from '@/lib/shared/format-duration'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
+  parseUniversalAmount,
+  universalAmountEntryLabel,
+  type UniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
+import {
   VTXO_EXIT_PHASE_COPY,
   type VtxoExitPhaseCopyKind,
 } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
@@ -36,31 +41,30 @@ export function formatIntentFeePrograms(configured: ArkadeIntentFeeConfigured): 
  */
 export const ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS = 1_000
 
-const COLLABORATIVE_EXIT_AMOUNT_HELP =
+const COLLABORATIVE_EXIT_SAT_AMOUNT_HELP =
   'Enter a whole number of satoshis, or leave empty for full balance.'
 
 export type CollaborativeExitAmountParseResult =
   | { ok: true; amountSats: number | undefined }
   | { ok: false; message: string }
 
+function collaborativeExitAmountHelp(entry: UniversalAmountEntry): string {
+  if (entry.mode === 'bitcoin' && entry.bitcoinUnit === 'sat') {
+    return COLLABORATIVE_EXIT_SAT_AMOUNT_HELP
+  }
+  return `Enter an amount in ${universalAmountEntryLabel(entry)}, or leave empty for full balance.`
+}
+
 export function parseCollaborativeExitAmountSats(
   rawAmount: string,
+  entry: UniversalAmountEntry = { mode: 'bitcoin', bitcoinUnit: 'sat' },
 ): CollaborativeExitAmountParseResult {
-  const trimmed = rawAmount.trim()
-  if (trimmed === '') {
-    return { ok: true, amountSats: undefined }
+  const parsedAmount = parseUniversalAmount(rawAmount, entry)
+  if (parsedAmount.kind === 'empty') return { ok: true, amountSats: undefined }
+  if (parsedAmount.kind !== 'sats' || parsedAmount.amountSats < 1) {
+    return { ok: false, message: collaborativeExitAmountHelp(entry) }
   }
-
-  if (!/^\d+$/.test(trimmed)) {
-    return { ok: false, message: COLLABORATIVE_EXIT_AMOUNT_HELP }
-  }
-
-  const amountSats = Number(trimmed)
-  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
-    return { ok: false, message: COLLABORATIVE_EXIT_AMOUNT_HELP }
-  }
-
-  return { ok: true, amountSats }
+  return { ok: true, amountSats: parsedAmount.amountSats }
 }
 
 /** Characters shown before the ellipsis in Arkade txid toast snippets. */

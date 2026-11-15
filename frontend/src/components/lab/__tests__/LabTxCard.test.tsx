@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { LabTxCard } from '@/components/lab/LabTxCard'
 import { labEntityLabOwner, walletLabOwner } from '@/lib/lab/lab-owner'
 import { formatAmountInBitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 /** Shared card props: one lab entity "Alice" and one wallet "W1". */
 const fixtureLabEntities = [
@@ -15,6 +16,10 @@ const fixtureLabWallets = [
 ]
 
 describe('LabTxCard', () => {
+  beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
+  })
+
   it('renders transfer rows with txid, parties, and amount/fee', () => {
     const transferTxid = 'abcd1234efgh90'
     const transferAmountSats = 5_000

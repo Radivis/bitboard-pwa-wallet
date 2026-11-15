@@ -146,7 +146,7 @@ feature:
           - paste button
             - click_event:
               - paste address from clipboard
-          - amount input field with BTC/sats toggle
+          - amount input field using the Settings Bitcoin unit (sat when unset), with a per-send unit selector, and the fiat currency when fiat denomination mode is on for mainnet
           - available balance display
           - send max button
             - click_event:

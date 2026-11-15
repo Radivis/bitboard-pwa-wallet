@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Coins, Gauge, Hash } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Gauge, Hash } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -8,12 +8,16 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { DesignInput } from '@/components/design/DesignInput'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
+import {
+  universalAmountEntryLabel,
+  useUniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 
-const MIN_AMOUNT_SATS = 1
 const MIN_RANDOM_TRANSACTION_COUNT = 1
 
 function parseAndClampRandomTransactionCount(raw: string): string {
@@ -81,6 +85,7 @@ export function LabMakeTransactionCard({
   sendDisabledFromDeadEntity?: boolean
   deadFromEntityDisplayName?: string
 }) {
+  const amountEntry = useUniversalAmountEntry()
   const selectedRandomCount = parseRandomTransactionCountValue(randomTransactionCount)
   const showRandomBatchConflictWarning =
     hasMinedBlocks &&
@@ -93,7 +98,7 @@ export function LabMakeTransactionCard({
     <InfomodeWrapper
       infoId="lab-make-transaction-card"
       infoTitle="Lab transaction"
-      infoText="Compose a payment inside the simulator: pick a funded lab address to spend from, a destination, an amount in satoshis, and a fee rate. The tx is built and broadcast into the lab mempool; mine blocks afterward to confirm it—same lifecycle as real Bitcoin, without real money."
+      infoText="Compose a payment inside the simulator: pick a funded lab address to spend from, a destination, an amount, and a fee rate. The tx is built and broadcast into the lab mempool; mine blocks afterward to confirm it—same lifecycle as real Bitcoin, without real money."
       className="rounded-xl"
     >
       <DesignCard>
@@ -205,15 +210,11 @@ export function LabMakeTransactionCard({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount (sats)</Label>
-                <DesignInput
+                <Label htmlFor="amount">Amount ({universalAmountEntryLabel(amountEntry)})</Label>
+                <UniversalAmountInput
                   id="amount"
-                  type="number"
-                  leadingIcon={Coins}
-                  min={MIN_AMOUNT_SATS}
-                  placeholder="1000"
                   value={amountSats}
-                  onChange={(e) => setAmountSats(e.target.value)}
+                  onChange={setAmountSats}
                 />
               </div>
               <div className="space-y-2">

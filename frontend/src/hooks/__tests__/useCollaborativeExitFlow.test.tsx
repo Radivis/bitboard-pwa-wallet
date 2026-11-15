@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { useWalletStore } from '@/stores/walletStore'
 import { ARKADE_INTENT_LIFECYCLE_PHASES } from '@/lib/arkade/arkade-pending-batch-intent'
 
@@ -38,6 +40,17 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
 
 import { useCollaborativeExitFlow } from '@/hooks/useCollaborativeExitFlow'
 
+function renderExitFlow() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return renderHook(() => useCollaborativeExitFlow(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  })
+}
+
 describe('useCollaborativeExitFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -51,13 +64,13 @@ describe('useCollaborativeExitFlow', () => {
   })
 
   it('quotes the fee for the current receive address on the first render', () => {
-    renderHook(() => useCollaborativeExitFlow())
+    renderExitFlow()
 
     expect(feeQueryCalls[0]?.destinationAddress).toBe('bcrt1qtest')
   })
 
   it('returns to management after a successful submit', () => {
-    const { result } = renderHook(() => useCollaborativeExitFlow())
+    const { result } = renderExitFlow()
 
     result.current.handleCollaborativeExit()
 
@@ -78,7 +91,7 @@ describe('useCollaborativeExitFlow', () => {
       },
     ]
 
-    renderHook(() => useCollaborativeExitFlow())
+    renderExitFlow()
 
     expect(navigate).toHaveBeenCalledWith({ to: '/wallet/management' })
   })

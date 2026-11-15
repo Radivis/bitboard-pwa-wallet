@@ -224,8 +224,9 @@ export function SendFlow() {
       amountSatsFromSendForm(amount, amountUnit, {
         useFiatAmountEntry: mainnetFiatMode,
         btcPriceInFiat,
+        currency: defaultFiatCurrency,
       }),
-    [amount, amountUnit, mainnetFiatMode, btcPriceInFiat],
+    [amount, amountUnit, mainnetFiatMode, btcPriceInFiat, defaultFiatCurrency],
   )
 
   const normalizedRecipient = useMemo(
@@ -897,7 +898,6 @@ export function SendFlow() {
         defaultFiatCurrency={defaultFiatCurrency}
         btcPriceInFiat={btcPriceInFiat}
         fiatRatesLoading={fiatRatesQuery.isPending}
-        parsedAmountSats={amountSats}
         onFiatModeUserToggle={handleFiatModeUserToggle}
       />
 

@@ -7,7 +7,7 @@ import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocki
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
-import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
@@ -28,10 +28,11 @@ import {
   type BarkOffboardReview,
 } from '@/lib/bark/review-bark-offboard'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import { satsOrFiatAmountReviewDecision } from '@/lib/fiat/sats-or-fiat-amount'
 import {
-  amountSatsFromSatsOrFiatField,
-  satsOrFiatAmountReviewDecision,
-} from '@/lib/fiat/sats-or-fiat-amount'
+  universalAmountEntryLabel,
+  useUniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 import { errorMessage } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -46,6 +47,7 @@ export function BarkOffboardPage() {
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const spendableSats = useBarkSyncLifecycleSnapshot().spendableSats
   const fiatAmount = useMainnetFiatAmountProps()
+  const amountEntry = useUniversalAmountEntry()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [amountRaw, setAmountRaw] = useState('')
@@ -76,10 +78,7 @@ export function BarkOffboardPage() {
   const destinationAddress = currentAddress?.trim() ?? ''
   const canExitAll = spendableSats != null && spendableSats > 0
   const fiatPriceBlocksReview = fiatAmount.mainnetFiatEntry && !fiatAmount.hasUsableFiatSpot
-  const parsedAmountSats = amountSatsFromSatsOrFiatField(amountRaw, {
-    useFiatAmountEntry: fiatAmount.mainnetFiatEntry,
-    btcPriceInFiat: fiatAmount.btcPriceInFiat,
-  })
+  const bitcoinUnit = amountEntry.mode === 'bitcoin' ? amountEntry.bitcoinUnit : undefined
 
   function clearAmountEntry() {
     setAmountRaw('')
@@ -88,7 +87,10 @@ export function BarkOffboardPage() {
   }
 
   async function onReviewAmount() {
-    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, fiatAmount)
+    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, {
+      ...fiatAmount,
+      bitcoinUnit,
+    })
     if (amountDecision.kind === 'blocked') {
       setReview(null)
       setReviewError(null)
@@ -188,20 +190,20 @@ export function BarkOffboardPage() {
               <DesignCardTitle>Amount</DesignCardTitle>
             </DesignCardHeader>
             <DesignCardContent className="space-y-3">
-              <SatsOrFiatAmountField
-                satsLabel="Satoshis that should arrive on-chain"
-                fiatLabel={`${fiatAmount.currency} that should arrive on-chain`}
-                amountRaw={amountRaw}
-                onAmountChange={(nextAmountRaw) => {
-                  setAmountRaw(nextAmountRaw)
-                  setReview(null)
-                }}
-                inputTestId="bark-offboard-amount"
-                priceUnavailableTestId="bark-offboard-fiat-price-unavailable"
-                btcPreviewTestId="bark-offboard-amount-btc-preview"
-                fiat={fiatAmount}
-                parsedAmountSats={parsedAmountSats}
-              />
+              <label className="design-type-regular block space-y-1" htmlFor="bark-offboard-amount">
+                <span>{universalAmountEntryLabel(amountEntry)} that should arrive on-chain</span>
+                <UniversalAmountInput
+                  id="bark-offboard-amount"
+                  value={amountRaw}
+                  onChange={(nextAmountRaw) => {
+                    setAmountRaw(nextAmountRaw)
+                    setReview(null)
+                  }}
+                  inputTestId="bark-offboard-amount"
+                  priceUnavailableTestId="bark-offboard-fiat-price-unavailable"
+                  previewTestId="bark-offboard-amount-btc-preview"
+                />
+              </label>
               <div className="flex flex-wrap gap-2">
                 <DesignButton
                   type="button"

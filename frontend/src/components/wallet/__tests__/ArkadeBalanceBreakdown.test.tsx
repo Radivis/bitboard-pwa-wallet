@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 const fiatRatesQueryMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -38,6 +39,7 @@ describe('ArkadeBalanceBreakdown', () => {
   beforeEach(() => {
     walletStoreState.networkMode = 'mutinynet'
     walletStoreState.loadedDescriptorWallet = null
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
     useFiatDenominationStore.setState({ fiatDenominationMode: false })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
   })

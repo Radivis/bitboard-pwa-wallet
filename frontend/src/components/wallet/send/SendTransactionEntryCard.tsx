@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight, Coins, ScanQrCode, Wallet } from 'lucide-react'
+import { ArrowUpRight, ScanQrCode, Wallet } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -29,19 +29,17 @@ import {
   sendRecipientFormatErrorMessage,
   sendRecipientPlaceholder,
 } from '@/lib/bark/send-flow-validation'
-import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import {
   bolt11SignetFamilyConfirmationText,
   isValidBolt11Invoice,
 } from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
-import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
@@ -114,7 +112,6 @@ export function SendTransactionEntryCard({
   defaultFiatCurrency,
   btcPriceInFiat,
   fiatRatesLoading,
-  parsedAmountSats,
   onFiatModeUserToggle,
 }: {
   pageTitle: string
@@ -182,8 +179,6 @@ export function SendTransactionEntryCard({
   defaultFiatCurrency: FiatCurrencyCode
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
-  /** Parsed sats from the amount field (fiat or BTC) for readonly BTC / validation display. */
-  parsedAmountSats: number
   onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
@@ -219,12 +214,6 @@ export function SendTransactionEntryCard({
     hideEditableAmountForZeroMainnet &&
     isLightningSendMode &&
     !needsUserLightningAmount
-
-  const useFiatAmountField =
-    mainnetFiatMode &&
-    hasUsableFiatSpot &&
-    !hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
 
   const showFiatLayout = mainnetFiatMode && hasUsableFiatSpot
 
@@ -439,7 +428,7 @@ export function SendTransactionEntryCard({
                 {(needsUserLightningAmount ||
                   (!isLightningSendMode && !isBarkSendMode && !isArkadeSendMode) ||
                   isBarkSendMode) &&
-                  !useFiatAmountField && (
+                  !mainnetFiatMode && (
                     <BitcoinUnitSelect
                       value={amountUnit}
                       onChange={onAmountUnitChange}
@@ -477,46 +466,15 @@ export function SendTransactionEntryCard({
                   ) : null}
                 </div>
               ) : (
-                <>
-                  <DesignInput
-                    id="send-amount"
-                    type="text"
-                    leadingIcon={Coins}
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={amount}
-                    onChange={(e) =>
-                      onAmountChange(e.target.value, { fromUser: true })
-                    }
-                    placeholder={
-                      useFiatAmountField
-                        ? fiatAmountInputPlaceholder(defaultFiatCurrency)
-                        : amountInputPlaceholderForUnit(amountUnit)
-                    }
-                    disabled={isPending}
-                  />
-                  {mainnetFiatMode && useFiatAmountField && hasUsableFiatSpot && (
-                      <p className="design-type-regular text-muted-foreground">
-                        <span className="mr-1">≈</span>
-                        <BitcoinAmountDisplay
-                          amountSats={parsedAmountSats}
-                          size="sm"
-                          className="inline"
-                          allowUnitToggle={false}
-                        />
-                      </p>
-                    )}
-                  {mainnetFiatMode && useFiatAmountField && !fiatRatesLoading && (
-                    <>
-                      {!hasUsableFiatSpot ? (
-                        <p className="design-type-regular text-destructive">
-                          Exchange rate unavailable. Check your connection or rate
-                          service in Settings.
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                </>
+                <UniversalAmountInput
+                  id="send-amount"
+                  bitcoinUnit={amountUnit}
+                  value={amount}
+                  onChange={(nextAmount) =>
+                    onAmountChange(nextAmount, { fromUser: true })
+                  }
+                  disabled={isPending}
+                />
               )}
               <div className="design-type-regular text-muted-foreground">
                 {isLightningSendMode ? (

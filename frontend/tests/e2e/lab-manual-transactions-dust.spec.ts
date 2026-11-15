@@ -48,7 +48,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByRole('button', { name: 'Make transaction' }).click()
     await page.getByLabel('From address').fill(aliceAddress!)
     await page.getByLabel('To address').fill(bobAddress!)
-    await page.getByLabel('Amount (sats)').fill('200')
+    await page.getByLabel('Amount (sat)').fill('200')
     await page.getByLabel('Fee rate (sat/vB)').fill('1')
     await page.getByRole('button', { name: 'Send' }).click()
 
@@ -95,7 +95,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByRole('button', { name: 'Make transaction' }).click()
     await page.getByLabel('From address').fill(aliceAddress!)
     await page.getByLabel('To address').fill(bobAddress!)
-    await page.getByLabel('Amount (sats)').fill('800')
+    await page.getByLabel('Amount (sat)').fill('800')
     await page.getByLabel('Fee rate (sat/vB)').fill('1')
     await page.getByRole('button', { name: 'Send' }).click()
 
@@ -132,7 +132,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByRole('button', { name: 'Make transaction' }).click()
     await page.getByLabel('From address').fill(aliceAddress!)
     await page.getByLabel('To address').fill(bobAddress!)
-    await page.getByLabel('Amount (sats)').fill('800')
+    await page.getByLabel('Amount (sat)').fill('800')
     await page.getByLabel('Fee rate (sat/vB)').fill('1')
     await page.getByRole('button', { name: 'Send' }).click()
 

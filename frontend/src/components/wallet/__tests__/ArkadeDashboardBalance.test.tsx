@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
 import type { NetworkMode } from '@/stores/walletStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
@@ -137,6 +138,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 describe('ArkadeDashboardBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
     walletStoreState.networkMode = 'mutinynet'
     walletStoreState.arkadeBalance = null
     walletStoreState.arkadeSignerMigrationHint = null

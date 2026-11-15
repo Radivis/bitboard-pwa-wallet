@@ -23,13 +23,14 @@ function syncQueryCache(unit: BitcoinDisplayUnit) {
 }
 
 /**
- * Default Bitcoin display unit (BTC, mBTC, …) chosen on Settings and used across send/receive UI.
+ * Default Bitcoin display unit (sat, BTC, mBTC, …) chosen on Settings and used across send/receive UI.
+ * The unset value is sat. A unit the user already saved is left as saved.
  * Persists through {@link sqliteStorage} to the app `settings` table; not a separate storage backend.
  */
 export const useBitcoinDisplayUnitStore = create<BitcoinDisplayUnitState>()(
   persist(
     (set) => ({
-      defaultBitcoinUnit: 'BTC',
+      defaultBitcoinUnit: 'sat',
       setDefaultBitcoinUnit: (unit) => {
         set({ defaultBitcoinUnit: unit })
         syncQueryCache(unit)

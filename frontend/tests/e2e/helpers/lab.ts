@@ -511,7 +511,7 @@ export async function createTransactionInLab(
   await page.getByRole('button', { name: 'Make transaction' }).click()
   await page.getByLabel('From address').fill(fromAddress)
   await page.getByLabel('To address').fill(toAddress)
-  await page.getByLabel('Amount (sats)').fill(String(amountSats))
+  await page.getByLabel('Amount (sat)').fill(String(amountSats))
   await page.getByLabel('Fee rate (sat/vB)').fill(String(feeRate))
   await page.getByRole('button', { name: 'Send' }).click()
 

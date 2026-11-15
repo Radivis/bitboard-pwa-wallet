@@ -149,6 +149,7 @@ vi.mock('qr-scanner', () => ({
 }))
 
 import { useSendStore } from '@/stores/sendStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { SendPage } from '@/pages/wallet/SendPage'
 import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 
@@ -191,6 +192,7 @@ describe('SendPage', () => {
       feeSats: 1_500,
       ...mockReviewSummaryFields,
     })
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'sat' })
     useSendStore.getState().reset()
     walletStoreState = {
       activeWalletId: 1,
@@ -259,14 +261,14 @@ describe('SendPage', () => {
     renderWithProviders(<SendPage />)
 
     expect(screen.getByLabelText('Amount')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('0.00000000')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('0')).toBeInTheDocument()
     const unitSelect = screen.getByLabelText('Unit for amount entry')
     expect(unitSelect).toBeInTheDocument()
 
-    await user.selectOptions(unitSelect, 'sat')
+    await user.selectOptions(unitSelect, 'BTC')
 
-    expect(screen.getByPlaceholderText('0')).toBeInTheDocument()
-    expect(useSendStore.getState().amountUnit).toBe('sat')
+    expect(screen.getByPlaceholderText('0.00000000')).toBeInTheDocument()
+    expect(useSendStore.getState().amountUnit).toBe('BTC')
   })
 
   it('displays available balance', () => {
@@ -310,7 +312,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.type(screen.getByLabelText(/Amount/), '100000')
 
     expect(screen.getByRole('button', { name: 'Review Transaction' })).toBeEnabled()
   })
@@ -334,7 +336,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.type(screen.getByLabelText(/Amount/), '100000')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
     expect(await screen.findByText('Fee')).toBeInTheDocument()
@@ -368,7 +370,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.type(screen.getByLabelText(/Amount/), '100000')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
     expect(
@@ -407,7 +409,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.00005')
+    await user.type(screen.getByLabelText(/Amount/), '5000')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
     expect(await screen.findByText('Change and fees')).toBeInTheDocument()
@@ -450,7 +452,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.00005')
+    await user.type(screen.getByLabelText(/Amount/), '5000')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
     expect(await screen.findByText('Change and fees')).toBeInTheDocument()
@@ -481,7 +483,7 @@ describe('SendPage', () => {
       screen.getByLabelText('Recipient Address'),
       'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
     )
-    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.type(screen.getByLabelText(/Amount/), '100000')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
     expect(

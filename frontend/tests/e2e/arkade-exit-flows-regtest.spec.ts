@@ -46,7 +46,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByRole('link', { name: 'Collaborative exit' }).click()
     await expect(page.getByRole('heading', { name: 'Collaborative exit' })).toBeVisible()
     await page.getByRole('button', { name: 'Use current receive address' }).click()
-    await page.getByLabel('Amount (sats, optional)').fill('50000')
+    await page.getByLabel('Amount (sat, optional)').fill('50000')
     await page.getByRole('button', { name: 'Confirm exit' }).click()
     await expect(
       page.getByRole('button', { name: 'Exiting…' }).or(

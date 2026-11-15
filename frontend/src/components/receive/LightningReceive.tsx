@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Zap, Copy, Plus, Loader2, Coins, MessageSquareText } from 'lucide-react'
+import { Zap, Copy, Plus, Loader2, MessageSquareText } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { DesignButton } from '@/components/design/DesignButton'
@@ -23,19 +23,21 @@ import {
   INVOICE_EXPIRY_OPTIONS,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
 } from '@/lib/lightning/lightning-utils'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
-import {
-  amountSatsFromFiatAndBtcPrice,
-  parsePositiveFiatAmountInput,
-} from '@/lib/fiat/fiat-amount-to-sats'
-import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
+import { parsePositiveFiatAmountInput } from '@/lib/fiat/fiat-amount-to-sats'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
+import {
+  parseUniversalAmount,
+  universalAmountEntryLabel,
+  useUniversalAmountEntry,
+  type UniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 import {
   parseInvoiceAmountField,
   type InvoiceAmountFieldParse,
@@ -203,26 +205,36 @@ function InvoiceListItem({
   )
 }
 
+function invoiceAmountFieldParse(
+  amountRaw: string,
+  amountEntry: UniversalAmountEntry,
+): InvoiceAmountFieldParse {
+  if (amountEntry.mode === 'bitcoin' && amountEntry.bitcoinUnit === 'sat') {
+    return parseInvoiceAmountField(amountRaw)
+  }
+  const trimmedAmount = amountRaw.trim()
+  if (trimmedAmount === '') return { kind: 'amountless' }
+  if (amountEntry.mode === 'fiat') {
+    const fiatAmount = parsePositiveFiatAmountInput(trimmedAmount)
+    if (fiatAmount == null) return { kind: 'invalid' }
+    if (fiatAmount === 0) return { kind: 'amountless' }
+  }
+  const parsedAmount = parseUniversalAmount(amountRaw, amountEntry)
+  if (parsedAmount.kind === 'empty') return { kind: 'amountless' }
+  if (parsedAmount.kind !== 'sats') return { kind: 'invalid' }
+  if (parsedAmount.amountSats === 0) {
+    return amountEntry.mode === 'fiat' ? { kind: 'invalid' } : { kind: 'amountless' }
+  }
+  return { kind: 'fixed', sats: parsedAmount.amountSats }
+}
+
 function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const [amountRaw, setAmountRaw] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
-
-  const fiatDenominationMode = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
-  )
-  const defaultFiatCurrency = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
-  )
-  const fiatRatesQuery = useMainnetFiatRatesQuery({
+  const amountEntry = useUniversalAmountEntry(undefined, {
     allowFetchWhenPortfolioZeroForReceivePage: true,
   })
-  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
-  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
-
-  const mainnetFiatEntry =
-    networkMode === 'mainnet' && fiatDenominationMode
 
   const createMutation = useCreateInvoiceMutation(() => {
     setAmountRaw('')
@@ -231,23 +243,10 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
     onCreated()
   })
 
-  const amountParse = useMemo((): InvoiceAmountFieldParse => {
-    if (mainnetFiatEntry) {
-      const trimmedAmount = amountRaw.trim()
-      if (trimmedAmount === '') return { kind: 'amountless' }
-      const fiat = parsePositiveFiatAmountInput(trimmedAmount)
-      if (fiat == null) return { kind: 'invalid' }
-      if (fiat === 0) return { kind: 'amountless' }
-      if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) return { kind: 'invalid' }
-      const sats = amountSatsFromFiatAndBtcPrice(fiat, btcPriceInFiat)
-      if (sats == null || sats < 1) return { kind: 'invalid' }
-      return { kind: 'fixed', sats }
-    }
-    return parseInvoiceAmountField(amountRaw)
-  }, [mainnetFiatEntry, amountRaw, btcPriceInFiat])
-
-  const parsedSatsForPreview =
-    amountParse.kind === 'fixed' ? amountParse.sats : null
+  const amountParse = useMemo(
+    (): InvoiceAmountFieldParse => invoiceAmountFieldParse(amountRaw, amountEntry),
+    [amountRaw, amountEntry],
+  )
 
   const canCreate = amountParse.kind !== 'invalid' && !createMutation.isPending
 
@@ -292,49 +291,17 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
           >
             <div className="space-y-2">
               <Label htmlFor="invoice-amount">
-                {mainnetFiatEntry
-                  ? `Amount (${defaultFiatCurrency}) (optional)`
-                  : 'Amount (sats) (optional)'}
+                Amount ({universalAmountEntryLabel(amountEntry)}) (optional)
               </Label>
-              <DesignInput
+              <UniversalAmountInput
                 id="invoice-amount"
-                type="text"
-                leadingIcon={Coins}
-                inputMode={mainnetFiatEntry ? 'decimal' : 'numeric'}
-                pattern={mainnetFiatEntry ? undefined : '[0-9]*'}
                 value={amountRaw}
-                onChange={(e) => setAmountRaw(e.target.value)}
+                onChange={setAmountRaw}
                 placeholder={
-                  mainnetFiatEntry
-                    ? fiatAmountInputPlaceholder(defaultFiatCurrency)
-                    : 'Leave empty for amountless'
+                  amountEntry.mode === 'bitcoin' ? 'Leave empty for amountless' : undefined
                 }
-                autoComplete="off"
+                allowFetchWhenPortfolioZeroForReceivePage
               />
-              {mainnetFiatEntry &&
-                parsedSatsForPreview != null &&
-                hasUsableFiatSpot && (
-                  <p className="design-type-regular text-muted-foreground">
-                    ≈{' '}
-                    <BitcoinAmountDisplay
-                      amountSats={parsedSatsForPreview}
-                      size="sm"
-                      className="inline"
-                      allowUnitToggle={false}
-                    />
-                  </p>
-                )}
-              {mainnetFiatEntry &&
-                amountRaw.trim() !== '' &&
-                parsePositiveFiatAmountInput(amountRaw) != null &&
-                parsePositiveFiatAmountInput(amountRaw)! > 0 &&
-                !hasUsableFiatSpot &&
-                !fiatRatesQuery.isPending && (
-                  <p className="design-type-regular text-destructive">
-                    Exchange rate unavailable. Check your connection or rate service
-                    in Settings.
-                  </p>
-                )}
               {amountParse.kind === 'amountless' ? (
                 <p className="design-type-regular text-muted-foreground">
                   If you don&apos;t define an amount, the amount for this invoice must

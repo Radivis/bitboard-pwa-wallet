@@ -16,6 +16,16 @@ describe('amountSatsFromSatsOrFiatField', () => {
     ).toBe(1500)
   })
 
+  it('converts a Bitcoin display unit other than sat', () => {
+    expect(
+      amountSatsFromSatsOrFiatField('0.5', {
+        useFiatAmountEntry: false,
+        btcPriceInFiat: spotPriceUsdPerBtc,
+        bitcoinUnit: 'BTC',
+      }),
+    ).toBe(50_000_000)
+  })
+
   it('rejects empty, zero, fractions, and leading zeros when fiat entry is off', () => {
     const satsOptions = { useFiatAmountEntry: false, btcPriceInFiat: spotPriceUsdPerBtc }
     expect(amountSatsFromSatsOrFiatField('', satsOptions)).toBeNull()
@@ -84,6 +94,16 @@ describe('satsOrFiatAmountReviewDecision', () => {
       kind: 'invalid',
       message: 'Enter a whole number of satoshis.',
     })
+  })
+
+  it('accepts the selected Bitcoin unit when fiat entry is off', () => {
+    expect(
+      satsOrFiatAmountReviewDecision('0.5', {
+        ...fiatEntry,
+        mainnetFiatEntry: false,
+        bitcoinUnit: 'BTC',
+      }),
+    ).toEqual({ kind: 'ready', amountSats: 50_000_000 })
   })
 
   it('returns sats when the field is usable', () => {

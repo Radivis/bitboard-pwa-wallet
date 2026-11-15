@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 import { BarkMovementItem } from '@/components/BarkMovementItem'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { BarkMovementRow } from '@/workers/bark-api'
 
 const failedBoard: BarkMovementRow = {
@@ -15,6 +16,10 @@ const failedBoard: BarkMovementRow = {
 }
 
 describe('BarkMovementItem', () => {
+  beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
+  })
+
   it('BARK-HIST-04 shows status and the signed effective amount for a failed movement', () => {
     renderWithProviders(<BarkMovementItem movement={failedBoard} />)
     const row = screen.getByTestId('bark-movement-7')

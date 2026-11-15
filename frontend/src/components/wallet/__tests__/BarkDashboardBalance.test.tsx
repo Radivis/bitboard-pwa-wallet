@@ -5,6 +5,7 @@ import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
@@ -127,6 +128,7 @@ function pendingOffboard(): BarkPendingAction {
 describe('BarkDashboardBalance', () => {
   beforeEach(() => {
     pendingActions.current = []
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
     useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true

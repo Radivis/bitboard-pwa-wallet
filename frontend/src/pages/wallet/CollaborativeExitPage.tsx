@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Coins, Loader2, Wallet } from 'lucide-react'
+import { Loader2, Wallet } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
@@ -8,6 +8,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DesignInput } from '@/components/design/DesignInput'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
@@ -21,6 +22,10 @@ import {
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useCollaborativeExitFlow } from '@/hooks/useCollaborativeExitFlow'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import {
+  universalAmountEntryLabel,
+  useUniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 
 type CollaborativeExitFlow = ReturnType<typeof useCollaborativeExitFlow>
 
@@ -101,6 +106,7 @@ function CollaborativeExitFeeEstimate({
 }
 
 export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentProps) {
+  const amountEntry = useUniversalAmountEntry()
   const {
     networkMode,
     currentAddress,
@@ -165,13 +171,13 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
         )}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="arkade-collab-amount">Amount (sats, optional)</Label>
-        <DesignInput
+        <Label htmlFor="arkade-collab-amount">
+          Amount ({universalAmountEntryLabel(amountEntry)}, optional)
+        </Label>
+        <UniversalAmountInput
           id="arkade-collab-amount"
-          type="number"
-          leadingIcon={Coins}
           value={collabAmountSats}
-          onChange={(event) => setCollabAmountSats(event.target.value)}
+          onChange={setCollabAmountSats}
           placeholder="Leave empty for full balance"
         />
         {balanceQuery.data && (

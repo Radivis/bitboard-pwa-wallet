@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 import { screen } from '@testing-library/react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 describe('FiatBtcAmountDisplay', () => {
+  beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
+  })
+
   it('renders BTC-only when showFiatLayout is false', () => {
     renderWithProviders(
       <FiatBtcAmountDisplay

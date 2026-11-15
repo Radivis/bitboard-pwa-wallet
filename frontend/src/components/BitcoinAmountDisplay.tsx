@@ -48,7 +48,7 @@ export function BitcoinAmountDisplay({
   amountTypography,
   'data-testid': dataTestId,
 }: BitcoinAmountDisplayProps) {
-  const { data: defaultUnit = 'BTC' } = useBitcoinUnit()
+  const { data: defaultUnit = 'sat' } = useBitcoinUnit()
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const networkUnitIndicator = getNetworkUnitIndicator(networkMode)
   const [localUnitOverride, setLocalUnitOverride] =
