@@ -147,6 +147,37 @@ describe('DesignSwitch', () => {
     }
   })
 
+  it('shows a label beside an icon when the option asks for both', () => {
+    render(
+      <DesignSwitch
+        aria-label="Receive rail"
+        value="bitcoin"
+        onValueChange={vi.fn()}
+        options={[
+          {
+            value: 'bitcoin',
+            label: 'Bitcoin',
+            showLabel: true,
+            icon: <svg data-testid="bitcoin-icon" />,
+          },
+          {
+            value: 'lightning',
+            label: 'Lightning',
+            showLabel: true,
+            icon: <svg data-testid="lightning-icon" />,
+          },
+        ]}
+      />,
+    )
+
+    const bitcoin = screen.getByRole('button', { name: 'Bitcoin' })
+    expect(bitcoin).toHaveAttribute('aria-pressed', 'true')
+    expect(bitcoin).not.toHaveAttribute('aria-label')
+    expect(screen.getByTestId('bitcoin-icon')).toBeInTheDocument()
+    expect(screen.getByText('Bitcoin')).toBeInTheDocument()
+    expect(bitcoin.className).toContain('gap-2')
+  })
+
   it('uses the label as the accessible name of an icon option', () => {
     render(
       <DesignSwitch

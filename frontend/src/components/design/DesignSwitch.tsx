@@ -11,6 +11,8 @@ export type DesignSwitchOption<Value extends string> = {
   value: Value
   label: string
   icon?: ReactNode
+  /** Keep the label visible beside the icon. An icon otherwise replaces the label. */
+  showLabel?: boolean
 }
 
 type DesignSwitchProps<Value extends string> = {
@@ -49,7 +51,10 @@ export function DesignSwitch<Value extends string>({
   const animationFrameRef = useRef<number | null>(null)
   valueRef.current = value
   const optionLayoutKey = options
-    .map((option) => `${option.value}\u0000${option.label}\u0000${option.icon != null}`)
+    .map(
+      (option) =>
+        `${option.value}\u0000${option.label}\u0000${option.icon != null}\u0000${option.showLabel === true}`,
+    )
     .join('\u0001')
 
   placeSelectedSurfaceRef.current = (animate) => {
@@ -127,6 +132,7 @@ export function DesignSwitch<Value extends string>({
       {options.map((option) => {
         const selected = option.value === value
         const showsIcon = option.icon != null
+        const showsLabel = !showsIcon || option.showLabel === true
         const optionButton = (
           <button
             ref={(element) => {
@@ -138,7 +144,7 @@ export function DesignSwitch<Value extends string>({
             }}
             type="button"
             aria-pressed={selected}
-            aria-label={showsIcon ? option.label : undefined}
+            aria-label={showsIcon && !showsLabel ? option.label : undefined}
             disabled={disabled}
             onClick={() => onValueChange(option.value)}
             className={cn(
@@ -148,10 +154,12 @@ export function DesignSwitch<Value extends string>({
               showsIcon
                 ? 'text-[var(--design-input-content)]'
                 : 'text-[var(--design-text-regular)]',
+              showsIcon && showsLabel && 'gap-2',
               wrap && 'w-full',
             )}
           >
-            {showsIcon ? option.icon : option.label}
+            {showsIcon ? option.icon : null}
+            {showsLabel ? option.label : null}
           </button>
         )
         const framedOption = frameOption ? frameOption(option, optionButton) : optionButton
