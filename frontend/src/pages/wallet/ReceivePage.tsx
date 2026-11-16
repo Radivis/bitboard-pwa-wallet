@@ -42,6 +42,10 @@ import {
   chainHistoryObserved,
   confirmKindForGap,
   paymentsToAddressLabel,
+  RECEIVE_PAYMENT_COUNT_INFO_TEXT,
+  RECEIVE_PAYMENT_COUNT_INFO_TITLE,
+  RECEIVE_UNUSED_GAP_INFO_TEXT,
+  RECEIVE_UNUSED_GAP_INFO_TITLE,
   receiveGapSurface,
   type ReceiveGapConfirmKind,
 } from '@/lib/wallet/receive-gap-surface'
@@ -359,11 +363,25 @@ export function ReceivePage() {
             </div>
             {gapSurface.kind === 'visible' ? (
               <div className="space-y-2" data-testid="receive-gap-summary">
-                <p data-testid="receive-payment-count">
-                  {paymentsToAddressLabel(gapSurface.receiveCount)}
-                </p>
+                <InfomodeWrapper
+                  infoId="receive-payment-count"
+                  infoTitle={RECEIVE_PAYMENT_COUNT_INFO_TITLE}
+                  infoText={RECEIVE_PAYMENT_COUNT_INFO_TEXT}
+                  className="rounded-md"
+                >
+                  <p data-testid="receive-payment-count">
+                    {paymentsToAddressLabel(gapSurface.receiveCount)}
+                  </p>
+                </InfomodeWrapper>
                 {gapSurface.gapLabel != null ? (
-                  <p data-testid="receive-unused-gap">{gapSurface.gapLabel}</p>
+                  <InfomodeWrapper
+                    infoId="receive-unused-gap"
+                    infoTitle={RECEIVE_UNUSED_GAP_INFO_TITLE}
+                    infoText={RECEIVE_UNUSED_GAP_INFO_TEXT}
+                    className="rounded-md"
+                  >
+                    <p data-testid="receive-unused-gap">{gapSurface.gapLabel}</p>
+                  </InfomodeWrapper>
                 ) : null}
                 {networkMode !== 'lab' && onchainEsploraSyncQuery.data?.isStaleOnchain ? (
                   <DesignBanner

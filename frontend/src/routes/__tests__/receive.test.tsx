@@ -239,12 +239,18 @@ describe('ReceivePage', () => {
     expect(await screen.findByTestId('receive-payment-count')).toHaveTextContent(
       paymentsToAddressLabel(0),
     )
+    expect(
+      screen.getByTestId('receive-payment-count').closest('[data-infomode-id="receive-payment-count"]'),
+    ).not.toBeNull()
     expect(screen.queryByTestId('receive-unused-gap')).not.toBeInTheDocument()
     unmount()
 
     syncedGap(2, 3)
     renderWithProviders(<ReceivePage />)
     expect(await screen.findByTestId('receive-unused-gap')).toHaveTextContent(unusedGapLabel(2))
+    expect(
+      screen.getByTestId('receive-unused-gap').closest('[data-infomode-id="receive-unused-gap"]'),
+    ).not.toBeNull()
     expect(screen.getByTestId('receive-payment-count')).toHaveTextContent(paymentsToAddressLabel(3))
   })
 

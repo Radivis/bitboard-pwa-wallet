@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Always visible network selector for switching networks quickly without having to go to the "Settings" page
 - Always visible wallet lock toggle button
 - Almost always visible back button
+- The receive page shows the number of receives for the current address
+- The receive page shows the current gap, if it is 2 or higher
+- Confirmation modal for "Generate New Address" button, if there is a non-trivial gap
 
 ### Changed
 

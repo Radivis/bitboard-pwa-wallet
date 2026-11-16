@@ -27,9 +27,18 @@ export function confirmKindForGap(gap: number): ReceiveGapConfirmKind {
   return 'none'
 }
 
+export const RECEIVE_PAYMENT_COUNT_INFO_TITLE = 'Payments to this address'
+
+export const RECEIVE_PAYMENT_COUNT_INFO_TEXT =
+  'This count matters for privacy. Each extra payment to the same address is address reuse: observers can link those payments to one recipient, which is a common way to deanonymize a wallet. A count of 0 means this address is still fresh.'
+
 export function paymentsToAddressLabel(receiveCount: number): string {
   return `Payments to this address: ${receiveCount}`
 }
+
+export const RECEIVE_UNUSED_GAP_INFO_TITLE = 'Unused gap'
+
+export const RECEIVE_UNUSED_GAP_INFO_TEXT = `The gap is how many addresses in a row have been revealed since the last one that was paid. A normal wallet stops scanning after ${RECEIVE_GAP_HARD_MIN} unused addresses. Going past that limit does not destroy coins, but a restore from the seed alone, and most other wallets, will not look far enough to find them. This wallet still can, because it remembers every address it revealed. Generating past ${RECEIVE_GAP_HARD_MIN} asks you to opt in to that breakage.`
 
 export function unusedGapLabel(gap: number): string {
   return `Unused gap: ${gap}. A normal wallet looks ahead ${RECEIVE_GAP_HARD_MIN} addresses.`
