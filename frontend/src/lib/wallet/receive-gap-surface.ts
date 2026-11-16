@@ -59,7 +59,7 @@ export const HARD_GAP_GENERATE_LABEL = 'Generate past the gap limit'
  * Public networks stay hidden until some successful Esplora sync exists.
  * Labnet uses the local chain as soon as the page asks.
  * This gates the payment count and the soft confirmation. The hard opt-in
- * uses {@link generateConfirmForClick} and does not wait for this.
+ * uses {@link generateConfirmKindForClick} and does not wait for this.
  */
 export function chainHistoryObserved(input: {
   networkMode: string
@@ -77,7 +77,7 @@ export function chainHistoryObserved(input: {
  * A gap of 20 or more still asks for the hard opt-in. That local upper bound
  * is already past a normal scan. An unrevealed wallet reveals with no modal.
  */
-export function generateConfirmForClick(input: {
+export function generateConfirmKindForClick(input: {
   chainObserved: boolean
   reading: ExternalReceiveGapReading
 }): ReceiveGapConfirmKind {

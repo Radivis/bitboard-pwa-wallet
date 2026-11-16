@@ -43,7 +43,7 @@ import { useOnchainEsploraSyncMetadataQuery } from '@/hooks/useOnchainDashboardQ
 import {
   chainHistoryObserved,
   confirmKindForGap,
-  generateConfirmForClick,
+  generateConfirmKindForClick,
   paymentsToAddressLabel,
   receiveGapSurface,
   type ReceiveGapConfirmKind,
@@ -66,7 +66,7 @@ export function ReceivePage() {
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
-  const [gapPrompt, setGapPrompt] = useState<ReceiveGapConfirmKind | null>(null)
+  const [gapPromptKind, setGapPromptKind] = useState<ReceiveGapConfirmKind | null>(null)
   const [promptGap, setPromptGap] = useState(0)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
@@ -163,13 +163,13 @@ export function ReceivePage() {
   const handleGenerateClick = useCallback(async () => {
     try {
       const reading = await getExternalReceiveGap()
-      const generateConfirm = generateConfirmForClick({ chainObserved, reading })
-      if (generateConfirm === 'none') {
+      const generateConfirmKind = generateConfirmKindForClick({ chainObserved, reading })
+      if (generateConfirmKind === 'none') {
         await revealNextAddress()
         return
       }
       setPromptGap(reading.gap)
-      setGapPrompt(generateConfirm)
+      setGapPromptKind(generateConfirmKind)
     } catch {
       toast.error('Failed to check the address gap')
     }
@@ -178,23 +178,23 @@ export function ReceivePage() {
   const handleGapConfirm = useCallback(async () => {
     try {
       const reading = await getExternalReceiveGap()
-      const nextConfirm = reading.revealed ? confirmKindForGap(reading.gap) : 'none'
-      if (nextConfirm === 'none') {
-        setGapPrompt(null)
+      const nextConfirmKind = reading.revealed ? confirmKindForGap(reading.gap) : 'none'
+      if (nextConfirmKind === 'none') {
+        setGapPromptKind(null)
         await revealNextAddress()
         return
       }
-      if (nextConfirm !== gapPrompt) {
+      if (nextConfirmKind !== gapPromptKind) {
         setPromptGap(reading.gap)
-        setGapPrompt(nextConfirm)
+        setGapPromptKind(nextConfirmKind)
         return
       }
-      setGapPrompt(null)
+      setGapPromptKind(null)
       await revealNextAddress()
     } catch {
       toast.error('Failed to check the address gap')
     }
-  }, [gapPrompt, getExternalReceiveGap, revealNextAddress])
+  }, [gapPromptKind, getExternalReceiveGap, revealNextAddress])
 
   const handleCopy = useCallback(async () => {
     if (!currentAddress) return
@@ -275,11 +275,11 @@ export function ReceivePage() {
     <>
       {mainnetDemoModal}
       <ReceiveGapConfirmModal
-        open={gapPrompt === 'soft' || gapPrompt === 'hard'}
-        mode={gapPrompt === 'hard' ? 'hard' : 'soft'}
+        open={gapPromptKind === 'soft' || gapPromptKind === 'hard'}
+        kind={gapPromptKind === 'hard' ? 'hard' : 'soft'}
         gap={promptGap}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) setGapPrompt(null)
+          if (!nextOpen) setGapPromptKind(null)
         }}
         onConfirm={handleGapConfirm}
       />

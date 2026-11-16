@@ -3,7 +3,7 @@ import {
   RECEIVE_GAP_HARD_MIN,
   chainHistoryObserved,
   confirmKindForGap,
-  generateConfirmForClick,
+  generateConfirmKindForClick,
   paymentsToAddressLabel,
   receiveGapSurface,
   softGapConfirmBody,
@@ -77,10 +77,10 @@ describe('receiveGapSurface', () => {
   })
 })
 
-describe('generateConfirmForClick', () => {
+describe('generateConfirmKindForClick', () => {
   it('asks for the hard opt-in from the local gap before chain history is in', () => {
     expect(
-      generateConfirmForClick({
+      generateConfirmKindForClick({
         chainObserved: false,
         reading: { ...revealed, receiveCount: 0, gap: RECEIVE_GAP_HARD_MIN },
       }),
@@ -89,13 +89,13 @@ describe('generateConfirmForClick', () => {
 
   it('reveals immediately before chain history when the local gap is under 20', () => {
     expect(
-      generateConfirmForClick({
+      generateConfirmKindForClick({
         chainObserved: false,
         reading: { ...revealed, receiveCount: 0, gap: 4 },
       }),
     ).toBe('none')
     expect(
-      generateConfirmForClick({
+      generateConfirmKindForClick({
         chainObserved: false,
         reading: { ...revealed, revealed: false, gap: RECEIVE_GAP_HARD_MIN },
       }),
@@ -104,13 +104,13 @@ describe('generateConfirmForClick', () => {
 
   it('keeps the soft confirmation once chain history is in', () => {
     expect(
-      generateConfirmForClick({
+      generateConfirmKindForClick({
         chainObserved: true,
         reading: { ...revealed, receiveCount: 0, gap: 4 },
       }),
     ).toBe('soft')
     expect(
-      generateConfirmForClick({
+      generateConfirmKindForClick({
         chainObserved: true,
         reading: { ...revealed, gap: 0 },
       }),

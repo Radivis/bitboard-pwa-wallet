@@ -16,7 +16,7 @@ import {
 
 interface ReceiveGapConfirmModalProps {
   open: boolean
-  mode: Exclude<ReceiveGapConfirmKind, 'none'>
+  kind: Exclude<ReceiveGapConfirmKind, 'none'>
   gap: number
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
@@ -24,21 +24,21 @@ interface ReceiveGapConfirmModalProps {
 
 export function ReceiveGapConfirmModal({
   open,
-  mode,
+  kind,
   gap,
   onOpenChange,
   onConfirm,
 }: ReceiveGapConfirmModalProps) {
   const [acknowledgedRisk, setAcknowledgedRisk] = useState(false)
   const [confirmPending, setConfirmPending] = useState(false)
-  const isHardWarning = mode === 'hard'
+  const isHardWarning = kind === 'hard'
 
   useEffect(() => {
     if (open) {
       setAcknowledgedRisk(false)
       setConfirmPending(false)
     }
-  }, [open, mode])
+  }, [open, kind])
 
   return (
     <DesignModal
