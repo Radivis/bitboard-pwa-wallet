@@ -24,7 +24,11 @@ describe('DesignThemeSwitcher', () => {
     expect(screen.getByRole('button', { name: 'Light mode' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Dark mode' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'System preference' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: 'Light mode' }).className).toContain(
+    const selectedSurface = screen
+      .getByRole('group', { name: 'Theme' })
+      .querySelector('[data-slot="design-switch-indicator"]')
+    expect(selectedSurface?.className).toContain('--design-nav-background-selected')
+    expect(screen.getByRole('button', { name: 'Light mode' }).className).not.toContain(
       '--design-nav-background-selected',
     )
 
