@@ -36,7 +36,9 @@ export function unusedGapLabel(gap: number): string {
 }
 
 export function softGapConfirmBody(gap: number): string {
-  const unusedAddresses = gap === 1 ? '1 unused address' : `${gap} unused addresses`
+  const unusedAfterGenerate = gap + 1
+  const unusedAddresses =
+    unusedAfterGenerate === 1 ? '1 unused address' : `${unusedAfterGenerate} unused addresses`
   return `Generating another address leaves ${unusedAddresses} in a row. Wallets that recover from a seed look ahead ${RECEIVE_GAP_HARD_MIN}. You can keep sharing this one.`
 }
 
@@ -56,6 +58,8 @@ export const HARD_GAP_GENERATE_LABEL = 'Generate past the gap limit'
 /**
  * Public networks stay hidden until some successful Esplora sync exists.
  * Labnet uses the local chain as soon as the page asks.
+ * This gates the payment count and the soft confirmation. The hard opt-in
+ * uses {@link generateConfirmForClick} and does not wait for this.
  */
 export function chainHistoryObserved(input: {
   networkMode: string
@@ -64,6 +68,23 @@ export function chainHistoryObserved(input: {
 }): boolean {
   if (input.networkMode === 'lab') return true
   return input.lastSyncTime != null || input.lastSuccessfulEsploraSyncAt != null
+}
+
+/**
+ * Click decision for Generate.
+ * A gap of 1–19 before chain history does not confirm: payments not fetched
+ * yet only shrink the gap, so that warning would often be wrong.
+ * A gap of 20 or more still asks for the hard opt-in. That local upper bound
+ * is already past a normal scan. An unrevealed wallet reveals with no modal.
+ */
+export function generateConfirmForClick(input: {
+  chainObserved: boolean
+  reading: ExternalReceiveGapReading
+}): ReceiveGapConfirmKind {
+  if (!input.reading.revealed) return 'none'
+  const kind = confirmKindForGap(input.reading.gap)
+  if (!input.chainObserved && kind !== 'hard') return 'none'
+  return kind
 }
 
 export function receiveGapSurface(input: {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RECEIVE_GAP_HARD_MIN,
   chainHistoryObserved,
   confirmKindForGap,
+  generateConfirmForClick,
   paymentsToAddressLabel,
   receiveGapSurface,
+  softGapConfirmBody,
   unusedGapLabel,
 } from '@/lib/wallet/receive-gap-surface'
 
@@ -61,6 +64,57 @@ describe('receiveGapSurface', () => {
 
   it('formats the payment count including zero', () => {
     expect(paymentsToAddressLabel(0)).toBe('Payments to this address: 0')
+  })
+
+  it('describes the unused run the click will leave', () => {
+    const lookahead = `look ahead ${RECEIVE_GAP_HARD_MIN}`
+    expect(softGapConfirmBody(1)).toBe(
+      `Generating another address leaves 2 unused addresses in a row. Wallets that recover from a seed ${lookahead}. You can keep sharing this one.`,
+    )
+    expect(softGapConfirmBody(19)).toBe(
+      `Generating another address leaves ${RECEIVE_GAP_HARD_MIN} unused addresses in a row. Wallets that recover from a seed ${lookahead}. You can keep sharing this one.`,
+    )
+  })
+})
+
+describe('generateConfirmForClick', () => {
+  it('asks for the hard opt-in from the local gap before chain history is in', () => {
+    expect(
+      generateConfirmForClick({
+        chainObserved: false,
+        reading: { ...revealed, receiveCount: 0, gap: RECEIVE_GAP_HARD_MIN },
+      }),
+    ).toBe('hard')
+  })
+
+  it('reveals immediately before chain history when the local gap is under 20', () => {
+    expect(
+      generateConfirmForClick({
+        chainObserved: false,
+        reading: { ...revealed, receiveCount: 0, gap: 4 },
+      }),
+    ).toBe('none')
+    expect(
+      generateConfirmForClick({
+        chainObserved: false,
+        reading: { ...revealed, revealed: false, gap: RECEIVE_GAP_HARD_MIN },
+      }),
+    ).toBe('none')
+  })
+
+  it('keeps the soft confirmation once chain history is in', () => {
+    expect(
+      generateConfirmForClick({
+        chainObserved: true,
+        reading: { ...revealed, receiveCount: 0, gap: 4 },
+      }),
+    ).toBe('soft')
+    expect(
+      generateConfirmForClick({
+        chainObserved: true,
+        reading: { ...revealed, gap: 0 },
+      }),
+    ).toBe('none')
   })
 })
 

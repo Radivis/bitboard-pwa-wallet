@@ -89,6 +89,7 @@ vi.mock('qrcode.react', () => ({
 import { ReceivePage } from '@/pages/wallet/ReceivePage'
 import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 import {
+  HARD_GAP_CONFIRM_TITLE,
   HARD_GAP_GENERATE_LABEL,
   HARD_GAP_OPT_IN_LABEL,
   SOFT_GAP_CONFIRM_TITLE,
@@ -262,6 +263,7 @@ describe('ReceivePage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
     expect(await screen.findByRole('heading', { name: SOFT_GAP_CONFIRM_TITLE })).toBeInTheDocument()
+    expect(screen.getByText(/leaves 2 unused addresses in a row/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: SOFT_GAP_KEEP_LABEL }))
 
     expect(mockGetNewAddress).not.toHaveBeenCalled()
@@ -337,6 +339,99 @@ describe('ReceivePage', () => {
       'Showing saved chain state',
     )
     expect(screen.getByTestId('receive-payment-count')).toHaveTextContent(paymentsToAddressLabel(1))
+  })
+
+  it('asks for the hard opt-in before a public sync when the local gap is already 20', async () => {
+    const user = userEvent.setup()
+    mockGetExternalReceiveGap.mockResolvedValue({
+      revealed: true,
+      index: 20,
+      receiveCount: 0,
+      gap: 20,
+    })
+    renderWithProviders(<ReceivePage />)
+
+    expect(screen.queryByTestId('receive-payment-count')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
+
+    expect(await screen.findByRole('heading', { name: HARD_GAP_CONFIRM_TITLE })).toBeInTheDocument()
+    expect(mockGetNewAddress).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('receive-payment-count')).not.toBeInTheDocument()
+  })
+
+  it('reveals immediately before a public sync when the local gap is under 20', async () => {
+    const user = userEvent.setup()
+    mockGetExternalReceiveGap.mockResolvedValue({
+      revealed: true,
+      index: 4,
+      receiveCount: 0,
+      gap: 4,
+    })
+    mockGetNewAddress.mockResolvedValue('tb1qnext')
+    mockExportChangeset.mockResolvedValue('{}')
+    renderWithProviders(<ReceivePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
+
+    await waitFor(() => {
+      expect(mockGetNewAddress).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('heading', { name: SOFT_GAP_CONFIRM_TITLE })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: HARD_GAP_CONFIRM_TITLE })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('receive-payment-count')).not.toBeInTheDocument()
+  })
+
+  it('stays on the hard warning when a confirm re-read reaches gap 20', async () => {
+    const user = userEvent.setup()
+    syncMetadataState.data = {
+      isStaleOnchain: false,
+      lastSuccessfulEsploraSyncAt: '2026-01-15T10:30:00.000Z',
+    }
+    let gap = 19
+    mockGetExternalReceiveGap.mockImplementation(async () => ({
+      revealed: true,
+      index: gap,
+      receiveCount: 0,
+      gap,
+    }))
+    renderWithProviders(<ReceivePage />)
+    await screen.findByTestId('receive-payment-count')
+
+    await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
+    expect(await screen.findByRole('heading', { name: SOFT_GAP_CONFIRM_TITLE })).toBeInTheDocument()
+    gap = 20
+    await user.click(screen.getByRole('button', { name: SOFT_GAP_GENERATE_LABEL }))
+
+    expect(await screen.findByRole('heading', { name: HARD_GAP_CONFIRM_TITLE })).toBeInTheDocument()
+    expect(mockGetNewAddress).not.toHaveBeenCalled()
+  })
+
+  it('reveals when a confirm re-read finds the gap has cleared', async () => {
+    const user = userEvent.setup()
+    syncMetadataState.data = {
+      isStaleOnchain: false,
+      lastSuccessfulEsploraSyncAt: '2026-01-15T10:30:00.000Z',
+    }
+    let gap = 20
+    mockGetExternalReceiveGap.mockImplementation(async () => ({
+      revealed: true,
+      index: gap,
+      receiveCount: gap === 0 ? 1 : 0,
+      gap,
+    }))
+    mockGetNewAddress.mockResolvedValue('tb1qpaid')
+    mockExportChangeset.mockResolvedValue('{}')
+    renderWithProviders(<ReceivePage />)
+    await screen.findByTestId('receive-payment-count')
+
+    await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
+    await user.click(await screen.findByRole('checkbox', { name: HARD_GAP_OPT_IN_LABEL }))
+    gap = 0
+    await user.click(screen.getByRole('button', { name: HARD_GAP_GENERATE_LABEL }))
+
+    await waitFor(() => {
+      expect(mockGetNewAddress).toHaveBeenCalled()
+    })
   })
 
   it('shows the Labnet payment count without an Esplora sync timestamp', async () => {

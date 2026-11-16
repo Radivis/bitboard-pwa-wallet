@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Almost always visible back button
 - The receive page shows the number of receives for the current address
 - The receive page shows the current gap, if it is 2 or higher
-- Confirmation modal for "Generate New Address" button, if there is a non-trivial gap
+- Confirmation modal for "Generate New Address" when the unused gap is 1–19 after a sync, and a hard opt-in once the gap reaches 20, including before the first sync
 - New Library articles: "Address reuse and deanonymization" and "The gap limit"
 
 ### Changed

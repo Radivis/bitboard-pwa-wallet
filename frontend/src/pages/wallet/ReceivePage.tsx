@@ -43,6 +43,7 @@ import { useOnchainEsploraSyncMetadataQuery } from '@/hooks/useOnchainDashboardQ
 import {
   chainHistoryObserved,
   confirmKindForGap,
+  generateConfirmForClick,
   paymentsToAddressLabel,
   receiveGapSurface,
   type ReceiveGapConfirmKind,
@@ -160,19 +161,15 @@ export function ReceivePage() {
   }, [getNewAddress, setCurrentAddress, activeWalletId])
 
   const handleGenerateClick = useCallback(async () => {
-    if (!chainObserved) {
-      await revealNextAddress()
-      return
-    }
     try {
       const reading = await getExternalReceiveGap()
-      const surface = receiveGapSurface({ chainObserved: true, reading })
-      if (surface.kind === 'hidden' || surface.generateConfirm === 'none') {
+      const generateConfirm = generateConfirmForClick({ chainObserved, reading })
+      if (generateConfirm === 'none') {
         await revealNextAddress()
         return
       }
       setPromptGap(reading.gap)
-      setGapPrompt(surface.generateConfirm)
+      setGapPrompt(generateConfirm)
     } catch {
       toast.error('Failed to check the address gap')
     }
