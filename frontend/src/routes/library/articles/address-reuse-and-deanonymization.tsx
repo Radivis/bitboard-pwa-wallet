@@ -46,7 +46,7 @@ export const article: LibraryArticle = {
             receive screen. They do show up if you paste a transaction id into a public explorer
             such as mempool.space: one output is the payment, and another is the change coming
             back. Copying that change output and handing it out joins the next payment to the spend
-            that created it.
+            that created it. That's exactly what you should not do.
           </li>
         </ul>
         <p>

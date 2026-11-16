@@ -9,7 +9,7 @@ export const article: LibraryArticle = {
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
         <p>
-          A wallet does not download the whole chain to find your coins. It asks an indexer about
+          A wallet does not download the whole chain to find your coins. It asks an indexer like Esplora about
           addresses in order and stops after a run of unused ones. That stop is the{' '}
           <strong>gap limit</strong>, usually 20. An address revealed past it can hold coins that a
           normal restore will not see. The coins are not destroyed.
@@ -69,10 +69,16 @@ export const article: LibraryArticle = {
           </li>
         </ul>
         <p>
-          A dropped or reorged payment can move the latest used address backward. Addresses that
-          looked safe can end up past the limit without you generating anything new. Receive
-          addresses and change addresses are separate chains, each with its own gap. Generating a
-          fresh address for privacy is still the right habit. See{' '}
+          A{' '}
+          <ArticleLink slug="can-bitcoin-transactions-be-dropped">dropped</ArticleLink> payment, or
+          one undone by a{' '}
+          <ArticleLink slug="what-is-a-blockchain-reorganization">
+            blockchain reorganization
+          </ArticleLink>
+          , can move the latest used address backward. Addresses that looked safe can end up past
+          the limit without you generating anything new. Receive addresses and change addresses are
+          separate chains, each with its own gap. Generating a fresh address for privacy is still
+          the right habit. See{' '}
           <ArticleLink slug="address-reuse-and-deanonymization">
             Address reuse and deanonymization
           </ArticleLink>
