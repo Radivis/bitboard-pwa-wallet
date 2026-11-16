@@ -11,6 +11,14 @@ import type {
   TransactionDetails,
 } from './crypto-types';
 
+/** External-chain receive count and trailing unused gap from the loaded wallet. */
+export interface ExternalReceiveGap {
+  revealed: boolean;
+  index: number;
+  receiveCount: number;
+  gap: number;
+}
+
 /** Result of resolveDescriptorWallet: descriptor data and optional new ciphertext(s) to store. */
 export interface ResolveDescriptorWalletResult {
   descriptorWalletData: DescriptorWalletData;
@@ -246,6 +254,8 @@ export interface CryptoService {
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
+  /** Canonical external receive count and trailing unused gap. Does not reveal. */
+  getExternalReceiveGap(): Promise<ExternalReceiveGap>;
   /** Build and sign a lab transaction using BDK add_foreign_utxo. */
   buildAndSignLabTransaction(
     params: BuildAndSignLabTransactionParams,

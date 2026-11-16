@@ -301,6 +301,13 @@ pub fn get_balance() -> Result<JsValue, JsValue> {
     Ok(serde_wasm_bindgen::to_value(&balance)?)
 }
 
+/// External receive count and trailing unused gap for the loaded wallet.
+#[wasm_bindgen]
+pub fn get_external_receive_gap() -> Result<JsValue, JsValue> {
+    let gap = with_wallet(wallet::external_receive_gap)?;
+    Ok(serde_wasm_bindgen::to_value(&gap)?)
+}
+
 /// Height of the newest block the active wallet has synced.
 #[wasm_bindgen]
 pub fn get_local_chain_tip_height() -> Result<u32, JsValue> {
