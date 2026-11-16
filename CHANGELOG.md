@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The receive page shows the number of receives for the current address
 - The receive page shows the current gap, if it is 2 or higher
 - Confirmation modal for "Generate New Address" button, if there is a non-trivial gap
+- New Library articles: "Address reuse and deanonymization" and "The gap limit"
 
 ### Changed
 

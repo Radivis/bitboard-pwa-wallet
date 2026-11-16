@@ -35,6 +35,8 @@ import { BarkReceive } from '@/components/receive/BarkReceive'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { ReceiveGapConfirmModal } from '@/components/receive/ReceiveGapConfirmModal'
+import { ReceivePaymentCountInfomodeContent } from '@/components/receive/infomode/ReceivePaymentCountInfomodeContent'
+import { ReceiveUnusedGapInfomodeContent } from '@/components/receive/infomode/ReceiveUnusedGapInfomodeContent'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
 import { useOnchainEsploraSyncMetadataQuery } from '@/hooks/useOnchainDashboardQueries'
@@ -42,10 +44,6 @@ import {
   chainHistoryObserved,
   confirmKindForGap,
   paymentsToAddressLabel,
-  RECEIVE_PAYMENT_COUNT_INFO_TEXT,
-  RECEIVE_PAYMENT_COUNT_INFO_TITLE,
-  RECEIVE_UNUSED_GAP_INFO_TEXT,
-  RECEIVE_UNUSED_GAP_INFO_TITLE,
   receiveGapSurface,
   type ReceiveGapConfirmKind,
 } from '@/lib/wallet/receive-gap-surface'
@@ -365,8 +363,7 @@ export function ReceivePage() {
               <div className="space-y-2" data-testid="receive-gap-summary">
                 <InfomodeWrapper
                   infoId="receive-payment-count"
-                  infoTitle={RECEIVE_PAYMENT_COUNT_INFO_TITLE}
-                  infoText={RECEIVE_PAYMENT_COUNT_INFO_TEXT}
+                  infoComponent={ReceivePaymentCountInfomodeContent}
                   className="rounded-md"
                 >
                   <p data-testid="receive-payment-count">
@@ -376,8 +373,7 @@ export function ReceivePage() {
                 {gapSurface.gapLabel != null ? (
                   <InfomodeWrapper
                     infoId="receive-unused-gap"
-                    infoTitle={RECEIVE_UNUSED_GAP_INFO_TITLE}
-                    infoText={RECEIVE_UNUSED_GAP_INFO_TEXT}
+                    infoComponent={ReceiveUnusedGapInfomodeContent}
                     className="rounded-md"
                   >
                     <p data-testid="receive-unused-gap">{gapSurface.gapLabel}</p>
