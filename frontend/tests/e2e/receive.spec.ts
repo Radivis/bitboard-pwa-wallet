@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test'
+import {
+  SOFT_GAP_CONFIRM_TITLE,
+  SOFT_GAP_GENERATE_LABEL,
+} from '@/lib/wallet/receive-gap-surface'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
 import { enableSegwitAddressesFeature } from './helpers/segwit-addresses-feature'
@@ -42,8 +46,18 @@ test.describe('Receive Page', () => {
     // wallet work) and oldToMatch would otherwise stay out of sync with what "new" means.
     const addressBeforeNew = (await addressDisplay.textContent())?.trim() ?? ''
     await newAddressButton.click()
-    // getNewAddress is async; poll until the UI shows a different address (fixed
-    // sleeps are flaky under load).
-    await expect(addressDisplay).not.toHaveText(addressBeforeNew, { timeout: 25_000 })
+    // After a sync, an unpaid address asks for confirmation before the next reveal.
+    // Before that sync the same click reveals immediately.
+    const gapConfirm = page
+      .getByRole('dialog', { name: SOFT_GAP_CONFIRM_TITLE })
+      .getByRole('button', { name: SOFT_GAP_GENERATE_LABEL, exact: true })
+    let confirmedGapPrompt = false
+    await expect.poll(async () => {
+      if (!confirmedGapPrompt && (await gapConfirm.isVisible())) {
+        confirmedGapPrompt = true
+        await gapConfirm.click()
+      }
+      return (await addressDisplay.textContent())?.trim() ?? ''
+    }, { timeout: 25_000 }).not.toBe(addressBeforeNew)
   })
 })

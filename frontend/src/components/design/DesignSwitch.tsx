@@ -183,7 +183,7 @@ function offsetWithin(element: HTMLElement, ancestor: HTMLElement): { left: numb
   while (current && current !== ancestor) {
     left += current.offsetLeft
     top += current.offsetTop
-    const parent = current.offsetParent
+    const parent: Element | null = current.offsetParent
     if (!(parent instanceof HTMLElement) || !ancestor.contains(parent)) {
       break
     }
