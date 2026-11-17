@@ -408,6 +408,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitboard-wasm-sleep"
+version = "0.4.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "bitcoin"
 version = "0.32.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -808,6 +817,7 @@ dependencies = [
 name = "esplora-client"
 version = "0.12.3"
 dependencies = [
+ "bitboard-wasm-sleep",
  "bitcoin",
  "hex-conservative 0.2.3",
  "log",

@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { ArkadeAddressInfomodeContent } from '@/components/arkade/infomode/ArkadeAddressInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -12,6 +11,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
+import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   useArkadeAddressQuery,
@@ -70,19 +70,7 @@ export function ArkadeReceive() {
             {addressLoading ? (
               <LoadingSpinner text="Loading address…" />
             ) : addressQuery.isError ? null : address ? (
-              <div className="rounded-lg bg-white p-4">
-                <QRCodeSVG
-                  value={address}
-                  size={256}
-                  level="M"
-                  imageSettings={{
-                    src: '/bitboard-icon.png',
-                    height: 48,
-                    width: 48,
-                    excavate: true,
-                  }}
-                />
-              </div>
+              <ReceiveQrCode value={address} rail="arkade" />
             ) : null}
           </div>
         </DesignCardContent>

@@ -50,10 +50,6 @@ features = ["time"]
 version = "0.12.0"
 default-features = false
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.gloo-timers]
-version = "0.3.0"
-features = ["futures"]
-
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3"
 features = ["console"]

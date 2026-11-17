@@ -27,9 +27,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-mod utils;
-
 pub struct Wallet<DB> {
     // Retained so `new` / `new_from_xpriv` keep the same inputs. BDK holds the signing key.
     #[allow(dead_code)]
@@ -37,10 +34,7 @@ pub struct Wallet<DB> {
     #[allow(dead_code)]
     secp: Secp256k1<All>,
     inner: Arc<RwLock<BdkWallet>>,
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     client: esplora_client::AsyncClient,
-    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-    client: esplora_client::AsyncClient<WebSleeper>,
     #[allow(dead_code)]
     db: DB,
     completed_full_scan: AtomicBool,
@@ -98,15 +92,9 @@ impl<DB> Wallet<DB> {
                 .unwrap_or_else(|| wallet.take_staged().unwrap_or_default())
         };
 
-        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let client = esplora_client::Builder::new(esplora_url)
             .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
-            .build_async_with_sleeper()?;
-
-        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let client = esplora_client::Builder::new(esplora_url)
-            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
-            .build_async_with_sleeper::<WebSleeper>()?;
+            .build_async()?;
 
         Ok(Self {
             kp,
@@ -396,19 +384,6 @@ where
             total_selected,
             change_amount,
         })
-    }
-}
-
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-#[derive(Clone)]
-struct WebSleeper;
-
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-impl esplora_client::Sleeper for WebSleeper {
-    type Sleep = utils::SendWrapper<gloo_timers::future::TimeoutFuture>;
-
-    fn sleep(dur: std::time::Duration) -> Self::Sleep {
-        utils::SendWrapper(gloo_timers::future::sleep(dur))
     }
 }
 

@@ -187,6 +187,7 @@ describe('ReceivePage', () => {
     expect(screen.getByText('tb1qtest123address456')).toBeInTheDocument()
     const qr = screen.getByTestId('qr-code')
     expect(qr).toHaveAttribute('data-value', 'bitcoin:tb1qtest123address456')
+    expect(screen.getByTestId('receive-qr-rail-icon').querySelector('.lucide-bitcoin')).toBeTruthy()
   })
 
   it('address type badge shows correct type when SegWit addresses feature is on', () => {

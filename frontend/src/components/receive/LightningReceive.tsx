@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
 import { Zap, Copy, Plus, Loader2, MessageSquareText } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
@@ -13,6 +12,7 @@ import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useReceiveStore, isInvoiceExpired } from '@/stores/receiveStore'
 import type { LightningInvoice } from '@/stores/lightningStore'
@@ -111,19 +111,7 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
       </DesignCardHeader>
       <DesignCardContent className="space-y-4">
         <div className="flex flex-col items-center gap-4">
-          <div className="rounded-lg bg-white p-4">
-            <QRCodeSVG
-              value={invoice.bolt11}
-              size={256}
-              level="M"
-              imageSettings={{
-                src: '/bitboard-icon.png',
-                height: 48,
-                width: 48,
-                excavate: true,
-              }}
-            />
-          </div>
+          <ReceiveQrCode value={invoice.bolt11} rail="lightning" />
           <p className="design-type-regular text-center text-muted-foreground">
             {invoice.amountSats == null ? (
               <span className="text-muted-foreground">

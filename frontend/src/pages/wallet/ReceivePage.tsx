@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -29,6 +28,7 @@ import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
 import { exportChangesetForPersistence } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
+import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ArkadeReceive } from '@/components/receive/ArkadeReceive'
 import { BarkReceive } from '@/components/receive/BarkReceive'
@@ -313,19 +313,7 @@ export function ReceivePage() {
           <DesignCardContent>
             <div className="flex flex-col items-center gap-4">
               {currentAddress ? (
-                <div className="rounded-lg bg-white p-4">
-                  <QRCodeSVG
-                    value={`bitcoin:${currentAddress}`}
-                    size={256}
-                    level="M"
-                    imageSettings={{
-                      src: '/bitboard-icon.png',
-                      height: 48,
-                      width: 48,
-                      excavate: true,
-                    }}
-                  />
-                </div>
+                <ReceiveQrCode value={`bitcoin:${currentAddress}`} rail="bitcoin" />
               ) : (
                 <LoadingSpinner text="Generating address..." />
               )}

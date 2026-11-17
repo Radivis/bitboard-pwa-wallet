@@ -1,5 +1,4 @@
 import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignButton } from '@/components/design/DesignButton'
@@ -10,6 +9,7 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import {
   useBarkReceiveAddressQuery,
@@ -55,19 +55,7 @@ export function BarkReceive() {
             {addressLoading ? (
               <LoadingSpinner text="Loading address…" />
             ) : showAddressError ? null : address ? (
-              <div className="rounded-lg bg-white p-4">
-                <QRCodeSVG
-                  value={address}
-                  size={256}
-                  level="M"
-                  imageSettings={{
-                    src: '/bitboard-icon.png',
-                    height: 48,
-                    width: 48,
-                    excavate: true,
-                  }}
-                />
-              </div>
+              <ReceiveQrCode value={address} rail="bark" />
             ) : null}
           </div>
         </DesignCardContent>

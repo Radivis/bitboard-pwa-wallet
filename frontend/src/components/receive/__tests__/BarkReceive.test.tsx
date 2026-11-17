@@ -65,6 +65,9 @@ describe('BarkReceive', () => {
     const first = renderWithProviders(<BarkReceive />)
     expect(screen.getByTestId('bark-receive-address')).toHaveTextContent('tark1qqstable')
     expect(screen.getByTestId('qr-code')).toHaveAttribute('data-value', 'tark1qqstable')
+    expect(screen.getByTestId('receive-qr-rail-icon').querySelector('span')?.style.maskImage).toContain(
+      'bark-logomark.svg',
+    )
     expect(barkReceiveTestState.mutate).not.toHaveBeenCalled()
 
     first.unmount()

@@ -706,14 +706,26 @@ pub trait Sleeper: 'static {
 }
 
 /// The default `Sleeper` implementation using the underlying async runtime.
+///
+/// On `wasm32-unknown-unknown` this waits with `setTimeout`. `tokio::time::sleep`
+/// calls `std::time::Instant::now()`, which panics there and aborts the worker.
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultSleeper;
 
-#[cfg(any(test, feature = "tokio"))]
+#[cfg(all(any(test, feature = "tokio"), not(target_arch = "wasm32")))]
 impl Sleeper for DefaultSleeper {
     type Sleep = tokio::time::Sleep;
 
     fn sleep(dur: std::time::Duration) -> Self::Sleep {
         tokio::time::sleep(dur)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Sleeper for DefaultSleeper {
+    type Sleep = bitboard_wasm_sleep::WasmSleep;
+
+    fn sleep(dur: std::time::Duration) -> Self::Sleep {
+        bitboard_wasm_sleep::sleep_for(dur)
     }
 }

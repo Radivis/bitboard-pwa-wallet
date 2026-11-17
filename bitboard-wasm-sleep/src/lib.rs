@@ -1,6 +1,8 @@
-//! WASM-only `Future` backed by browser `setTimeout`.
+//! The one browser `setTimeout` future.
 //!
-//! Used by Esplora async clients in browser builds. Native host tests do not execute this path.
+//! `std::time::Instant::now()` panics on `wasm32-unknown-unknown`. Esplora's
+//! default sleeper and other browser waits use this future instead of
+//! `tokio::time::sleep`.
 
 use std::future::Future;
 use std::pin::Pin;

@@ -38,15 +38,13 @@ pub mod lab_psbt;
 pub mod mnemonic;
 pub mod p2a_cpfp;
 pub mod sync;
+#[cfg(test)]
+mod tests;
 pub mod transaction;
 pub mod types;
 pub mod validation;
 pub mod wallet;
 pub mod wallet_session;
-pub mod wasm_sleep;
-
-#[cfg(test)]
-mod tests;
 
 #[wasm_bindgen(start)]
 pub fn init() {

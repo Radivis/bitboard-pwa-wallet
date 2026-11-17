@@ -68,11 +68,7 @@ fn now_ms() -> u64 {
     }
 }
 
-/// Esplora async client. On WASM the sleeper yields to the browser event loop between retries.
-#[cfg(target_arch = "wasm32")]
-type EsploraAsyncClient = esplora_client::AsyncClient<crate::wasm_sleep::WasmSleeper>;
-/// Esplora async client on native targets.
-#[cfg(not(target_arch = "wasm32"))]
+/// Esplora async client. On WASM the default sleeper yields to the browser event loop.
 type EsploraAsyncClient = esplora_client::AsyncClient;
 
 /// One address's UTXOs, reused by balance and history so session start does not list the same
@@ -100,23 +96,11 @@ impl EsploraBlockchain {
             return Err(ArkWasmError::EmptyEsploraUrl);
         }
 
-        #[cfg(target_arch = "wasm32")]
-        let client = {
-            use crate::wasm_sleep::WasmSleeper;
-            esplora_client::Builder::new(esplora_url)
-                .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
-                .header("Cache-Control", "no-cache")
-                .header("Pragma", "no-cache")
-                .build_async_with_sleeper::<WasmSleeper>()
-                .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?
-        };
-
-        #[cfg(not(target_arch = "wasm32"))]
         let client = esplora_client::Builder::new(esplora_url)
             .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
             .header("Cache-Control", "no-cache")
             .header("Pragma", "no-cache")
-            .build_async_with_sleeper()
+            .build_async()
             .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
 
         Ok(Self {

@@ -129,6 +129,9 @@ version = "1"
 features = ["time"]
 optional = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bitboard-wasm-sleep = { path = "../../bitboard-wasm-sleep" }
+
 [dev-dependencies.electrsd]
 version = "0.33.0"
 features = [

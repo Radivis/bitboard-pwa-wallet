@@ -1,11 +1,9 @@
-import { Bitcoin, Zap } from 'lucide-react'
-import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import { BarkIcon } from '@/components/icons/BarkIcon'
 import { ReceiveModeArkadeInfomodeContent } from '@/components/arkade/infomode/ReceiveModeArkadeInfomodeContent'
 import { DesignSwitch, type DesignSwitchOption } from '@/components/design/DesignSwitch'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { ReceiveRailIcon, type ReceiveRail } from '@/components/receive/ReceiveRailIcon'
 
-export type ReceiveMode = 'bitcoin' | 'lightning' | 'arkade' | 'bark'
+export type ReceiveMode = ReceiveRail
 
 interface ReceiveModeToggleProps {
   mode: ReceiveMode
@@ -52,7 +50,7 @@ function receiveRailOptions({
       value: 'bitcoin',
       label: 'Bitcoin',
       showLabel: true,
-      icon: <Bitcoin aria-hidden />,
+      icon: <ReceiveRailIcon rail="bitcoin" className="size-6" />,
     },
   ]
   if (showLightning) {
@@ -60,7 +58,7 @@ function receiveRailOptions({
       value: 'lightning',
       label: 'Lightning',
       showLabel: true,
-      icon: <Zap aria-hidden />,
+      icon: <ReceiveRailIcon rail="lightning" className="size-6" />,
     })
   }
   if (showArkade) {
@@ -68,7 +66,7 @@ function receiveRailOptions({
       value: 'arkade',
       label: 'Arkade',
       showLabel: true,
-      icon: <ArkadeIcon className="size-6" />,
+      icon: <ReceiveRailIcon rail="arkade" className="size-6" />,
     })
   }
   if (showBark) {
@@ -76,7 +74,7 @@ function receiveRailOptions({
       value: 'bark',
       label: 'Bark',
       showLabel: true,
-      icon: <BarkIcon className="size-6" />,
+      icon: <ReceiveRailIcon rail="bark" className="size-6" />,
     })
   }
   return options

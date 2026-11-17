@@ -60,6 +60,9 @@ describe('ArkadeReceive', () => {
   it('shows stable address across two peek calls via address query data', () => {
     renderWithProviders(<ArkadeReceive />)
     expect(screen.getAllByText('tark1qqreceive').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByTestId('receive-qr-rail-icon')[0]?.querySelector('span')?.style.maskImage,
+    ).toContain('arkade-mark.svg')
     renderWithProviders(<ArkadeReceive />)
     expect(screen.getAllByText('tark1qqreceive').length).toBeGreaterThan(0)
     expect(addressQueryMock).toHaveBeenCalled()
