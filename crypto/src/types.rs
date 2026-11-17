@@ -89,6 +89,19 @@ pub struct DescriptorPair {
     pub internal_descriptor: String,
 }
 
+/// External-chain receive count and trailing unused gap for the loaded wallet.
+///
+/// `gap` is the number of revealed external addresses after the highest index
+/// with a canonical payment. With no such payment it is `index + 1`.
+/// `revealed` is false until the external chain has a derivation index.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExternalReceiveGap {
+    pub revealed: bool,
+    pub index: u32,
+    pub receive_count: u32,
+    pub gap: u32,
+}
+
 /// Wallet balance broken down by confirmation status.
 /// All amounts are in satoshis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

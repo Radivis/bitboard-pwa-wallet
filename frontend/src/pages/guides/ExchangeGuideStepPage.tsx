@@ -11,8 +11,8 @@ import { EXCHANGE_GUIDE_STEPS, exchangeGuideStepContent } from '@/pages/guides/e
 import {
   GUIDE_STEP_NAV_TOGGLE_SPACER_CLASS_NAME,
   GuideStepNavChrome,
-  useGuideStepNavChrome,
 } from '@/pages/guides/GuideStepNavChrome'
+import { useGuideStepNavChrome } from '@/pages/guides/useGuideStepNavChrome'
 
 export function ExchangeGuideStepPage({ step }: { step: number }) {
   const content = exchangeGuideStepContent(step)

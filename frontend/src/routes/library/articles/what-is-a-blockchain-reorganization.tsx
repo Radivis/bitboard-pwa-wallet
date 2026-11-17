@@ -9,10 +9,10 @@ export const article: LibraryArticle = {
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
         <p>
-          A reorg happens when the network switches to a different chain of blocks with more
-          proof-of-work. It is like everyone agreeing to follow a different path on a trail when they
-          realize it leads somewhere better. Transactions in the abandoned blocks may need
-          re-confirmation.
+          A reorg happens when nodes switch to a different branch because it has more cumulative
+          proof-of-work. Transactions confirmed only on the abandoned branch lose those
+          confirmations. The ones that are still valid return to the mempool and wait to be mined
+          again.
         </p>
       </ArticleSection>
 
@@ -28,6 +28,17 @@ export const article: LibraryArticle = {
           Reorgs are normal under decentralized mining: two miners can find valid blocks at nearly
           the same time, and the network temporarily disagrees until more work accumulates on one
           side. Shallow reorgs (one or a few blocks) occur occasionally.
+        </p>
+        <p>
+          Transactions that were confirmed only in the blocks being abandoned are rolled back.
+          If they are still valid, nodes put them back in the mempool. A transaction that spends
+          coins the winning branch already spent is removed instead. Either way, a confirmation
+          on a short fork can disappear. What can happen to a transaction once it is only waiting
+          is covered in{' '}
+          <ArticleLink slug="can-bitcoin-transactions-be-dropped">
+            Can Bitcoin transactions be dropped?
+          </ArticleLink>
+          .
         </p>
       </ArticleSection>
 

@@ -30,7 +30,9 @@ export const article: LibraryArticle = {
           chain data plus a few write endpoints (mainly broadcasting already-signed transactions).
           When Bitboard syncs, it asks Esplora about the script pubkeys (addresses) your wallet has
           already revealed — one HTTP request per address — and merges the answers into your local{' '}
-          <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> state. When you send on-chain,
+          <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> state. A fresh restore does not
+          ask about every possible address. It stops after a run of unused ones — see{' '}
+          <ArticleLink slug="the-gap-limit">The gap limit</ArticleLink>. When you send on-chain,
           the signed transaction is posted to Esplora’s <code>/tx</code> endpoint so miners can pick
           it up.
         </p>

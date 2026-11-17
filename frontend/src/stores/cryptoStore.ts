@@ -32,6 +32,7 @@ import type {
   DraftLabPsbtTransactionParams,
   DraftLabPsbtTransactionResult,
   EncryptedBlobForDb,
+  ExternalReceiveGap,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
   OpenWalletSessionParams,
@@ -73,6 +74,7 @@ interface CryptoState {
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
+  getExternalReceiveGap: () => Promise<ExternalReceiveGap>;
   buildAndSignLabTransaction: (
     params: BuildAndSignLabTransactionParams,
   ) => Promise<BuildAndSignLabTransactionResult>;
@@ -223,6 +225,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
+
+    getExternalReceiveGap: () =>
+      withErrorHandling((worker) => worker.getExternalReceiveGap()),
 
     buildAndSignLabTransaction: (params) =>
       withErrorHandling((worker) => worker.buildAndSignLabTransaction(params)),

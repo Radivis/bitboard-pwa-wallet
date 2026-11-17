@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -32,8 +34,20 @@ import { ArkadeReceive } from '@/components/receive/ArkadeReceive'
 import { BarkReceive } from '@/components/receive/BarkReceive'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import { ReceiveGapConfirmModal } from '@/components/receive/ReceiveGapConfirmModal'
+import { ReceivePaymentCountInfomodeContent } from '@/components/receive/infomode/ReceivePaymentCountInfomodeContent'
+import { ReceiveUnusedGapInfomodeContent } from '@/components/receive/infomode/ReceiveUnusedGapInfomodeContent'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
+import { useOnchainEsploraSyncMetadataQuery } from '@/hooks/useOnchainDashboardQueries'
+import {
+  chainHistoryObserved,
+  confirmKindForGap,
+  generateConfirmKindForClick,
+  paymentsToAddressLabel,
+  receiveGapSurface,
+  type ReceiveGapConfirmKind,
+} from '@/lib/wallet/receive-gap-surface'
 import { walletReceivePageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
 
 export function ReceivePage() {
@@ -44,11 +58,16 @@ export function ReceivePage() {
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
+  const lastSyncTime = useWalletStore((walletState) => walletState.lastSyncTime)
   const getNewAddress = useCryptoStore((cryptoState) => cryptoState.getNewAddress)
+  const getExternalReceiveGap = useCryptoStore((cryptoState) => cryptoState.getExternalReceiveGap)
+  const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
+  const [gapPromptKind, setGapPromptKind] = useState<ReceiveGapConfirmKind | null>(null)
+  const [promptGap, setPromptGap] = useState(0)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
   const search = useSearch({ from: '/wallet/receive' })
@@ -92,7 +111,37 @@ export function ReceivePage() {
     }
   }, [currentAddress, walletStatus, getNewAddress, setCurrentAddress])
 
-  const handleNewAddress = useCallback(async () => {
+  const showingBitcoinReceive =
+    !(showLightningToggle && receiveMode === 'lightning') &&
+    !(showArkadeToggle && receiveMode === 'arkade') &&
+    !(showBarkToggle && receiveMode === 'bark')
+  const chainObserved = chainHistoryObserved({
+    networkMode,
+    lastSyncTime,
+    lastSuccessfulEsploraSyncAt: onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt,
+  })
+  const receiveGapQuery = useQuery({
+    queryKey: [
+      'receive-external-gap',
+      activeWalletId,
+      currentAddress,
+      networkMode,
+      lastSyncTime?.toISOString() ?? null,
+    ],
+    queryFn: () => getExternalReceiveGap(),
+    enabled:
+      showingBitcoinReceive &&
+      chainObserved &&
+      currentAddress != null &&
+      activeWalletId != null &&
+      walletIsUnlockedOrSyncing(walletStatus),
+  })
+  const gapSurface = receiveGapSurface({
+    chainObserved,
+    reading: receiveGapQuery.data ?? null,
+  })
+
+  const revealNextAddress = useCallback(async () => {
     try {
       const address = await getNewAddress()
       setCurrentAddress(address)
@@ -110,6 +159,42 @@ export function ReceivePage() {
       toast.error('Failed to generate new address')
     }
   }, [getNewAddress, setCurrentAddress, activeWalletId])
+
+  const handleGenerateClick = useCallback(async () => {
+    try {
+      const reading = await getExternalReceiveGap()
+      const generateConfirmKind = generateConfirmKindForClick({ chainObserved, reading })
+      if (generateConfirmKind === 'none') {
+        await revealNextAddress()
+        return
+      }
+      setPromptGap(reading.gap)
+      setGapPromptKind(generateConfirmKind)
+    } catch {
+      toast.error('Failed to check the address gap')
+    }
+  }, [chainObserved, getExternalReceiveGap, revealNextAddress])
+
+  const handleGapConfirm = useCallback(async () => {
+    try {
+      const reading = await getExternalReceiveGap()
+      const nextConfirmKind = reading.revealed ? confirmKindForGap(reading.gap) : 'none'
+      if (nextConfirmKind === 'none') {
+        setGapPromptKind(null)
+        await revealNextAddress()
+        return
+      }
+      if (nextConfirmKind !== gapPromptKind) {
+        setPromptGap(reading.gap)
+        setGapPromptKind(nextConfirmKind)
+        return
+      }
+      setGapPromptKind(null)
+      await revealNextAddress()
+    } catch {
+      toast.error('Failed to check the address gap')
+    }
+  }, [gapPromptKind, getExternalReceiveGap, revealNextAddress])
 
   const handleCopy = useCallback(async () => {
     if (!currentAddress) return
@@ -189,6 +274,15 @@ export function ReceivePage() {
   return (
     <>
       {mainnetDemoModal}
+      <ReceiveGapConfirmModal
+        open={gapPromptKind === 'soft' || gapPromptKind === 'hard'}
+        kind={gapPromptKind === 'hard' ? 'hard' : 'soft'}
+        gap={promptGap}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setGapPromptKind(null)
+        }}
+        onConfirm={handleGapConfirm}
+      />
       <div className="space-y-6">
       <PageHeader title={walletReceivePageTitle(networkMode)} icon={ArrowDownLeft} />
 
@@ -262,12 +356,58 @@ export function ReceivePage() {
                 icon={<Copy />}
               />
             </div>
+            {gapSurface.kind === 'visible' ? (
+              <div className="space-y-2" data-testid="receive-gap-summary">
+                <InfomodeWrapper
+                  infoId="receive-payment-count"
+                  infoComponent={ReceivePaymentCountInfomodeContent}
+                  className="rounded-md"
+                >
+                  <p data-testid="receive-payment-count">
+                    {paymentsToAddressLabel(gapSurface.receiveCount)}
+                  </p>
+                </InfomodeWrapper>
+                {gapSurface.gapLabel != null ? (
+                  <InfomodeWrapper
+                    infoId="receive-unused-gap"
+                    infoComponent={ReceiveUnusedGapInfomodeContent}
+                    className="rounded-md"
+                  >
+                    <p data-testid="receive-unused-gap">{gapSurface.gapLabel}</p>
+                  </InfomodeWrapper>
+                ) : null}
+                {networkMode !== 'lab' && onchainEsploraSyncQuery.data?.isStaleOnchain ? (
+                  <DesignBanner
+                    role="status"
+                    status="warning"
+                    data-testid="receive-gap-stale-banner"
+                    title="Showing saved chain state"
+                    description={
+                      <>
+                        Showing on-chain data from your wallet&apos;s saved chain state. Esplora has
+                        not been verified this session.
+                        {onchainEsploraSyncQuery.data.lastSuccessfulEsploraSyncAt != null ? (
+                          <>
+                            {' '}
+                            Last verified with Esplora:{' '}
+                            {new Date(
+                              onchainEsploraSyncQuery.data.lastSuccessfulEsploraSyncAt,
+                            ).toLocaleString()}
+                            .
+                          </>
+                        ) : null}
+                      </>
+                    }
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <InfomodeWrapper
               infoId="receive-generate-new-address-button"
               infoTitle="Generate new address"
               infoText="When you tap this, Bitboard advances an internal index and derives the next unused address from your wallet’s master key along the standard path for your address type (BIP86 for Taproot, BIP84 for SegWit). Nothing is “random” in the sense of losing it later: the new address is the next slot in a deterministic list, so your seed phrase can always recreate every address you have ever generated, in order. Older addresses you already shared still receive funds; generating a new one is mainly for privacy and for keeping track of separate payments."
             >
-              <DesignButton className="w-full" onClick={handleNewAddress} icon={<RefreshCw />}>
+              <DesignButton className="w-full" onClick={handleGenerateClick} icon={<RefreshCw />}>
                 Generate New Address
               </DesignButton>
             </InfomodeWrapper>

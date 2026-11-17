@@ -1,5 +1,6 @@
 import type {
   BuildAndSignLabTransactionResult,
+  ExternalReceiveGap,
   DraftLabPsbtTransactionResult,
   PrepareOnchainSendResult,
   ReviewInputUtxo,
@@ -14,6 +15,7 @@ import type {
 } from './crypto-types';
 import type {
   WireBalanceInfo,
+  WireExternalReceiveGap,
   WireCreateWalletResult,
   WireDescriptorPair,
   WireDraftPsbtResult,
@@ -37,6 +39,17 @@ export function mapWireDescriptorPairToDomain(wire: WireDescriptorPair): Descrip
   return {
     externalDescriptor: wire.external_descriptor,
     internalDescriptor: wire.internal_descriptor,
+  };
+}
+
+export function mapWireExternalReceiveGapToDomain(
+  wire: WireExternalReceiveGap,
+): ExternalReceiveGap {
+  return {
+    revealed: wire.revealed,
+    index: wire.index,
+    receiveCount: wire.receive_count,
+    gap: wire.gap,
   };
 }
 

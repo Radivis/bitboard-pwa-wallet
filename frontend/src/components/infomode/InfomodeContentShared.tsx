@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components -- shared infomode layout constant and presentational components */
 import type { ReactNode } from 'react'
 
 /** Display contents so the heading and body join the popup grid. */
