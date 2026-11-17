@@ -23,6 +23,7 @@ vi.mock('@getalby/sdk', () => {
 import { MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/wallet/bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '../lightning-input-limits'
 import {
+  AMOUNTLESS_INVOICE_UNSUPPORTED_BY_WALLET_MESSAGE,
   createBackendService,
   fetchNwcChainTipBlockHeight,
   isValidNwcConnectionString,
@@ -154,6 +155,94 @@ describe('NWC backend service', () => {
       expect(mockExecuteNip47Request).toHaveBeenCalledWith(
         'make_invoice',
         { expiry: 3600 },
+        expect.any(Function),
+      )
+    })
+
+    it('retries amountless invoice with explicit 0 msats when the wallet rejects a missing amount', async () => {
+      mockExecuteNip47Request
+        .mockRejectedValueOnce(new Error('the amount must be at least 1 satoshi'))
+        .mockResolvedValueOnce({
+          invoice: 'lntb1amountlessretry',
+          payment_hash: 'hash_retry',
+          type: 'incoming',
+          state: 'pending',
+          description: 'tips',
+          description_hash: '',
+          preimage: '',
+          amount: 0,
+          fees_paid: 0,
+          settled_at: 0,
+          created_at: 1700000000,
+          expires_at: 1700003600,
+        })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.createInvoice({
+        memo: 'tips',
+        expiry: 7200,
+      })
+
+      expect(mockMakeInvoice).not.toHaveBeenCalled()
+      expect(mockExecuteNip47Request).toHaveBeenNthCalledWith(
+        1,
+        'make_invoice',
+        { description: 'tips', expiry: 7200 },
+        expect.any(Function),
+      )
+      expect(mockExecuteNip47Request).toHaveBeenNthCalledWith(
+        2,
+        'make_invoice',
+        { amount: 0, description: 'tips', expiry: 7200 },
+        expect.any(Function),
+      )
+      expect(result).toEqual({
+        bolt11: 'lntb1amountlessretry',
+        paymentHash: 'hash_retry',
+      })
+    })
+
+    it('reports when the wallet rejects both a missing amount and an explicit zero', async () => {
+      mockExecuteNip47Request.mockRejectedValue(
+        new Error('the amount must be at least 1 satoshi'),
+      )
+
+      const service = createBackendService(TEST_CONFIG)
+      await expect(
+        service.createInvoice({ memo: '', expiry: 3600 }),
+      ).rejects.toThrow(AMOUNTLESS_INVOICE_UNSUPPORTED_BY_WALLET_MESSAGE)
+
+      expect(mockExecuteNip47Request).toHaveBeenNthCalledWith(
+        2,
+        'make_invoice',
+        { amount: 0, expiry: 3600 },
+        expect.any(Function),
+      )
+    })
+
+    it('treats a zero sat amount as amountless', async () => {
+      mockExecuteNip47Request.mockResolvedValue({
+        invoice: 'lntb1amountlesszero',
+        payment_hash: 'hash_zero',
+        type: 'incoming',
+        state: 'pending',
+        description: '',
+        description_hash: '',
+        preimage: '',
+        amount: 0,
+        fees_paid: 0,
+        settled_at: 0,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      await service.createInvoice({ amountSats: 0, memo: 'zero', expiry: 3600 })
+
+      expect(mockMakeInvoice).not.toHaveBeenCalled()
+      expect(mockExecuteNip47Request).toHaveBeenCalledWith(
+        'make_invoice',
+        { description: 'zero', expiry: 3600 },
         expect.any(Function),
       )
     })
