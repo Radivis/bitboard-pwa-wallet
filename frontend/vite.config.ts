@@ -299,6 +299,19 @@ export default defineConfig({
         ),
       },
       ...arkadeSdkVendorResolveAliases(),
+      // jsdom has no Worker. Wallet and lab migrations open `kysely-wasqlite-worker`
+      // on the first query, which throws `Worker is not defined` in Vitest.
+      ...(process.env.VITEST
+        ? [
+            {
+              find: 'kysely-wasqlite-worker',
+              replacement: path.resolve(
+                projectRoot,
+                './src/db/vitest-wasqlite-worker-dialect.ts',
+              ),
+            },
+          ]
+        : []),
     ],
   },
   server: {
