@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react'
 
-import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { designNavBarSurfaceClassName } from '@/components/design/design-drawer-chrome'
 import { DesignNavToggle } from '@/components/design/DesignNavToggle'
 import { cn } from '@/lib/shared/utils'
@@ -19,12 +18,6 @@ const GUIDE_STEP_NAV_TOGGLE_HEIGHT = '1.25rem'
 export const GUIDE_STEP_NAV_TOGGLE_SPACER_CLASS_NAME = 'h-5 w-[46px] shrink-0'
 
 export const GUIDE_STEP_NAV_ID = 'guide-step-nav'
-
-/** Clears the NavStepper footer while it is expanded. */
-export const GUIDE_STEP_MAIN_PADDING_WITH_NAV_CLASS = 'pb-24'
-
-/** Clears the nav toggle once the step footer has slid away. */
-export const GUIDE_STEP_MAIN_PADDING_WITH_TOGGLE_CLASS = 'pb-12'
 
 function useGuideStepNavHeight(
   navRef: RefObject<HTMLElement | null>,
@@ -45,21 +38,6 @@ function useGuideStepNavHeight(
     observer.observe(nav)
     return () => observer.disconnect()
   }, [navRef, chromeRef])
-}
-
-export function useGuideStepNavChrome() {
-  const [hidden, setHidden] = useState(false)
-  const navRef = useRef<HTMLElement>(null)
-  useBottomNavSwipe(navRef, setHidden)
-
-  return {
-    hidden,
-    navRef,
-    toggleHidden: () => setHidden((navHidden) => !navHidden),
-    mainPaddingClassName: hidden
-      ? GUIDE_STEP_MAIN_PADDING_WITH_TOGGLE_CLASS
-      : GUIDE_STEP_MAIN_PADDING_WITH_NAV_CLASS,
-  }
 }
 
 export function GuideStepNavChrome({

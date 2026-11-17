@@ -8,6 +8,7 @@ This gateway:
 - **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed**; `{ "confirmed": false }` when bitcoind has it in the mempool (does not proxy a stale Fulcrum confirmation). Proxy only when bitcoind does not have the tx.
 - **`GET /api/tx/:txid`** — when bitcoind has the tx, `status` is overwritten from that view, including `confirmed: false` after a reorg. A mined tx gets `block_height` so Bark can leave `AwaitingConfirmation`. Virtual-tree stubs bitcoind lacks stay proxied.
 - **`GET /api/blocks/tip/height`** — bitcoind `getblockcount`, so a reorg changes the height the wallet uses to drop its confirmation cache
+- **`GET /api/address/:address/utxo`** — bitcoind `scantxoutset` plus mempool outputs. Fulcrum's address index can stay empty for longer than arkd's ~30s cooperative boarding window after `faucet --confirm`
 - **`GET /api/tx/:txid/outspend/:vout`** — bitcoind mempool spend, or a scan from the parent block when the child is already confirmed. Electrum returns 404, which leaves a Bark exit in `AwaitingConfirmation`
 - **`POST /api/txs/package`** — bitcoind `submitpackage` (JSON array of raw tx hex). mempool electrum returns a generic RPC error, which leaves Bark board funding unbroadcast.
 - **`POST /api/tx`** — bitcoind `sendrawtransaction` (raw tx hex, response is the txid). mempool electrum hides the Core error, which leaves Bark offboard and exit broadcasts unsent.
