@@ -13,9 +13,10 @@ export function BarkReceivePaymentCountInfomodeContent() {
     <div className={INFOMODE_CONTENT_CLASS}>
       <InfomodeHeading>Payments to this address</InfomodeHeading>
       <InfomodeParagraph>
-        This count is the number of incoming payments on this Bark address. A payment still counts
-        after it is spent. Change from your own send, and a renewal of a coin already counted, are
-        not extra payments. A count of 0 means nobody has paid this address.
+        This count is the number of times this Bark address received a coin. A payment still
+        counts after it is spent. Change from your own send counts too, because that reuse is
+        what a unilateral exit would publish. A renewal of a coin already counted is not an extra
+        receive. A count of 0 means this address has not received a coin.
       </InfomodeParagraph>
       <InfomodeParagraph>
         An unfinished board does not count. The VTXO a finished board settles into counts once.

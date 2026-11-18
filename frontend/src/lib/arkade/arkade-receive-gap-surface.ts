@@ -58,7 +58,7 @@ export function arkadeUnusedGapLabel(gap: number): string {
 
 export function arkadeSoftGapConfirmBody(gap: number): string {
   if (gap <= 0) {
-    return 'This Arkade address has not received a payment. A boarding deposit uses this key, and change from a send can land here, but neither is an incoming payment. You can keep sharing this address.'
+    return 'This Arkade address has not received a payment. An unspent boarding deposit uses this key without adding to the count. You can keep sharing this address.'
   }
   const unusedAfterGenerate = gap + 1
   const unusedAddresses =

@@ -25,10 +25,10 @@ impl ArkadeSession {
 
     /// Incoming-payment count, index gap, and batch gap for the current receive cursor.
     ///
-    /// The count follows the history net rule: change and a same-value renewal are not payments,
-    /// and a spent incoming payment still counts. Boarding counts as a used key only when the
-    /// bumper wallet or the fresh Esplora address cache already holds an unspent output. This
-    /// does not start a scan.
+    /// The count follows the history net rule: change on this script counts, a same-value
+    /// renewal does not, and a spent incoming payment still counts. Boarding counts as a used
+    /// key only when the bumper wallet or the fresh Esplora address cache already holds an
+    /// unspent output. This does not start a scan.
     pub fn offchain_receive_gap(&self) -> ArkResult<OffchainReceiveGapReading> {
         let next_index = self.client.peek_next_offchain_derivation_index();
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;

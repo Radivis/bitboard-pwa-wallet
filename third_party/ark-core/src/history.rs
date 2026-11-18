@@ -131,18 +131,23 @@ pub fn generate_incoming_vtxo_transaction_history(
     Ok(txs)
 }
 
-/// Incoming payments whose VTXO script is `script`.
+/// Payments and change whose VTXO script is `script`.
 ///
-/// Uses the same net rule as [`generate_incoming_vtxo_transaction_history`]. Change and a
-/// same-value renewal are not payments. A spent incoming payment still counts.
+/// Uses the same net rule as [`generate_incoming_vtxo_transaction_history`]. A same-value
+/// renewal does not count. A spent incoming payment still counts. Change counts too: Arkade
+/// pays it to the current receive script, so a later unilateral exit would publish that reuse.
 pub fn count_incoming_payments_on_script(
     spent_vtxos: &[VirtualTxOutPoint],
     spendable_vtxos: &[VirtualTxOutPoint],
     boarding_commitment_txs: &[Txid],
     script: &ScriptBuf,
 ) -> Result<u32, Error> {
-    let hits =
-        collect_incoming_payment_vtxos(spent_vtxos, spendable_vtxos, boarding_commitment_txs)?;
+    let hits = collect_net_vtxos(
+        spent_vtxos,
+        spendable_vtxos,
+        boarding_commitment_txs,
+        NetVtxoSelection::PaymentAndChange,
+    )?;
     let count = hits.iter().filter(|hit| &hit.vtxo.script == script).count();
     u32::try_from(count).map_err(|_| Error::ad_hoc("incoming payment count overflow"))
 }
@@ -152,11 +157,33 @@ struct IncomingPaymentVtxo<'a> {
     net_amount: SignedAmount,
 }
 
+/// Activity history lists payments only. The receive count also lists change.
+#[derive(Clone, Copy)]
+enum NetVtxoSelection {
+    PaymentOnly,
+    PaymentAndChange,
+}
+
 /// VTXOs that were incoming payments. Change and zero-net renewals are left out.
 fn collect_incoming_payment_vtxos<'a>(
     spent_vtxos: &'a [VirtualTxOutPoint],
     spendable_vtxos: &'a [VirtualTxOutPoint],
     boarding_commitment_txs: &[Txid],
+) -> Result<Vec<IncomingPaymentVtxo<'a>>, Error> {
+    collect_net_vtxos(
+        spent_vtxos,
+        spendable_vtxos,
+        boarding_commitment_txs,
+        NetVtxoSelection::PaymentOnly,
+    )
+}
+
+/// VTXOs with a non-zero net. Zero is a renewal and is left out.
+fn collect_net_vtxos<'a>(
+    spent_vtxos: &'a [VirtualTxOutPoint],
+    spendable_vtxos: &'a [VirtualTxOutPoint],
+    boarding_commitment_txs: &[Txid],
+    selection: NetVtxoSelection,
 ) -> Result<Vec<IncomingPaymentVtxo<'a>>, Error> {
     let mut hits = Vec::new();
     let mut spent_vtxos_left_to_check = spent_vtxos.to_vec();
@@ -191,7 +218,11 @@ fn collect_incoming_payment_vtxos<'a>(
         let net_amount = receive_amount - spent_amount;
 
         // Zero is a self-payment or a renewal. Negative is change.
-        if net_amount.is_positive() {
+        let selected = match selection {
+            NetVtxoSelection::PaymentOnly => net_amount.is_positive(),
+            NetVtxoSelection::PaymentAndChange => net_amount != SignedAmount::ZERO,
+        };
+        if selected {
             hits.push(IncomingPaymentVtxo { vtxo, net_amount });
         }
     }
@@ -1178,7 +1209,7 @@ mod tests {
     }
 
     #[test]
-    fn incoming_count_keeps_a_spent_payment_and_drops_change_and_renewal() {
+    fn incoming_count_keeps_a_spent_payment_and_change_and_drops_renewal() {
         let script = ScriptBuf::from_bytes(vec![0x51]);
         let other_script = ScriptBuf::from_bytes(vec![0x52]);
         let payment_txid = "1111111111111111111111111111111111111111111111111111111111111111";
@@ -1209,7 +1240,7 @@ mod tests {
 
         assert_eq!(
             count_incoming_payments_on_script(&spent, &spendable, &[], &script).unwrap(),
-            1
+            2
         );
         assert_eq!(
             count_incoming_payments_on_script(&spent, &spendable, &[], &other_script).unwrap(),

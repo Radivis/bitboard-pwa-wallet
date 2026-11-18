@@ -51,7 +51,7 @@ impl OffchainBalanceBuckets {
     }
 }
 
-/// Incoming payments on `script`. Change and a same-value renewal do not count.
+/// Payments and change on `script`. A same-value renewal does not count.
 /// A spent incoming payment still counts.
 ///
 /// Confirmed rows with no commitment txid are omitted. The history rule indexes that

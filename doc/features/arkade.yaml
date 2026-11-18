@@ -45,9 +45,9 @@ feature:
       - id: ARK-RCV-06
         description: >-
           Once an offchain VTXO snapshot exists and a receive index has been revealed, the Arkade
-          receive card shows the incoming-payment count for the displayed script, including 0
-          (`Payments to this address: N`). A spent incoming payment still counts. Change and a
-          same-value renewal do not. The unused-gap line appears
+          receive card shows the receive count for the displayed script, including 0
+          (`Payments to this address: N`). A spent incoming payment still counts. Change on this
+          script counts. A same-value renewal does not. The unused-gap line appears
           only when the index gap is 2 or greater, and it does not describe an Esplora lookahead of 20
       - id: ARK-RCV-07
         description: >-
@@ -59,8 +59,8 @@ feature:
         description: >-
           Generate asks for the soft confirmation when this click is not the hard case and either
           the index gap is at least 1, or the index gap is 0 and the displayed script has no
-          incoming payment. The second case covers a key used only by an unspent boarding output
-          or by change. Cancelling leaves the current address in place. When the index gap is at
+          counted receive. The second case covers a key used only by an unspent boarding output.
+          Change on the script counts, so it does not leave this dialog up. Cancelling leaves the current address in place. When the index gap is at
           least 1, the text states the unused run after this click. When the gap is 0, the text
           says this address has not received a payment
       - id: ARK-RCV-09
@@ -78,9 +78,9 @@ feature:
       - id: ARK-RCV-11
         description: >-
           Payment-count infomode treats the operator and the chain as different audiences. The
-          operator can already connect VTXO movements. The count is incoming payments for the
+          operator can already connect VTXO movements. The count is receives for the
           chain audience: a collaborative exit leaves the script unpublished, and a unilateral
-          exit publishes it. Change and renewals are not extra payments. An unspent boarding
+          exit publishes it. Change on this script counts. A renewal is not an extra receive. An unspent boarding
           deposit can leave the count at 0 while the key is already used. It links to
           Privacy in Ark. Unused-gap infomode explains
           the batch scan and the batch_gap 2 opt-in, and does not describe the Esplora stop rule
@@ -509,12 +509,12 @@ feature:
         - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
         - Arkade address QR and copy (not on-chain bc1)
         - Generate new address control (mirrors on-chain Receive)
-        - incoming payment count for the displayed Arkade script, including 0, once an offchain snapshot exists (`Payments to this address: N`). Change and a same-value renewal are not counted
-          - infomode: the operator can already connect VTXO movements. The count is incoming payments for the chain: a collaborative exit leaves the script unpublished, and a unilateral exit publishes it. An unspent boarding deposit can leave the count at 0 while the key is used. Links to Privacy in Ark
+        - receive count for the displayed Arkade script, including 0, once an offchain snapshot exists (`Payments to this address: N`). Change on this script counts. A same-value renewal does not
+          - infomode: the operator can already connect VTXO movements. The count includes payments and change for the chain: a collaborative exit leaves the script unpublished, and a unilateral exit publishes that reuse. An unspent boarding deposit can leave the count at 0 while the key is used. Links to Privacy in Ark
         - unused-gap line only when the index gap is 2 or greater, without the on-chain "looks ahead 20 addresses" sentence
           - infomode: discovery asks for 20 keys at a time and stops after one empty batch past the last hit; the next key asks for an opt-in when that would make batch_gap 2
         - standing notice when the address on screen already has displayed_batch_gap of 2 or more, including before a snapshot exists
-        - soft confirmation when the index gap is at least 1, and when the gap is 0 but this script has no incoming payment
+        - soft confirmation when the index gap is at least 1, and when the gap is 0 but this script has no counted receive
         - hard opt-in when the next index would have batch_gap of 2 or more, including before a snapshot exists
       - requirements:
         - Contracts ARK-RCV-01 through ARK-RCV-12 apply to Arkade receive mode

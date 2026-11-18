@@ -391,10 +391,10 @@ pub async fn bark_peek_receive_address(index: u32) -> Result<String, JsValue> {
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
-/// Incoming payments on the receive key at `index`.
+/// Receives on the receive key at `index`.
 ///
-/// Reads the local wallet. A spent payment still counts. Change, a same-value
-/// renewal, and a movement that is not successful do not.
+/// Reads the local wallet. A spent payment still counts. Change counts. A
+/// same-value renewal, and a movement that is not successful, do not.
 #[wasm_bindgen]
 pub async fn bark_receive_payment_count(index: u32) -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;

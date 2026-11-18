@@ -26,7 +26,7 @@ describe('ArkadeReceivePaymentCountInfomodeContent', () => {
   it('points the count at chain privacy and the Privacy in Ark article', () => {
     renderWithProviders(<ArkadeReceivePaymentCountInfomodeContent />)
     expect(screen.getByText(/leaves this script unpublished/)).toBeInTheDocument()
-    expect(screen.getByText(/Change from your own send/)).toBeInTheDocument()
+    expect(screen.getByText(/Change from your own send counts too/)).toBeInTheDocument()
     expect(screen.getByText(/unspent boarding deposit/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Privacy in Ark' })).toHaveAttribute(
       'href',

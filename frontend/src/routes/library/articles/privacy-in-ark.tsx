@@ -80,12 +80,13 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="What the receive count is for">
         <p>
-          The Arkade receive count is the number of incoming payments on the script you are showing.
-          A payment still counts after it is spent. Change from your own send, and a renewal of a
-          coin already counted, are not extra payments. A count of 0 means nobody has paid this
-          script. An unspent boarding deposit can still mark the key as used. Generating a new
-          address before the next incoming payment keeps a later unilateral exit from publishing
-          one script for every one of them.
+          The Arkade receive count is the number of times the script you are showing received a
+          coin. A payment still counts after it is spent. Change from your own send counts too,
+          because that reuse is what a unilateral exit would publish. A renewal of a coin already
+          counted is not an extra receive. A count of 0 means this script has not received a coin.
+          An unspent boarding deposit can still mark the key as used. Generating a new address
+          before the next receive keeps a later unilateral exit from publishing one script for
+          every one of them. The Bark receive count uses this same rule for the address on screen.
         </p>
       </ArticleSection>
     </div>

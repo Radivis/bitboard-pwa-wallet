@@ -11,9 +11,10 @@ export function ArkadeReceivePaymentCountInfomodeContent() {
     <div className={INFOMODE_CONTENT_CLASS}>
       <InfomodeHeading>Payments to this address</InfomodeHeading>
       <InfomodeParagraph>
-        This count is the number of incoming payments on this Arkade script. A payment still
-        counts after it is spent. Change from your own send, and a renewal of a coin already
-        counted, are not extra payments. A count of 0 means nobody has paid this script.
+        This count is the number of times this Arkade script received a coin. A payment still
+        counts after it is spent. Change from your own send counts too, because that reuse is
+        what a unilateral exit would publish. A renewal of a coin already counted is not an extra
+        receive. A count of 0 means this script has not received a coin.
       </InfomodeParagraph>
       <InfomodeParagraph>
         An unspent boarding deposit uses this key without paying the Arkade script, so Generate

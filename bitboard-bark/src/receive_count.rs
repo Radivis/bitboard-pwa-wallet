@@ -1,9 +1,9 @@
-//! Incoming payments on one Bark receive key.
+//! Receives on one Bark receive key.
 //!
-//! A coin counts when its amount exceeds the coins this wallet spent in the same
-//! movement. That spent amount is applied once, to the first output. A spent
+//! A coin counts when its amount differs from the coins this wallet spent in the
+//! same movement. That spent amount is applied once, to the first output. A spent
 //! incoming payment still counts, because it stays an output of the receive
-//! movement. Change and a same-value renewal do not.
+//! movement. Change counts. A same-value renewal does not.
 
 use std::collections::HashMap;
 
@@ -33,11 +33,12 @@ pub(crate) struct ReceiveCountMovement {
     pub output_vtxo_ids: Vec<String>,
 }
 
-/// Incoming payments whose user pubkey is `displayed_user_pubkey`.
+/// Receives whose user pubkey is `displayed_user_pubkey`.
 ///
 /// Only successful movements count. An unknown input id is left out of the
-/// spent amount. An unknown output id is not a payment, and when it is the
-/// first output it still absorbs the inputs.
+/// spent amount. An unknown output id is not a receive, and when it is the
+/// first output it still absorbs the inputs. Change counts. A same-value
+/// renewal does not.
 pub(crate) fn incoming_payment_count_on_pubkey(
     vtxos: &[ReceiveCountVtxo],
     movements: &[ReceiveCountMovement],
@@ -70,7 +71,7 @@ fn payments_in_movement(
         .iter()
         .enumerate()
         .filter(|(index, output_id)| {
-            output_is_incoming_payment(
+            output_counts_as_receive(
                 vtxos_by_id.get(output_id.as_str()).copied(),
                 absorbed_input_sats(*index, input_amount_sats),
                 displayed_user_pubkey,
@@ -97,7 +98,7 @@ fn absorbed_input_sats(output_index: usize, input_amount_sats: u64) -> u64 {
     }
 }
 
-fn output_is_incoming_payment(
+fn output_counts_as_receive(
     output: Option<&ReceiveCountVtxo>,
     absorbed_input_sats: u64,
     displayed_user_pubkey: &str,
@@ -105,7 +106,7 @@ fn output_is_incoming_payment(
     let Some(output) = output else {
         return false;
     };
-    output.amount_sats > absorbed_input_sats && output.user_pubkey == displayed_user_pubkey
+    output.amount_sats != absorbed_input_sats && output.user_pubkey == displayed_user_pubkey
 }
 
 #[cfg(test)]
@@ -158,14 +159,14 @@ mod tests {
     fn a_spent_incoming_payment_still_counts() {
         let vtxos = [
             vtxo("payment", 1_000, DISPLAYED_PUBKEY),
-            vtxo("change", 400, DISPLAYED_PUBKEY),
+            vtxo("paid_out", 400, OTHER_PUBKEY),
         ];
         let movements = [
             movement(ReceiveCountMovementStatus::Successful, &[], &["payment"]),
             movement(
                 ReceiveCountMovementStatus::Successful,
                 &["payment"],
-                &["change"],
+                &["paid_out"],
             ),
         ];
 
@@ -173,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn change_and_an_equal_renewal_do_not_count() {
+    fn change_counts_and_an_equal_renewal_does_not() {
         let change_vtxos = [
             vtxo("payment", 1_000, DISPLAYED_PUBKEY),
             vtxo("change", 400, DISPLAYED_PUBKEY),
@@ -186,7 +187,7 @@ mod tests {
                 &["change"],
             ),
         ];
-        assert_eq!(count(&change_vtxos, &change_movements), 1);
+        assert_eq!(count(&change_vtxos, &change_movements), 2);
 
         let renewal_vtxos = [
             vtxo("payment", 2_000, DISPLAYED_PUBKEY),
@@ -267,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn a_fee_only_round_does_not_count() {
+    fn a_smaller_refresh_counts() {
         let vtxos = [
             vtxo("payment", 2_000, DISPLAYED_PUBKEY),
             vtxo("refreshed", 1_990, DISPLAYED_PUBKEY),
@@ -281,7 +282,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(count(&vtxos, &movements), 1);
+        assert_eq!(count(&vtxos, &movements), 2);
     }
 
     #[test]
@@ -289,7 +290,7 @@ mod tests {
         let vtxos = [
             vtxo("spent", 1_000, DISPLAYED_PUBKEY),
             vtxo("change", 100, DISPLAYED_PUBKEY),
-            vtxo("later", 50, DISPLAYED_PUBKEY),
+            vtxo("later", 1_000, DISPLAYED_PUBKEY),
         ];
         let movements = [
             movement(ReceiveCountMovementStatus::Successful, &[], &["spent"]),
@@ -300,7 +301,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(count(&vtxos, &movements), 2);
+        assert_eq!(count(&vtxos, &movements), 3);
     }
 
     #[test]

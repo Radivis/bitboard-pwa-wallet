@@ -71,7 +71,7 @@ describe('arkadeGenerateConfirmKind', () => {
     expect(arkadeGenerateConfirmKind({ ...revealed, gap: 1, batchGap: 1 })).toBe('soft')
   })
 
-  it('asks softly when boarding or change used the key and nobody has paid this script', () => {
+  it('asks softly when boarding used the key and this script has not received a coin', () => {
     expect(
       arkadeGenerateConfirmKind({ ...revealed, gap: 0, receiveCount: 0, batchGap: 1 }),
     ).toBe('soft')
