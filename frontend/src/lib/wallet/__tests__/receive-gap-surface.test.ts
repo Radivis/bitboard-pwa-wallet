@@ -5,6 +5,7 @@ import {
   confirmKindForGap,
   generateConfirmKindForClick,
   paymentsToAddressLabel,
+  receiveButtonEmphasis,
   receiveGapSurface,
   softGapConfirmBody,
   unusedGapLabel,
@@ -16,6 +17,13 @@ const revealed = {
   receiveCount: 2,
   gap: 0,
 }
+
+describe('receiveButtonEmphasis', () => {
+  it('keeps copy filled while the count is 0 and fills generate once the count is above 0', () => {
+    expect(receiveButtonEmphasis(0)).toEqual({ copy: 'primary', generate: 'secondary' })
+    expect(receiveButtonEmphasis(1)).toEqual({ copy: 'secondary', generate: 'primary' })
+  })
+})
 
 describe('receiveGapSurface', () => {
   it('hides the summary before a public wallet has synced', () => {

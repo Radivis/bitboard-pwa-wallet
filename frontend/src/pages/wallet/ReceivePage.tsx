@@ -45,6 +45,7 @@ import {
   confirmKindForGap,
   generateConfirmKindForClick,
   paymentsToAddressLabel,
+  receiveButtonEmphasis,
   receiveGapSurface,
   type ReceiveGapConfirmKind,
 } from '@/lib/wallet/receive-gap-surface'
@@ -136,6 +137,7 @@ export function ReceivePage() {
       activeWalletId != null &&
       walletIsUnlockedOrSyncing(walletStatus),
   })
+  const buttonEmphasis = receiveButtonEmphasis(receiveGapQuery.data?.receiveCount ?? 0)
   const gapSurface = receiveGapSurface({
     chainObserved,
     reading: receiveGapQuery.data ?? null,
@@ -338,6 +340,7 @@ export function ReceivePage() {
                 {currentAddress || 'Generating...'}
               </div>
               <DesignButton
+                appearance={buttonEmphasis.copy}
                 onClick={handleCopy}
                 disabled={!currentAddress}
                 aria-label="Copy address"
@@ -395,7 +398,12 @@ export function ReceivePage() {
               infoTitle="Generate new address"
               infoText="When you tap this, Bitboard advances an internal index and derives the next unused address from your wallet’s master key along the standard path for your address type (BIP86 for Taproot, BIP84 for SegWit). Nothing is “random” in the sense of losing it later: the new address is the next slot in a deterministic list, so your seed phrase can always recreate every address you have ever generated, in order. Older addresses you already shared still receive funds; generating a new one is mainly for privacy and for keeping track of separate payments."
             >
-              <DesignButton className="w-full" onClick={handleGenerateClick} icon={<RefreshCw />}>
+              <DesignButton
+                appearance={buttonEmphasis.generate}
+                className="w-full"
+                onClick={handleGenerateClick}
+                icon={<RefreshCw />}
+              >
                 Generate New Address
               </DesignButton>
             </InfomodeWrapper>

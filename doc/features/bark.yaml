@@ -51,7 +51,7 @@ feature:
     - Review lets the user pick the on-chain fee rate. Confirm signs the funding transaction built at that rate. Changing the rate does not derive another VTXO key
     - A failed board submission does not apply the funding transaction to the on-chain wallet
     - Boarding does not change the stored receive key index
-    - Once a Bark receive address is on screen, the receive card shows the receive count for that address, including 0 (Payments to this address: N). A spent incoming payment still counts. Change on this address counts. A same-value renewal does not. An unfinished board does not. The line stays hidden while the address is missing or failed
+    - Once a Bark receive address is on screen, the receive card shows the receive count for that address, including 0 (Payments to this address: N). A spent incoming payment still counts. Change on this address counts. A same-value renewal does not. An unfinished board does not. The line stays hidden while the address is missing or failed. Copy stays the filled button while that count is 0, including before the count is known. Generate takes the filled style once the count is above 0. The buttons keep their places
     - Spendable Bark balance updates after confirmations and a later Bark sync
     - Activity includes Bark movements only when isBarkEnabled and the network is signet or mainnet
     - A movement row shows its status and its signed effective balance

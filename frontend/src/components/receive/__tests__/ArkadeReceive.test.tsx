@@ -86,6 +86,14 @@ describe('ArkadeReceive', () => {
   it('shows stable address across two peek calls via address query data', () => {
     renderWithProviders(<ArkadeReceive />)
     expect(screen.getAllByText('tark1qqreceive').length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Copy address' })[0]).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
+    expect(screen.getAllByRole('button', { name: 'Generate New Address' })[0]).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
     expect(
       screen.getAllByTestId('receive-qr-rail-icon')[0]?.querySelector('span')?.style.maskImage,
     ).toContain('arkade-mark.svg')
@@ -184,6 +192,14 @@ describe('ArkadeReceive', () => {
     )
     expect(screen.getByTestId('arkade-receive-unused-gap')).toHaveTextContent('Unused gap: 2')
     expect(screen.getByTestId('arkade-receive-unused-gap').textContent).not.toContain('looks ahead')
+    expect(screen.getByRole('button', { name: 'Copy address' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
+    expect(screen.getByRole('button', { name: 'Generate New Address' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
   })
 
   it('keeps a restore warning on an address a seed restore will not ask about', async () => {

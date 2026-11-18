@@ -245,6 +245,14 @@ describe('ReceivePage', () => {
       screen.getByTestId('receive-payment-count').closest('[data-infomode-id="receive-payment-count"]'),
     ).not.toBeNull()
     expect(screen.queryByTestId('receive-unused-gap')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy address' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
+    expect(screen.getByRole('button', { name: 'Generate New Address' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
     unmount()
 
     syncedGap(2, 3)
@@ -254,6 +262,14 @@ describe('ReceivePage', () => {
       screen.getByTestId('receive-unused-gap').closest('[data-infomode-id="receive-unused-gap"]'),
     ).not.toBeNull()
     expect(screen.getByTestId('receive-payment-count')).toHaveTextContent(paymentsToAddressLabel(3))
+    expect(screen.getByRole('button', { name: 'Copy address' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
+    expect(screen.getByRole('button', { name: 'Generate New Address' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
   })
 
   it('asks before generating when the gap is at least 1 and skips the reveal on cancel', async () => {

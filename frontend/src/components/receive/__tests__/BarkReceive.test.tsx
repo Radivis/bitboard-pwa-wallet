@@ -114,5 +114,25 @@ describe('BarkReceive', () => {
     expect(screen.getByTestId('bark-receive-payment-count')).toHaveTextContent(
       'Payments to this address: 3',
     )
+    expect(screen.getByRole('button', { name: 'Copy address' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
+    expect(screen.getByRole('button', { name: 'Generate New Address' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
+  })
+
+  it('keeps copy filled while this address has no counted receive', () => {
+    renderWithProviders(<BarkReceive />)
+    expect(screen.getByRole('button', { name: 'Copy address' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
+    expect(screen.getByRole('button', { name: 'Generate New Address' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
   })
 })

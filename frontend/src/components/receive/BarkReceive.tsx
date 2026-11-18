@@ -20,7 +20,7 @@ import {
   useBarkReceivePaymentCountQuery,
   useBarkRevealReceiveAddressMutation,
 } from '@/hooks/useBarkReceiveQueries'
-import { paymentsToAddressLabel } from '@/lib/wallet/receive-gap-surface'
+import { paymentsToAddressLabel, receiveButtonEmphasis } from '@/lib/wallet/receive-gap-surface'
 
 export function BarkReceive() {
   const snapshot = useBarkLoadLifecycleSnapshot()
@@ -42,6 +42,9 @@ export function BarkReceive() {
     !addressLoading &&
     address.length > 0 &&
     typeof paymentCountQuery.data === 'number'
+  const buttonEmphasis = receiveButtonEmphasis(
+    typeof paymentCountQuery.data === 'number' ? paymentCountQuery.data : 0,
+  )
 
   const handleCopy = async () => {
     if (!address) return
@@ -102,6 +105,7 @@ export function BarkReceive() {
                 {addressLoading ? 'Loading…' : address || 'Loading…'}
               </div>
               <DesignButton
+                appearance={buttonEmphasis.copy}
                 onClick={handleCopy}
                 disabled={!address}
                 aria-label="Copy address"
@@ -121,6 +125,7 @@ export function BarkReceive() {
             </InfomodeWrapper>
           ) : null}
           <DesignButton
+            appearance={buttonEmphasis.generate}
             type="button"
             className="w-full"
             data-testid="bark-generate-new-address"

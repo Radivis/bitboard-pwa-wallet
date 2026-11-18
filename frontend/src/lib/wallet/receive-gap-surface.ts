@@ -31,6 +31,19 @@ export function paymentsToAddressLabel(receiveCount: number): string {
   return `Payments to this address: ${receiveCount}`
 }
 
+export type ReceiveButtonEmphasis = 'primary' | 'secondary'
+
+/** Copy stays filled while this address has no counted receive. Generate takes that role once it does. */
+export function receiveButtonEmphasis(receiveCount: number): {
+  copy: ReceiveButtonEmphasis
+  generate: ReceiveButtonEmphasis
+} {
+  if (receiveCount > 0) {
+    return { copy: 'secondary', generate: 'primary' }
+  }
+  return { copy: 'primary', generate: 'secondary' }
+}
+
 export function unusedGapLabel(gap: number): string {
   return `Unused gap: ${gap}. A normal wallet looks ahead ${RECEIVE_GAP_HARD_MIN} addresses.`
 }

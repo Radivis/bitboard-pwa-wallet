@@ -36,7 +36,10 @@ import {
   useArkadeOffchainReceiveGapQuery,
 } from '@/hooks/useArkadeQueries'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
-import type { ReceiveGapConfirmKind } from '@/lib/wallet/receive-gap-surface'
+import {
+  receiveButtonEmphasis,
+  type ReceiveGapConfirmKind,
+} from '@/lib/wallet/receive-gap-surface'
 
 export function ArkadeReceive() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -152,6 +155,7 @@ function ArkadeReceiveAddress({
   const gapQuery = useArkadeOffchainReceiveGapQuery(address)
   const gapReading = gapQuery.data ?? null
   const gapSurface = arkadeReceiveGapSurface(gapReading)
+  const buttonEmphasis = receiveButtonEmphasis(gapReading?.receiveCount ?? 0)
   const restoreWarning =
     gapReading != null && arkadeCurrentIndexMissesRestore(gapReading)
       ? arkadeCurrentAddressRestoreWarning()
@@ -219,6 +223,7 @@ function ArkadeReceiveAddress({
                   {addressLoading ? 'Loading…' : address || 'Loading…'}
                 </div>
                 <DesignButton
+                  appearance={buttonEmphasis.copy}
                   onClick={() => {
                     void onCopy()
                   }}
@@ -259,6 +264,7 @@ function ArkadeReceiveAddress({
                 </div>
               ) : null}
               <DesignButton
+                appearance={buttonEmphasis.generate}
                 type="button"
                 className="w-full"
                 data-testid="arkade-generate-new-address"

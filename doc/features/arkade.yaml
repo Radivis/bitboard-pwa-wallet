@@ -508,7 +508,7 @@ feature:
       - visible_elements:
         - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
         - Arkade address QR and copy (not on-chain bc1)
-        - Generate new address control (mirrors on-chain Receive)
+        - Generate new address control (mirrors on-chain Receive). Copy stays the filled button while the receive count is 0, including before the count is known. Generate takes the filled style once the count is above 0. The buttons keep their places
         - receive count for the displayed Arkade script, including 0, once an offchain snapshot exists (`Payments to this address: N`). Change on this script counts. A same-value renewal does not
           - infomode: the operator can already connect VTXO movements. The count includes payments and change for the chain: a collaborative exit leaves the script unpublished, and a unilateral exit publishes that reuse. An unspent boarding deposit can leave the count at 0 while the key is used. Links to Privacy in Ark
         - unused-gap line only when the index gap is 2 or greater, without the on-chain "looks ahead 20 addresses" sentence

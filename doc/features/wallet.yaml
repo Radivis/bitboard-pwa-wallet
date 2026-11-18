@@ -138,7 +138,7 @@ feature:
             - when the gap is 20 or greater, ask with a hard warning and an unchecked opt-in, including before chain history is available; the reveal stays disabled until the box is checked, and the choice is not remembered
             - confirming reads the gap again and follows the new band: reveal immediately only when the gap is now 0, stay on the hard warning if the gap has moved to 20 or greater
         - address type indicator (Taproot or SegWit)
-        - payment count for the current address, including 0, once chain history is available (`Payments to this address: N`)
+        - payment count for the current address, including 0, once chain history is available (`Payments to this address: N`). Copy stays the filled button while that count is 0, including before the count is known. Generate takes the filled style once the count is above 0. The buttons keep their places
           - infomode: address reuse links payments to one recipient and is a deanonymization risk; a count of 0 means the address is still fresh. Links to the article Address reuse and deanonymization
         - unused-gap line only when the gap is 2 or greater (`Unused gap: N. A normal wallet looks ahead 20 addresses.`)
           - infomode: a normal scan stops after 20 unused addresses; passing that limit does not destroy coins, but a seed-only restore and most other wallets will not find later addresses. This wallet still can, because it remembers revealed addresses. Generating past 20 asks for an opt-in. Links to the article The gap limit
