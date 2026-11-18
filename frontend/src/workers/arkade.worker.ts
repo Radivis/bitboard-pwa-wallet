@@ -62,6 +62,7 @@ import type {
   ArkadeWalletScope,
   ArkadeOperatorScheduledSession,
   ArkadeOperatorTrustStatus,
+  ArkadeOffchainReceiveGap,
   ArkadeOperatorConfigDiffResult,
   ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoExitRecordDto,
@@ -750,6 +751,13 @@ const arkadeService: ArkadeService = {
     )
     await persistAfterCriticalOperation()
     return address
+  },
+
+  async getOffchainReceiveGap() {
+    return invokeWasmArkade(
+      (wasmModule) =>
+        wasmModule.arkade_offchain_receive_gap() as ArkadeOffchainReceiveGap,
+    )
   },
 
   async getBoardingAddress(): Promise<string> {

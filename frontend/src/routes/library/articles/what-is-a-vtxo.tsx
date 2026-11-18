@@ -42,8 +42,10 @@ export const article: LibraryArticle = {
         <p>
           An Arkade <strong>operator</strong> (also called an ASP) batches many users&apos; VTXOs
           together for efficient settlement. You trust them only for liveness and batching—not for
-          custody of your seed phrase. If the operator disappears, you can still recover funds via
-          unilateral exit paths built into the protocol.
+          custody of your seed phrase. The operator does see the offchain movements. What the
+          public chain later sees is a separate question, covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>. If the operator
+          disappears, you can still recover funds via unilateral exit paths built into the protocol.
         </p>
       </ArticleSection>
 

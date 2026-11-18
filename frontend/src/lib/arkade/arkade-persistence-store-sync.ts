@@ -28,16 +28,16 @@ function syncArkadeDashboardQueryCaches(params: {
     return
   }
   appQueryClient.setQueryData(
-    arkadeBalanceQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+    arkadeBalanceQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
     params.balance,
   )
   appQueryClient.setQueryData(
-    arkadeHistoryQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+    arkadeHistoryQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
     params.payments,
   )
   if (params.receiveAddress.length > 0) {
     appQueryClient.setQueryData(
-      arkadeAddressQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+      arkadeAddressQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
       params.receiveAddress,
     )
   }

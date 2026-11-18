@@ -15,7 +15,7 @@ const arkadeAccountId = 'conn-1'
 describe('arkade-exit-balance-optimistic', () => {
   it('tracks unilateral exit in progress and reduces spendable totals at tag', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -47,7 +47,7 @@ describe('arkade-exit-balance-optimistic', () => {
   // Snapshot still lists exiting VTXOs as spendable until operator sync — deduct net fields.
   it('deducts collaborative exit from cached balance on mutate', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -73,7 +73,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reverts optimistic deduction on error', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -95,7 +95,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reconciles fetched balance when server exit bucket lags for collaborative exit', () => {
     const context = {
-      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
+      balanceKey: arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId }),
       previousBalance: {
         confirmedSats: 200_000,
         totalSats: 200_000,
@@ -122,7 +122,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reconciles fetched balance when server exit bucket lags for unilateral exit', () => {
     const context = {
-      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
+      balanceKey: arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId }),
       previousBalance: {
         confirmedSats: 200_000,
         totalSats: 200_000,

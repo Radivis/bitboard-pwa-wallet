@@ -59,6 +59,15 @@ export interface ArkadeOperatorConfigDiffResult {
   entries: ArkadeOperatorConfigDiffEntry[]
 }
 
+export interface ArkadeOffchainReceiveGap {
+  revealed: boolean
+  index: number
+  receiveCount: number
+  gap: number
+  batchGap: number
+  snapshotPresent: boolean
+}
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   /** Offchain VTXO spendable balance (excludes bumper/boarding). */
@@ -654,6 +663,7 @@ export interface ArkadeService {
   getLiveDashboard(): Promise<ArkadeLiveDashboard>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
+  getOffchainReceiveGap(): Promise<ArkadeOffchainReceiveGap>
   getBoardingAddress(): Promise<string>
   getBoardingStatus(): Promise<ArkadeBoardingStatus>
   sendPayment(params: ArkadeSendParams): Promise<string>

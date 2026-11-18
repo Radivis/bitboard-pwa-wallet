@@ -42,6 +42,42 @@ feature:
         description: Generate new address reveals the next index and persists offchain_next_derivation_index
       - id: ARK-RCV-05
         description: Read paths (getAddress, balance, history) never await wallet-secrets re-encrypt
+      - id: ARK-RCV-06
+        description: >-
+          Once an offchain VTXO snapshot exists and a receive index has been revealed, the Arkade
+          receive card shows the payment count for the displayed script, including 0
+          (`Payments to this address: N`). A spent VTXO still counts. The unused-gap line appears
+          only when the index gap is 2 or greater, and it does not describe an Esplora lookahead of 20
+      - id: ARK-RCV-07
+        description: >-
+          The index gap is the revealed run after the highest used key, or last revealed index + 1
+          when no key is used. A key is used when the snapshot has any VTXO on a discovery candidate
+          script for that index, or an already loaded unspent boarding output matches that index.
+          No new Esplora scan is started to decide this
+      - id: ARK-RCV-08
+        description: >-
+          Generate asks for the soft confirmation when the index gap is at least 1 and this click is
+          not the hard case. Cancelling leaves the current address in place. The text states the
+          unused run after this click
+      - id: ARK-RCV-09
+        description: >-
+          Generate asks for the hard opt-in, unchecked and not remembered, when the index it would
+          reveal has batch_gap of 2 or more. batch_gap is the batch of that index minus the last
+          batch discover_keys would treat as a hit. Batches are 20 keys from index 0. The first empty
+          batch ends the walk, so a later used key behind that empty batch does not extend it. The
+          hard opt-in still appears before a snapshot exists, because missing payments can only move
+          the last hit batch forward. The first reveal, while the next index is still 0, does not ask
+      - id: ARK-RCV-10
+        description: >-
+          Confirming reads the gap again. Reveal immediately only when the new click would not
+          confirm. Stay on the dialog and show the new band when soft and hard swap
+      - id: ARK-RCV-11
+        description: >-
+          Payment-count infomode treats the operator and the chain as different audiences. The
+          operator can already connect VTXO movements. The count is for unilateral exit, which
+          publishes the script, while a collaborative exit leaves it unpublished. It links to
+          Privacy in Ark. Unused-gap infomode explains
+          the batch scan and the batch_gap 2 opt-in, and does not describe the Esplora stop rule
     signer_rotation:
       - id: ARK-ROT-01
         description: Session open succeeds when stored operator_identity.signer_pk_hex equals current getInfo signer
@@ -461,8 +497,14 @@ feature:
         - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
         - Arkade address QR and copy (not on-chain bc1)
         - Generate new address control (mirrors on-chain Receive)
+        - payment count for the displayed Arkade script, including 0, once an offchain snapshot exists (`Payments to this address: N`)
+          - infomode: the operator can already connect VTXO movements. The count is for the chain: a collaborative exit leaves the script unpublished, and a unilateral exit publishes it. Links to Privacy in Ark
+        - unused-gap line only when the index gap is 2 or greater, without the on-chain "looks ahead 20 addresses" sentence
+          - infomode: discovery asks for 20 keys at a time and stops after one empty batch past the last hit; the next key asks for an opt-in when that would make batch_gap 2
+        - soft confirmation when the index gap is at least 1
+        - hard opt-in when the next index would have batch_gap of 2 or more, including before a snapshot exists
       - requirements:
-        - Contracts ARK-RCV-01 through ARK-RCV-05 apply to Arkade receive mode
+        - Contracts ARK-RCV-01 through ARK-RCV-11 apply to Arkade receive mode
     - WalletSendArkadeDetection:
       - description: "Arkade send via address format on main Send page"
       - file: frontend/src/pages/wallet/SendPage/index.tsx

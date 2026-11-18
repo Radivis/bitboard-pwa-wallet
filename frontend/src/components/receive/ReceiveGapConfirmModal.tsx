@@ -20,6 +20,10 @@ interface ReceiveGapConfirmModalProps {
   gap: number
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
+  /** Replaces the default on-chain explanation. Titles and buttons stay the same. */
+  body?: string
+  optInLabel?: string
+  dialogDescription?: string
 }
 
 export function ReceiveGapConfirmModal({
@@ -28,6 +32,9 @@ export function ReceiveGapConfirmModal({
   gap,
   onOpenChange,
   onConfirm,
+  body,
+  optInLabel = HARD_GAP_OPT_IN_LABEL,
+  dialogDescription,
 }: ReceiveGapConfirmModalProps) {
   const [acknowledgedRisk, setAcknowledgedRisk] = useState(false)
   const [confirmPending, setConfirmPending] = useState(false)
@@ -50,7 +57,7 @@ export function ReceiveGapConfirmModal({
         isHardWarning
           ? {
               id: 'receive-gap-hard-ack',
-              label: HARD_GAP_OPT_IN_LABEL,
+              label: optInLabel,
               checked: acknowledgedRisk,
               onChange: setAcknowledgedRisk,
               disabled: confirmPending,
@@ -84,11 +91,12 @@ export function ReceiveGapConfirmModal({
     >
       <div className="design-type-regular space-y-3 text-muted-foreground">
         <DialogDescription className="sr-only">
-          {isHardWarning
-            ? 'Confirm that you understand a normal wallet may not find funds sent to the next address.'
-            : 'Confirm generating another address while the current one has not been paid.'}
+          {dialogDescription ??
+            (isHardWarning
+              ? 'Confirm that you understand a normal wallet may not find funds sent to the next address.'
+              : 'Confirm generating another address while the current one has not been paid.')}
         </DialogDescription>
-        <p>{isHardWarning ? hardGapConfirmBody() : softGapConfirmBody(gap)}</p>
+        <p>{body ?? (isHardWarning ? hardGapConfirmBody() : softGapConfirmBody(gap))}</p>
       </div>
     </DesignModal>
   )

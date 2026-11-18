@@ -136,6 +136,19 @@ impl<DB> Wallet<DB> {
         self.completed_full_scan.load(Ordering::Acquire)
     }
 
+    /// Script hex of unspent outputs already in this wallet. Does not scan Esplora.
+    pub fn unspent_script_hexes(&self) -> Result<Vec<String>, Error> {
+        use bitcoin::hex::DisplayHex;
+        let wallet = self
+            .inner
+            .read()
+            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+        Ok(wallet
+            .list_unspent()
+            .map(|utxo| utxo.txout.script_pubkey.as_bytes().to_lower_hex_string())
+            .collect())
+    }
+
     fn scan_unix_secs() -> Result<u64, Error> {
         let now: std::time::Duration = Timestamp::now()
             .as_duration()

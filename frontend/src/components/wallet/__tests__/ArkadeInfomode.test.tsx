@@ -52,7 +52,21 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: null,
   }),
-  useArkadeNewAddressMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeNewAddressMutation: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useArkadeOffchainReceiveGapQuery: () => ({ data: undefined }),
+  readArkadeOffchainReceiveGap: () =>
+    Promise.resolve({
+      revealed: false,
+      index: 0,
+      receiveCount: 0,
+      gap: 0,
+      batchGap: 0,
+      snapshotPresent: false,
+    }),
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
   useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),

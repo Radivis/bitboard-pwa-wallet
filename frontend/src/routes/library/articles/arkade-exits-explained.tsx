@@ -81,7 +81,9 @@ export const article: LibraryArticle = {
       <ArticleSection title="Related topics">
         <p>
           VTXOs must be renewed while offchain—see{' '}
-          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. For unilateral
+          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. What each
+          exit reveals on the chain is covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>. For unilateral
           exit risks see{' '}
           <ArticleLink slug="risks-of-arkade-unilateral-exits">
             Risks of Arkade unilateral exit

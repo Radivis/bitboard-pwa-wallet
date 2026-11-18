@@ -13,6 +13,7 @@ import {
   arkadeDisabledQueryKey,
   ARKADE_QUERY_DISABLED,
   arkadeAddressQueryKey,
+  arkadeReceiveGapQueryKey,
   arkadeAutonomousModeStatusQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
+  ArkadeOffchainReceiveGap,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
   ArkadeCollaborativeExitFeeEstimateParams,
@@ -105,6 +107,7 @@ import {
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
+import type { ArkadeWalletKey } from '@/lib/arkade/arkade-session-scope'
 import {
   getCommittedNetworkMode,
   selectCommittedNetworkMode,
@@ -226,19 +229,15 @@ function walletScopedQueryKey(
   activeWalletId: number | null,
   networkMode: NetworkMode,
   arkadeAccountId: string | null,
-  buildKey: (
-    walletId: number,
-    network: ArkadeSupportedNetworkMode,
-    arkadeAccountId: string,
-  ) => readonly unknown[],
+  buildKey: (walletKey: ArkadeWalletKey) => readonly unknown[],
   disabledScope: string,
 ): readonly unknown[] {
   if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
-    return buildKey(
-      activeWalletId,
+    return buildKey({
+      walletId: activeWalletId,
       networkMode,
-      arkadeAccountId ?? `pending-${networkMode}`,
-    )
+      arkadeAccountId: arkadeAccountId ?? `pending-${networkMode}`,
+    })
   }
   return arkadeDisabledQueryKey(disabledScope)
 }
@@ -254,35 +253,35 @@ async function invalidateArkadeWalletDataQueries(
 
   const invalidations = [
     queryClient.invalidateQueries({
-      queryKey: arkadeHistoryQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeHistoryQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeExitCandidatesQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeUnilateralExitsInProgressQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeUnilateralExitsInProgressQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeBumperInfoQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeVtxoExpiryQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeOperatorScheduledSessionQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeOperatorScheduledSessionQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeVtxoListQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeVtxoListQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, arkadeAccountId),
+      queryKey: arkadeRecoverableVtxoFeeQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
   ]
 
   if (!options?.skipBalance) {
     invalidations.unshift(
       queryClient.invalidateQueries({
-        queryKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
+        queryKey: arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId }),
       }),
     )
   }
@@ -290,7 +289,7 @@ async function invalidateArkadeWalletDataQueries(
   if (!options?.skipBoardingStatus) {
     invalidations.push(
       queryClient.invalidateQueries({
-        queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId),
+        queryKey: arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId }),
       }),
     )
   }
@@ -350,6 +349,30 @@ export function useArkadeHistoryQuery() {
       return getArkadeWorker().getTransactionHistory()
     },
     ...arkadeDashboardPeriodicQueryOptions,
+  })
+}
+
+export async function readArkadeOffchainReceiveGap(): Promise<ArkadeOffchainReceiveGap> {
+  return withReadyArkadeWorker(() => getArkadeWorker().getOffchainReceiveGap())
+}
+
+export function useArkadeOffchainReceiveGapQuery(receiveAddress: string) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: [
+      ...walletScopedQueryKey(
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+        arkadeReceiveGapQueryKey,
+        'receive-gap',
+      ),
+      receiveAddress,
+    ],
+    enabled: sessionReady && receiveAddress.length > 0,
+    queryFn: () => readArkadeOffchainReceiveGap(),
   })
 }
 
@@ -655,12 +678,8 @@ function patchPendingBatchIntentQueryCaches(
   intent: ArkadePendingBatchIntent,
 ): void {
   rememberInFlightRegisteredIntent(intent)
-  const boardingStatusKey = arkadeBoardingStatusQueryKey(
-    walletId,
-    networkMode,
-    arkadeAccountId,
-  )
-  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+  const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId })
+  const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
   queryClient.setQueryData<ArkadeBoardingStatus>(boardingStatusKey, (previous) =>
     previous == null
       ? previous
@@ -875,11 +894,9 @@ export function useArkadeSignerMigrationPartialResultQuery() {
     activeWalletId,
     networkMode,
     activeArkadeAccountId,
-    (walletId, scopedNetworkMode, arkadeAccountId) =>
+    (walletKey) =>
       arkadeSignerMigrationPartialResultQueryKey(
-        walletId,
-        scopedNetworkMode,
-        arkadeAccountId,
+        walletKey,
         migrationHint?.previousSignerPkHex ?? '',
       ),
     'signer-migration-partial',
@@ -948,10 +965,7 @@ export function useArkadeSignerMigrationMutation() {
       const migrationHint = useWalletStore.getState().arkadeSignerMigrationHint
       const partialResultQueryKey =
         migrationHint != null
-          ? arkadeSignerMigrationPartialResultQueryKey(
-              activeWalletId,
-              networkMode,
-              activeArkadeAccountId,
+          ? arkadeSignerMigrationPartialResultQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
               migrationHint.previousSignerPkHex,
             )
           : null
@@ -1002,16 +1016,8 @@ export function useArkadeOnboardMutation() {
         return undefined
       }
 
-      const boardingStatusKey = arkadeBoardingStatusQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
-      )
-      const balanceKey = arkadeBalanceQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
-      )
+      const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
+      const balanceKey = arkadeBalanceQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
       await queryClient.cancelQueries({ queryKey: boardingStatusKey })
       await queryClient.cancelQueries({ queryKey: balanceKey })
 
@@ -1048,16 +1054,8 @@ export function useArkadeOnboardMutation() {
       }
 
       const settledSats = context?.settledSats ?? 0
-      const boardingStatusKey = arkadeBoardingStatusQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
-      )
-      const balanceKey = arkadeBalanceQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
-      )
+      const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
+      const balanceKey = arkadeBalanceQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
 
       await queryClient.refetchQueries({ queryKey: balanceKey })
       const fetchedBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
@@ -1249,10 +1247,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? [
-            ...arkadeUnilateralExitCompletionFeeQueryKey(
-              activeWalletId,
-              networkMode,
-              activeArkadeAccountId,
+            ...arkadeUnilateralExitCompletionFeeQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
               sortedVtxoOutpoints,
               destinationTrimmed,
               params.feeRateSatPerVb,
@@ -1302,11 +1297,7 @@ export function useArkadeCollaborativeExitMutation() {
       ) {
         return undefined
       }
-      const balanceKey = arkadeBalanceQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
-      )
+      const balanceKey = arkadeBalanceQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
       const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
       const deductedSats =
         params.amountSats ??
@@ -1408,11 +1399,7 @@ export function useArkadeRecoverableVtxoFeeQuery(params: { enabled: boolean }) {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeRecoverableVtxoFeeQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-          )
+        ? arkadeRecoverableVtxoFeeQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId })
         : arkadeDisabledQueryKey('recoverable-vtxo-fee'),
     enabled,
     queryFn: () =>
@@ -1437,10 +1424,7 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeCollaborativeExitFeeQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
+        ? arkadeCollaborativeExitFeeQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
             destinationTrimmed,
             params.amountSats,
           )
@@ -1504,11 +1488,7 @@ export function useArkadeAutonomousModeMutation() {
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await queryClient.invalidateQueries({
-          queryKey: arkadeAutonomousModeStatusQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-          ),
+          queryKey: arkadeAutonomousModeStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
         })
         await invalidateOperatorTrustQueries(
           queryClient,
@@ -1517,11 +1497,7 @@ export function useArkadeAutonomousModeMutation() {
           activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
-          queryKey: arkadeExitCandidatesQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-          ),
+          queryKey: arkadeExitCandidatesQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
         })
       }
     },
@@ -1544,10 +1520,10 @@ async function invalidateOperatorTrustQueries(
   arkadeAccountId: string,
 ): Promise<void> {
   await queryClient.invalidateQueries({
-    queryKey: arkadeOperatorTrustStatusQueryKey(walletId, networkMode, arkadeAccountId),
+    queryKey: arkadeOperatorTrustStatusQueryKey({ walletId, networkMode, arkadeAccountId }),
   })
   await queryClient.invalidateQueries({
-    queryKey: arkadeOperatorConfigDiffQueryKey(walletId, networkMode, arkadeAccountId),
+    queryKey: arkadeOperatorConfigDiffQueryKey({ walletId, networkMode, arkadeAccountId }),
   })
 }
 
@@ -1619,11 +1595,7 @@ export function useAcceptOperatorConfigMutation() {
             activeArkadeAccountId,
           )
           await queryClient.invalidateQueries({
-            queryKey: arkadeAutonomousModeStatusQueryKey(
-              activeWalletId,
-              networkMode,
-              activeArkadeAccountId,
-            ),
+            queryKey: arkadeAutonomousModeStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
           })
         }
         throw error
@@ -1654,14 +1626,10 @@ export function useAcceptOperatorConfigMutation() {
           activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
-          queryKey: arkadeAutonomousModeStatusQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-          ),
+          queryKey: arkadeAutonomousModeStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
         })
         await queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode, activeArkadeAccountId),
+          queryKey: arkadeBalanceQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
         })
       }
     },
@@ -1699,11 +1667,7 @@ export function useReviewOperatorConfigInAutonomousMutation() {
           activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
-          queryKey: arkadeAutonomousModeStatusQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-          ),
+          queryKey: arkadeAutonomousModeStatusQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }),
         })
       }
     },
@@ -1731,10 +1695,7 @@ export function useArkadeUnilateralExitTopologyQuery(params: {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeUnilateralExitTopologyQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
+        ? arkadeUnilateralExitTopologyQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
             sortedOutpoints,
           )
         : arkadeDisabledQueryKey('unilateral-exit-topology'),
@@ -1766,10 +1727,7 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeUnilateralExitBatchEstimateQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
+        ? arkadeUnilateralExitBatchEstimateQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
             sortedOutpoints,
             params.feeRateSatPerVb,
           )
@@ -1814,10 +1772,7 @@ export function useArkadeUnilateralExitProgressQuery(params: {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeUnilateralExitProgressQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
+        ? arkadeUnilateralExitProgressQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
             sortedOutpoints,
           )
         : arkadeDisabledQueryKey('unilateral-exit-progress'),

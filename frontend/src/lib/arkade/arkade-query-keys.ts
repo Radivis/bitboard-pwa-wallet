@@ -1,4 +1,5 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import type { ArkadeWalletKey } from '@/lib/arkade/arkade-session-scope'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -7,77 +8,53 @@ import { arkadeVtxoOutpointCacheKey } from '@/workers/arkade-api'
 /** Sentinel segment for disabled Arkade queries (wallet/network not ready). */
 export const ARKADE_QUERY_DISABLED = 'disabled' as const
 
+function arkadeWalletKeyPrefix(walletKey: ArkadeWalletKey) {
+  return [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletKey.walletId,
+    walletKey.networkMode,
+    walletKey.arkadeAccountId,
+  ] as const
+}
+
 export function arkadeDisabledQueryKey(scope: string) {
   return [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', scope, ARKADE_QUERY_DISABLED] as const
 }
 
-export const arkadeBalanceQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeBalanceQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'balance',
   ] as const
 
-export const arkadeHistoryQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeHistoryQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'history',
   ] as const
 
-export const arkadeAddressQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeReceiveGapQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
+    'receive-gap',
+  ] as const
+
+export const arkadeAddressQueryKey = (walletKey: ArkadeWalletKey) =>
+  [
+    ...arkadeWalletKeyPrefix(walletKey),
     'address',
   ] as const
 
-export const arkadeBoardingAddressQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeBoardingAddressQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'boarding-address',
   ] as const
 
-export const arkadeBoardingStatusQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeBoardingStatusQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'boarding-status',
   ] as const
 
@@ -89,223 +66,109 @@ export const arkadeDelegateInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
 ) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', 'delegator', networkMode, 'info'] as const
 
-export const arkadeVtxoExpiryQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeVtxoExpiryQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'vtxo-expiry',
   ] as const
 
-export const arkadeOperatorScheduledSessionQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeOperatorScheduledSessionQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'operator-scheduled-session',
   ] as const
 
-export const arkadeVtxoListQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeVtxoListQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'vtxo-list',
   ] as const
 
-export const arkadeExitCandidatesQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeExitCandidatesQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'exit-candidates',
   ] as const
 
-export const arkadeBumperInfoQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeBumperInfoQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'bumper',
   ] as const
 
-export const arkadeUnilateralExitTimelockQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeUnilateralExitTimelockQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'unilateral-exit-timelock',
   ] as const
 
-export const arkadeBumperAddressQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeBumperAddressQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'bumper-address',
   ] as const
 
-export const arkadeRecoverableVtxoFeeQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeRecoverableVtxoFeeQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'recoverable-vtxo-fee',
   ] as const
 
 export const arkadeSignerMigrationPartialResultQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   previousSignerPkHex: string,
 ) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'signer-migration-partial',
     previousSignerPkHex,
   ] as const
 
 export const arkadeCollaborativeExitFeeQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   destinationAddress: string,
   amountSats: number | undefined,
 ) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'exit-fee',
     'collaborative',
     destinationAddress,
     amountSats ?? 'full',
   ] as const
 
-export const arkadeUnilateralExitsInProgressQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeUnilateralExitsInProgressQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'unilateral-exits-in-progress',
   ] as const
 
-export const arkadeAutonomousModeStatusQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeAutonomousModeStatusQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'autonomous-mode-status',
   ] as const
 
-export const arkadeOperatorTrustStatusQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeOperatorTrustStatusQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'operator-trust-status',
   ] as const
 
-export const arkadeOperatorConfigDiffQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeOperatorConfigDiffQueryKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'operator-config-diff',
   ] as const
 
 export const arkadeUnilateralExitCompletionFeeQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   vtxoOutpoints: ArkadeVtxoOutpoint[],
   destinationAddress: string,
   feeRateSatPerVb: number,
 ) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'exit-fee',
     'unilateral-completion',
     arkadeVtxoOutpointCacheKey(vtxoOutpoints),
@@ -313,44 +176,28 @@ export const arkadeUnilateralExitCompletionFeeQueryKey = (
     feeRateSatPerVb,
   ] as const
 
-export const arkadeUnilateralExitTopologyScopeKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
-) =>
+export const arkadeUnilateralExitTopologyScopeKey = (walletKey: ArkadeWalletKey) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'unilateral-exit-topology',
   ] as const
 
 export const arkadeUnilateralExitTopologyQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   vtxoOutpoints: ArkadeVtxoOutpoint[],
 ) =>
   [
-    ...arkadeUnilateralExitTopologyScopeKey(walletId, networkMode, arkadeAccountId),
+    ...arkadeUnilateralExitTopologyScopeKey(walletKey),
     arkadeVtxoOutpointCacheKey(vtxoOutpoints),
   ] as const
 
 export const arkadeUnilateralExitBatchEstimateQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   vtxoOutpoints: ArkadeVtxoOutpoint[],
   feeRateSatPerVb: number,
 ) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'exit-fee',
     'unilateral-batch',
     arkadeVtxoOutpointCacheKey(vtxoOutpoints),
@@ -358,17 +205,11 @@ export const arkadeUnilateralExitBatchEstimateQueryKey = (
   ] as const
 
 export const arkadeUnilateralExitProgressQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  arkadeAccountId: string,
+  walletKey: ArkadeWalletKey,
   vtxoOutpoints: ArkadeVtxoOutpoint[],
 ) =>
   [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    arkadeAccountId,
+    ...arkadeWalletKeyPrefix(walletKey),
     'unilateral-exit-progress',
     arkadeVtxoOutpointCacheKey(vtxoOutpoints),
   ] as const

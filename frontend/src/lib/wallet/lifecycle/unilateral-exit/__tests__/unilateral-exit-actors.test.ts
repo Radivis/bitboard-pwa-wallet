@@ -49,10 +49,7 @@ describe('invalidateUnilateralExitQueries', () => {
   it('does not remove or invalidate the progress query', async () => {
     await invalidateUnilateralExitQueries(walletScope, [leaf])
 
-    const progressQueryKey = arkadeUnilateralExitProgressQueryKey(
-      walletScope.walletId,
-      walletScope.networkMode,
-      walletScope.arkadeAccountId,
+    const progressQueryKey = arkadeUnilateralExitProgressQueryKey({ walletId: walletScope.walletId, networkMode: walletScope.networkMode, arkadeAccountId: walletScope.arkadeAccountId }, 
       [leaf],
     )
     expect(removeQueriesMock).not.toHaveBeenCalled()
@@ -60,18 +57,10 @@ describe('invalidateUnilateralExitQueries', () => {
       expect.objectContaining({ queryKey: progressQueryKey }),
     )
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: arkadeBalanceQueryKey(
-        walletScope.walletId,
-        walletScope.networkMode,
-        walletScope.arkadeAccountId,
-      ),
+      queryKey: arkadeBalanceQueryKey({ walletId: walletScope.walletId, networkMode: walletScope.networkMode, arkadeAccountId: walletScope.arkadeAccountId }),
     })
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: arkadeUnilateralExitTopologyScopeKey(
-        walletScope.walletId,
-        walletScope.networkMode,
-        walletScope.arkadeAccountId,
-      ),
+      queryKey: arkadeUnilateralExitTopologyScopeKey({ walletId: walletScope.walletId, networkMode: walletScope.networkMode, arkadeAccountId: walletScope.arkadeAccountId }),
     })
   })
 
@@ -79,10 +68,7 @@ describe('invalidateUnilateralExitQueries', () => {
     await invalidateUnilateralExitQueries(walletScope, [leaf], progress)
 
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeUnilateralExitProgressQueryKey(
-        walletScope.walletId,
-        walletScope.networkMode,
-        walletScope.arkadeAccountId,
+      arkadeUnilateralExitProgressQueryKey({ walletId: walletScope.walletId, networkMode: walletScope.networkMode, arkadeAccountId: walletScope.arkadeAccountId }, 
         [leaf],
       ),
       progress,

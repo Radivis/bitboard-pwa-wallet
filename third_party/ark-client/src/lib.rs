@@ -514,6 +514,15 @@ struct ServerState {
     contract_manager: Mutex<ContractManager>,
 }
 
+/// Scripts `restore_contracts` would derive for one key index.
+#[derive(Clone, Debug)]
+pub struct DiscoveryIndexCandidates {
+    pub index: u32,
+    pub offchain_scripts: Vec<ScriptBuf>,
+    pub boarding_scripts: Vec<ScriptBuf>,
+    pub boarding_addresses: Vec<Address>,
+}
+
 #[derive(Clone, Debug)]
 enum RestoreCandidate {
     DefaultVtxo(DefaultVtxoContract),
@@ -1664,6 +1673,57 @@ where
         tracing::info!(?report, "Contract restore completed");
 
         Ok(report)
+    }
+
+    /// Candidate scripts for indices `0..end_exclusive`, using the same contracts as
+    /// [`Self::restore_contracts`]. Does not contact the operator.
+    pub fn discovery_candidates_before(
+        &self,
+        end_exclusive: u32,
+    ) -> Result<Vec<DiscoveryIndexCandidates>, Error> {
+        if end_exclusive == 0 {
+            return Ok(Vec::new());
+        }
+        let server_info = self.server_info_snapshot()?;
+        let ctx = ContractContext::new(server_info.network);
+        let all_server_keys: Vec<XOnlyPublicKey> = server_info.all_server_keys().collect();
+        let offchain_exit_delays = ark_core::candidate_exit_delays(
+            server_info.unilateral_exit_delay,
+            server_info.network,
+        )?;
+        let boarding_exit_delays =
+            ark_core::candidate_exit_delays(server_info.boarding_exit_delay, server_info.network)?;
+        let batch = self.restore_candidate_batch(
+            0,
+            end_exclusive,
+            &all_server_keys,
+            &offchain_exit_delays,
+            &boarding_exit_delays,
+        )?;
+        let mut rows = Vec::with_capacity(batch.len());
+        for (index, _keypair, candidates) in batch {
+            let mut offchain_scripts = Vec::new();
+            let mut boarding_scripts = Vec::new();
+            let mut boarding_addresses = Vec::new();
+            for candidate in &candidates {
+                match candidate.discovery_target(self.secp(), &ctx)? {
+                    RestoreDiscoveryTarget::Offchain(_) => {
+                        offchain_scripts.push(candidate.script_pubkey(self.secp(), &ctx)?);
+                    }
+                    RestoreDiscoveryTarget::Boarding(address) => {
+                        boarding_scripts.push(candidate.script_pubkey(self.secp(), &ctx)?);
+                        boarding_addresses.push(address);
+                    }
+                }
+            }
+            rows.push(DiscoveryIndexCandidates {
+                index,
+                offchain_scripts,
+                boarding_scripts,
+                boarding_addresses,
+            });
+        }
+        Ok(rows)
     }
 
     fn restore_candidate_batch(

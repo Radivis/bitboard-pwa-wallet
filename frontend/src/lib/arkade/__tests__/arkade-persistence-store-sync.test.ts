@@ -61,15 +61,27 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     expect(state.arkadeReceiveAddress).toBe('tark1qreceive')
 
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeBalanceQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeBalanceQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       { confirmedSats: 47_000, totalSats: 47_000 },
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeHistoryQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeHistoryQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       state.arkadePayments,
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeAddressQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeAddressQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       'tark1qreceive',
     )
   })

@@ -89,6 +89,26 @@ pub struct EsploraBlockchain {
 }
 
 impl EsploraBlockchain {
+    /// Addresses whose cached UTXO list is still fresh and contains an unspent output.
+    /// Does not contact Esplora. A stale or missing entry is omitted.
+    pub fn fresh_cached_addresses_with_unspent(&self) -> Vec<String> {
+        let cache = self
+            .address_utxo_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = now_ms();
+        cache
+            .by_address
+            .iter()
+            .filter_map(|(address, (fetched_at_ms, utxos))| {
+                let age_ms = now.saturating_sub(*fetched_at_ms);
+                let still_fresh = age_ms < UNSPENT_OUTSPEND_CACHE_TTL_MS;
+                let has_unspent = utxos.iter().any(|utxo| !utxo.is_spent);
+                (still_fresh && has_unspent).then(|| address.clone())
+            })
+            .collect()
+    }
+
     /// Client for `esplora_url`. An empty URL is rejected. Each request times out after
     /// [`ESPLORA_HTTP_TIMEOUT_SECS`] and sends cache-busting headers.
     pub fn new(esplora_url: &str) -> ArkResult<Self> {
