@@ -241,9 +241,11 @@ mod session_receive_gap_tests {
     fn persistence_json(next_index: u32) -> String {
         let info = offline_server_info();
         let signer = info.signer_pk.x_only_public_key().0;
-        let mut wallet_db = WalletDbSnapshot::default();
-        wallet_db.offchain_next_derivation_index = next_index;
-        wallet_db.cached_operator_info = Some(CachedOperatorInfoRecord::from_server_info(&info));
+        let wallet_db = WalletDbSnapshot {
+            offchain_next_derivation_index: next_index,
+            cached_operator_info: Some(CachedOperatorInfoRecord::from_server_info(&info)),
+            ..WalletDbSnapshot::default()
+        };
         let envelope = BitboardArkadePersistence {
             version: BITBOARD_ARKADE_PERSISTENCE_VERSION,
             engine: ARK_RS_ENGINE.to_string(),

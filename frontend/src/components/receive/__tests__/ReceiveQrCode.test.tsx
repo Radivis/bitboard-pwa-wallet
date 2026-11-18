@@ -28,7 +28,9 @@ describe('ReceiveQrCode', () => {
       const embeddedImage = container.querySelector('image')
       const imageHref = embeddedImage?.getAttribute('href') ?? ''
       expect(imageHref).not.toContain('bitboard-icon')
+      expect(embeddedImage).not.toBeNull()
       expect(railIcon.querySelector('div')?.style.width).toBe('64px')
+      expect(container.firstElementChild?.className).toContain('rounded-[20px]')
       expect(container.querySelector('svg')).toBeInTheDocument()
     },
   )

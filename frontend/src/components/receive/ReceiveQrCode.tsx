@@ -17,7 +17,7 @@ interface ReceiveQrCodeProps {
 
 export function ReceiveQrCode({ value, rail }: ReceiveQrCodeProps) {
   return (
-    <div className="rounded-lg bg-white p-4">
+    <div className="overflow-hidden rounded-[20px] bg-white p-5">
       <div className="relative">
         <QRCodeSVG
           value={value}
