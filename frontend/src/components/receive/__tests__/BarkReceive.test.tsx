@@ -19,6 +19,9 @@ const barkReceiveTestState = vi.hoisted(() => ({
   },
   mutate: vi.fn(),
   isPending: false,
+  paymentCount: {
+    data: 0 as number | undefined,
+  },
 }))
 
 vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
@@ -27,6 +30,7 @@ vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
 
 vi.mock('@/hooks/useBarkReceiveQueries', () => ({
   useBarkReceiveAddressQuery: () => barkReceiveTestState.query,
+  useBarkReceivePaymentCountQuery: () => barkReceiveTestState.paymentCount,
   useBarkRevealReceiveAddressMutation: () => ({
     mutate: barkReceiveTestState.mutate,
     isPending: barkReceiveTestState.isPending,
@@ -59,6 +63,7 @@ describe('BarkReceive', () => {
     }
     barkReceiveTestState.mutate.mockReset()
     barkReceiveTestState.isPending = false
+    barkReceiveTestState.paymentCount = { data: 0 }
   })
 
   it('shows the peeked address and does not reveal on render or reopen', () => {
@@ -99,6 +104,15 @@ describe('BarkReceive', () => {
     renderWithProviders(<BarkReceive />)
     expect(screen.getByText('Could not load Bark address.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Generate New Address' })).toBeDisabled()
+    expect(screen.queryByTestId('bark-receive-payment-count')).not.toBeInTheDocument()
     expect(barkReceiveTestState.mutate).not.toHaveBeenCalled()
+  })
+
+  it('shows the incoming payment count for the address on screen', () => {
+    barkReceiveTestState.paymentCount = { data: 3 }
+    renderWithProviders(<BarkReceive />)
+    expect(screen.getByTestId('bark-receive-payment-count')).toHaveTextContent(
+      'Payments to this address: 3',
+    )
   })
 })

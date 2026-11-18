@@ -25,6 +25,7 @@ feature:
     - As a user with Bark enabled on signet or mainnet, I want to open a VTXO list from wallet management and see each coin's Bark state
     - As a user, I want each Bark VTXO card to show how far that coin's emergency exit has gotten, including a started exit, the timelock after confirmation, and an anchor sweep or a seizure of a checkpoint, leaf, or internal node, with the spending transaction beside that node type
     - As a user with Bark enabled on signet or mainnet, I want to send to a Bark Ark address from the send form
+    - As a user with Bark enabled on signet or mainnet, I want the receive card to show how many incoming payments this Bark address has received
     - As a user with Bark enabled on signet or mainnet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
     - As a user, I want a failed emergency-exit step to leave the page without a success message
     - As a user on the emergency-exit page, I want to see the exit transaction tree for the VTXOs I selected and for exits already in progress
@@ -50,6 +51,7 @@ feature:
     - Review lets the user pick the on-chain fee rate. Confirm signs the funding transaction built at that rate. Changing the rate does not derive another VTXO key
     - A failed board submission does not apply the funding transaction to the on-chain wallet
     - Boarding does not change the stored receive key index
+    - Once a Bark receive address is on screen, the receive card shows the incoming-payment count for that address, including 0 (Payments to this address: N). A spent incoming payment still counts. Change and a same-value renewal do not. An unfinished board does not. The line stays hidden while the address is missing or failed
     - Spendable Bark balance updates after confirmations and a later Bark sync
     - Activity includes Bark movements only when isBarkEnabled and the network is signet or mainnet
     - A movement row shows its status and its signed effective balance

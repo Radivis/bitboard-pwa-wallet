@@ -4,7 +4,13 @@ use std::sync::Arc;
 
 use bip39::Mnemonic;
 use bitcoin::Network;
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+use crate::receive_count::{
+    ReceiveCountMovement, ReceiveCountMovementStatus, ReceiveCountVtxo,
+    incoming_payment_count_on_pubkey,
+};
 
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
@@ -383,6 +389,73 @@ pub async fn bark_peek_receive_address(index: u32) -> Result<String, JsValue> {
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Incoming payments on the receive key at `index`.
+///
+/// Reads the local wallet. A spent payment still counts. Change, a same-value
+/// renewal, and a movement that is not successful do not.
+#[wasm_bindgen]
+pub async fn bark_receive_payment_count(index: u32) -> Result<String, JsValue> {
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let address = wallet.peek_address(index).await.map_err(bark_error)?;
+        let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+        let movements = wallet.history().await.map_err(bark_error)?;
+        let counted_vtxos = vtxos.iter().map(receive_count_vtxo).collect::<Vec<_>>();
+        let counted_movements = movements
+            .iter()
+            .map(receive_count_movement)
+            .collect::<Vec<_>>();
+        let receive_count = incoming_payment_count_on_pubkey(
+            &counted_vtxos,
+            &counted_movements,
+            &address.policy().user_pubkey().to_string(),
+        );
+        serde_json::to_string(&BarkReceivePaymentCountJson { receive_count })
+            .map_err(|err| err.to_string())
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BarkReceivePaymentCountJson {
+    receive_count: u32,
+}
+
+fn receive_count_vtxo(vtxo: &bark::WalletVtxo) -> ReceiveCountVtxo {
+    ReceiveCountVtxo {
+        id: vtxo.vtxo.id().to_string(),
+        amount_sats: vtxo.vtxo.amount().to_sat(),
+        user_pubkey: vtxo.vtxo.user_pubkey().to_string(),
+    }
+}
+
+fn receive_count_movement(movement: &bark::movement::Movement) -> ReceiveCountMovement {
+    ReceiveCountMovement {
+        status: receive_count_status(movement.status),
+        input_vtxo_ids: movement
+            .input_vtxos
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        output_vtxo_ids: movement
+            .output_vtxos
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+    }
+}
+
+fn receive_count_status(status: bark::movement::MovementStatus) -> ReceiveCountMovementStatus {
+    match status {
+        bark::movement::MovementStatus::Pending => ReceiveCountMovementStatus::Pending,
+        bark::movement::MovementStatus::Successful => ReceiveCountMovementStatus::Successful,
+        bark::movement::MovementStatus::Failed => ReceiveCountMovementStatus::Failed,
+        bark::movement::MovementStatus::Canceled => ReceiveCountMovementStatus::Canceled,
+    }
 }
 
 /// Derives and stores the next Bark receive address.

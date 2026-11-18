@@ -15,6 +15,14 @@ export function barkReceiveAddressQueryKey(
   return ['bark', 'receive-address', walletId, networkMode, receiveKeyIndex] as const
 }
 
+export function barkReceivePaymentCountQueryKey(
+  walletId: number | null,
+  networkMode: NetworkMode,
+  receiveKeyIndex: number | null,
+) {
+  return ['bark', 'receive-payment-count', walletId, networkMode, receiveKeyIndex] as const
+}
+
 export function useBarkReceiveAddressQuery() {
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -37,6 +45,35 @@ export function useBarkReceiveAddressQuery() {
       return getBarkWorker().peekReceiveAddress(receiveKeyIndex)
     },
     staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+export function useBarkReceivePaymentCountQuery() {
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const snapshot = useBarkLoadLifecycleSnapshot()
+  const addressQuery = useBarkReceiveAddressQuery()
+  const receiveKeyIndex = snapshot.receiveKeyIndex
+  const addressReady =
+    addressQuery.isSuccess &&
+    typeof addressQuery.data === 'string' &&
+    addressQuery.data.length > 0
+  const sessionReady =
+    snapshot.loadPhase === 'loaded' &&
+    snapshot.networkMode === networkMode &&
+    isBarkActiveForNetworkMode(networkMode) &&
+    receiveKeyIndex != null &&
+    activeWalletId != null
+
+  return useQuery({
+    queryKey: barkReceivePaymentCountQueryKey(activeWalletId, networkMode, receiveKeyIndex),
+    enabled: sessionReady && addressReady,
+    queryFn: () => {
+      if (receiveKeyIndex == null) {
+        throw new Error('Bark receive key index is missing')
+      }
+      return getBarkWorker().receivePaymentCount(receiveKeyIndex)
+    },
   })
 }
 

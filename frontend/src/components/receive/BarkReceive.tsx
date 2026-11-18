@@ -1,5 +1,9 @@
 import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  BARK_RECEIVE_PAYMENT_COUNT_INFO_ID,
+  BarkReceivePaymentCountInfomodeContent,
+} from '@/components/bark/infomode/BarkReceivePaymentCountInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
@@ -13,12 +17,15 @@ import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import {
   useBarkReceiveAddressQuery,
+  useBarkReceivePaymentCountQuery,
   useBarkRevealReceiveAddressMutation,
 } from '@/hooks/useBarkReceiveQueries'
+import { paymentsToAddressLabel } from '@/lib/wallet/receive-gap-surface'
 
 export function BarkReceive() {
   const snapshot = useBarkLoadLifecycleSnapshot()
   const addressQuery = useBarkReceiveAddressQuery()
+  const paymentCountQuery = useBarkReceivePaymentCountQuery()
   const revealMutation = useBarkRevealReceiveAddressMutation()
 
   const indexMissing = snapshot.loadPhase === 'loaded' && snapshot.receiveKeyIndex == null
@@ -30,6 +37,11 @@ export function BarkReceive() {
       addressQuery.isLoading ||
       (addressQuery.isFetching && address.length === 0))
   const showAddressError = indexMissing || snapshot.loadPhase === 'load-error' || addressQuery.isError
+  const showPaymentCount =
+    !showAddressError &&
+    !addressLoading &&
+    address.length > 0 &&
+    typeof paymentCountQuery.data === 'number'
 
   const handleCopy = async () => {
     if (!address) return
@@ -97,6 +109,17 @@ export function BarkReceive() {
               />
             </div>
           )}
+          {showPaymentCount ? (
+            <InfomodeWrapper
+                  infoId={BARK_RECEIVE_PAYMENT_COUNT_INFO_ID}
+              infoComponent={BarkReceivePaymentCountInfomodeContent}
+              className="rounded-md"
+            >
+              <p data-testid="bark-receive-payment-count">
+                {paymentsToAddressLabel(paymentCountQuery.data ?? 0)}
+              </p>
+            </InfomodeWrapper>
+          ) : null}
           <DesignButton
             type="button"
             className="w-full"
