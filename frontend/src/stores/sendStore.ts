@@ -67,7 +67,7 @@ const initialState = {
   step: 1 as SendStep,
   recipient: '',
   amount: '',
-  amountUnit: 'BTC' as SendAmountUnit,
+  amountUnit: 'sat' as SendAmountUnit,
   feePresetSelection: initialFeePresetSelection,
   feeRate: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB[initialFeePresetSelection],
   customFeeRate: '',

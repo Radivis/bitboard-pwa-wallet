@@ -2,9 +2,15 @@ import { useNavigate } from '@tanstack/react-router'
 import { Trash2, Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
 import { prepareActiveWalletSwitch } from '@/lib/wallet/prepare-active-wallet-switch'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { Button } from '@/components/ui/button'
 
 export function WalletsPage() {
   const navigate = useNavigate()
@@ -41,41 +47,39 @@ export function WalletsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Select Wallet</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h2 className="design-type-screen-heading">Select Wallet</h2>
+        <p className="design-type-regular mt-1 text-muted-foreground">
           Choose a wallet to use
         </p>
       </div>
 
       <div className="space-y-3">
         {wallets.map((wallet) => (
-          <Card
+          <DesignCard
             key={wallet.walletId}
             className="cursor-pointer transition-colors hover:bg-muted/50"
             onClick={() => handleSelectWallet(wallet.walletId)}
           >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
+            <DesignCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <DesignCardTitle className="flex items-center gap-2">
                 <Wallet className="h-4 w-4" />
                 {wallet.name}
-              </CardTitle>
-              <Button
+              </DesignCardTitle>
+              <DesignButton
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
+                appearance="tertiary"
+                className="shrink-0"
                 aria-label={`Delete wallet ${wallet.name}`}
                 onClick={(e) => void handleDeleteWalletIntent(e, wallet.walletId)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
+                icon={<Trash2 />}
+              />
+            </DesignCardHeader>
+            <DesignCardContent>
+              <DesignCardDescription>
                 Created {new Date(wallet.createdAt).toLocaleDateString()}
-              </CardDescription>
-            </CardContent>
-          </Card>
+              </DesignCardDescription>
+            </DesignCardContent>
+          </DesignCard>
         ))}
       </div>
     </div>

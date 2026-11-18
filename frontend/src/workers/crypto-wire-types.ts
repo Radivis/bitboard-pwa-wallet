@@ -5,6 +5,13 @@ export interface WireDescriptorPair {
   internal_descriptor: string;
 }
 
+export interface WireExternalReceiveGap {
+  revealed: boolean;
+  index: number;
+  receive_count: number;
+  gap: number;
+}
+
 export interface WireBalanceInfo {
   confirmed_sats: number;
   trusted_pending_sats: number;

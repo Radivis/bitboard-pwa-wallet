@@ -1,12 +1,15 @@
+use std::collections::HashSet;
+
 use bdk_wallet::chain::ChainPosition;
 use bdk_wallet::chain::spk_client::SyncRequest;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 use bitcoin::Network as BdkNetwork;
+use bitcoin::Txid;
 
 use crate::error::CryptoError;
 use crate::p2a_cpfp::is_pay_to_anchor_cpfp_child;
 use crate::transaction::WalletUtxoRow;
-use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
+use crate::types::{BalanceInfo, BitcoinNetwork, ExternalReceiveGap, TransactionDetails};
 
 /// BDK network for our [`BitcoinNetwork::Testnet`] mode. Public Esplora defaults use
 /// Testnet4 (e.g. mempool.space/testnet4); BDK's `Network::Testnet` is Testnet3, which
@@ -147,6 +150,49 @@ pub fn start_incremental_sync_request(
 /// Height of the newest block the wallet has synced. Coins confirmed above it still look unconfirmed.
 pub fn local_chain_tip_height(wallet: &Wallet) -> u32 {
     wallet.local_chain().tip().height()
+}
+
+/// Receive count of the last revealed external address, and the trailing unused gap.
+///
+/// The count is distinct canonical transaction ids from [`Wallet::list_output`] that pay
+/// that index. Spent outputs still count. Change outputs are ignored. `revealed` is false
+/// until the external chain has been revealed; a peeked index is not a gap.
+pub fn external_receive_gap(wallet: &Wallet) -> ExternalReceiveGap {
+    let Some(last_revealed) = wallet.derivation_index(KeychainKind::External) else {
+        return ExternalReceiveGap {
+            revealed: false,
+            index: 0,
+            receive_count: 0,
+            gap: 0,
+        };
+    };
+
+    let mut last_paid_index: Option<u32> = None;
+    let mut receive_txids = HashSet::<Txid>::new();
+    for output in wallet.list_output() {
+        if output.keychain != KeychainKind::External {
+            continue;
+        }
+        last_paid_index = Some(match last_paid_index {
+            Some(current) => current.max(output.derivation_index),
+            None => output.derivation_index,
+        });
+        if output.derivation_index == last_revealed {
+            receive_txids.insert(output.outpoint.txid);
+        }
+    }
+
+    let gap = match last_paid_index {
+        Some(last_paid) => last_revealed.saturating_sub(last_paid),
+        None => last_revealed.saturating_add(1),
+    };
+
+    ExternalReceiveGap {
+        revealed: true,
+        index: last_revealed,
+        receive_count: u32::try_from(receive_txids.len()).unwrap_or(u32::MAX),
+        gap,
+    }
 }
 
 /// Return the current wallet balance broken down by confirmation status.

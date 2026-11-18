@@ -204,10 +204,10 @@ function BarkExitTreeDetail({
   )
 
   return (
-    <div className="space-y-2 text-sm" data-testid="bark-exit-tree-detail">
+    <div className="design-type-regular space-y-2" data-testid="bark-exit-tree-detail">
       <button
         type="button"
-        className="break-all text-left font-mono text-primary underline-offset-4 hover:underline"
+        className="design-type-addresses break-all text-left text-primary underline-offset-4 hover:underline"
         data-testid="bark-exit-tree-detail-txid"
         onClick={() => void copyTxid()}
       >
@@ -232,7 +232,7 @@ function BarkExitTreeDetail({
             const row = vtxoRows.find((candidate) => candidate.id === vtxoId)
             return (
               <li key={vtxoId} data-testid={`bark-exit-tree-detail-vtxo-${vtxoId}`}>
-                <span className="font-mono">{vtxoId}</span>
+                <span className="design-type-addresses">{vtxoId}</span>
                 {row == null ? null : <span> · {formatSats(row.amountSats)}</span>}
               </li>
             )
@@ -287,11 +287,11 @@ export function BarkExitTreeGraph({
       >
         {errorMessage != null ? (
           <div className="flex h-full items-center justify-center bg-muted/20 px-4">
-            <p className="text-sm text-destructive">{errorMessage}</p>
+            <p className="design-type-regular text-destructive">{errorMessage}</p>
           </div>
         ) : emptySelection || nodes?.length === 0 ? (
           <div className="flex h-full items-center justify-center bg-muted/20 px-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               {emptySelection
                 ? 'Select spendable VTXOs to see their exit tree.'
                 : 'No exit transactions for this selection.'}
@@ -299,7 +299,7 @@ export function BarkExitTreeGraph({
           </div>
         ) : nodes == null ? (
           <div className="flex h-full items-center justify-center bg-muted/20">
-            <p className="text-sm text-muted-foreground">Loading exit tree…</p>
+            <p className="design-type-regular text-muted-foreground">Loading exit tree…</p>
           </div>
         ) : (
           <div className="h-full w-full">

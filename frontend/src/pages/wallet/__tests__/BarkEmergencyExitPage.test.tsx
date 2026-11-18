@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { BarkEmergencyExitPage } from '@/pages/wallet/BarkEmergencyExitPage'
@@ -257,14 +257,15 @@ describe('BarkEmergencyExitPage', () => {
     ).toBeInTheDocument()
 
     const toggle = await screen.findByTestId('bark-emergency-exit-proceed-automatically')
+    const turnOn = within(toggle).getByRole('button', { name: 'On' })
     expect(screen.getByTestId('bark-emergency-exit-live-card')).toContainElement(toggle)
     expect(screen.getByTestId('bark-emergency-exit-fee-card')).not.toContainElement(toggle)
-    expect(toggle).toHaveAttribute('data-state', 'unchecked')
+    expect(turnOn).toHaveAttribute('aria-pressed', 'false')
     await waitFor(() => {
-      expect(toggle).toBeEnabled()
+      expect(turnOn).toBeEnabled()
     })
 
-    await user.click(toggle)
+    await user.click(turnOn)
 
     await waitFor(() => {
       expect(barkWorker.writeProceedAutomatically).toHaveBeenCalledWith(true)
@@ -336,7 +337,7 @@ describe('BarkEmergencyExitPage', () => {
   it('BARK-EMG-03 shows the broadcast fee, claim fee, and transaction count before start', async () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     const review = await screen.findByRole('button', { name: 'Review emergency exit' })
-    expect(review).toHaveAttribute('data-variant', 'default')
+    expect(review).toHaveAttribute('data-type', 'primary')
     expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(review)
@@ -481,7 +482,7 @@ describe('BarkEmergencyExitPage', () => {
       'Broadcasting 1 of 2 exit transactions. 1 is waiting for confirmed funds.',
     )
     expect(graph.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(graph.closest('[data-slot="card"]')).toContainElement(banner)
+    expect(graph.closest('[data-slot="design-card"]')).toContainElement(banner)
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
   })

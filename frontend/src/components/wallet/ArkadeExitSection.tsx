@@ -3,7 +3,7 @@ import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/info
 import { ArkadeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeExitInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
 import { useHasUnilateralExitInProgress } from '@/hooks/useHasUnilateralExitInProgress'
@@ -35,7 +35,7 @@ export function ArkadeExitSection() {
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">
+      <p className="design-type-emphasis">
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.exitSection}
           infoComponent={ArkadeExitInfomodeContent}
@@ -44,7 +44,7 @@ export function ArkadeExitSection() {
           Exit to on-chain
         </InfomodeWrapper>
       </p>
-      <p className="text-xs text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Move Arkade funds back to a normal Bitcoin address.{' '}
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.learnAboutExits}
@@ -67,13 +67,13 @@ export function ArkadeExitSection() {
           as="span"
         >
           {collaborativeExitUnavailable ? (
-            <Button type="button" variant="outline" size="sm" disabled>
+            <DesignButton type="button" appearance="secondary" disabled>
               Collaborative exit
-            </Button>
+            </DesignButton>
           ) : (
-            <Button type="button" variant="outline" size="sm" asChild>
+            <DesignButton type="button" appearance="secondary" asChild>
               <Link to="/wallet/arkade/collaborative-exit">Collaborative exit</Link>
-            </Button>
+            </DesignButton>
           )}
         </InfomodeWrapper>
         <InfomodeWrapper
@@ -81,7 +81,7 @@ export function ArkadeExitSection() {
           infoComponent={ArkadeUnilateralExitInfomodeContent}
           as="span"
         >
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link
               to="/wallet/arkade/unilateral-exit"
               data-testid="arkade-unilateral-exit-control"
@@ -90,21 +90,21 @@ export function ArkadeExitSection() {
                 ? 'Control unilateral exit'
                 : 'Start unilateral exit'}
             </Link>
-          </Button>
+          </DesignButton>
         </InfomodeWrapper>
         {hasUnilateralExitInProgress && (
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link
               to="/wallet/arkade/complete-unilateral-exit"
               data-testid="arkade-complete-unilateral-exit"
             >
               Complete unilateral exit
             </Link>
-          </Button>
+          </DesignButton>
         )}
       </div>
       {collaborativeExitUnavailable && (
-        <p className="text-xs text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
+        <p className="design-type-regular text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
           {collaborativeExitUnavailableReason({
             hasPendingCollaborativeIntent,
             autonomousModeActive,

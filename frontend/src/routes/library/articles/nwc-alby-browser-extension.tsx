@@ -35,7 +35,7 @@ export const article: LibraryArticle = {
             create a new NWC connection.
           </li>
           <li>
-            Copy the <code className="text-sm">nostr+walletconnect://</code> URI.
+            Copy the <code className="design-type-addresses">nostr+walletconnect://</code> URI.
           </li>
           <li>
             In Bitboard, open <strong>Management → Lightning</strong> and paste the URI into the NWC

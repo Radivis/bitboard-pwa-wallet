@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { getDatabase, libraryKeys, recordLibraryHistoryAccess } from '@/db'
 import { articleSlugFromAccessPath, isArticleSlug } from '@/lib/library/articles'
-import { PostLockPrivacyBanner } from '@/components/PostLockPrivacyBanner'
 
 export const Route = createFileRoute('/library')({
   component: LibraryLayout,
@@ -26,10 +25,5 @@ function LibraryLayout() {
       })
   }, [location.pathname, queryClient])
 
-  return (
-    <>
-      <PostLockPrivacyBanner />
-      <Outlet />
-    </>
-  )
+  return <Outlet />
 }

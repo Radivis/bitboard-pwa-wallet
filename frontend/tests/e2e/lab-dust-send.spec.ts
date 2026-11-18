@@ -63,7 +63,7 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     ).toBeVisible({
       timeout: 15000,
     })
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     await expect(addressEl).toBeVisible({ timeout: 10000 })
     const walletAddress = (await addressEl.textContent())?.trim()
     expect(walletAddress).toMatch(/^bcrt1/)
@@ -121,7 +121,7 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     ).toBeVisible({
       timeout: 15000,
     })
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     await expect(addressEl).toBeVisible({ timeout: 10000 })
     const walletAddress = (await addressEl.textContent())?.trim()
     expect(walletAddress).toMatch(/^bcrt1/)

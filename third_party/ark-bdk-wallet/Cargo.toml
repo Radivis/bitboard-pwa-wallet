@@ -87,10 +87,6 @@ default-features = false
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.getrandom]
 version = "0.2"
 
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.gloo-timers]
-version = "0.3.0"
-features = ["futures"]
-
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.bdk_esplora]
 version = "0.22.2"
 features = [

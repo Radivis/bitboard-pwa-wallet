@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 
 interface ArkadeEnableConfirmModalProps {
   open: boolean
@@ -24,18 +23,23 @@ export function ArkadeEnableConfirmModal({
   }, [open])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Enable Arkade"
-      contentClassName="sm:max-w-lg"
+      optIn={{
+        id: 'arkade-enable-ack',
+        label: 'I understand Arkade is new, and accept the associated risks',
+        checked: acknowledgedRisks,
+        onChange: setAcknowledgedRisks,
+      }}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={!acknowledgedRisks}
             onClick={() => {
@@ -44,12 +48,11 @@ export function ArkadeEnableConfirmModal({
             }}
           >
             Enable Arkade
-          </Button>
+          </DesignButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
-      <div className="space-y-4 text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-4 text-muted-foreground">
         <DialogDescription className="sr-only">
           Confirm that you understand Arkade is a new feature and how to use it safely before
           enabling.
@@ -68,19 +71,7 @@ export function ArkadeEnableConfirmModal({
           to <strong className="text-foreground">very small sums</strong> you can afford to lose
           while the feature matures.
         </p>
-        <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
-            id="arkade-enable-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
-            checked={acknowledgedRisks}
-            onChange={(event) => setAcknowledgedRisks(event.target.checked)}
-          />
-          <Label htmlFor="arkade-enable-ack" className="cursor-pointer font-normal">
-            I understand Arkade is new, and accept the associated risks
-          </Label>
-        </div>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

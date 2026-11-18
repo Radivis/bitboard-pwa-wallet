@@ -5,7 +5,6 @@ use bitcoin::{Transaction, Txid};
 
 use crate::blockchain::BlockchainClient;
 use crate::error::CryptoError;
-use crate::wasm_sleep::WasmSleeper;
 
 /// Per-request timeout for incremental sync and broadcast (seconds).
 pub const ESPLORA_SYNC_HTTP_TIMEOUT_SECS: u64 = 5;
@@ -19,7 +18,7 @@ pub const ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS: u64 = 30;
 pub const ESPLORA_FULL_SCAN_MAX_TRANSPORT_RETRIES: usize = 0;
 
 pub struct EsploraClient {
-    async_client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
+    async_client: bdk_esplora::esplora_client::AsyncClient,
 }
 
 impl EsploraClient {
@@ -36,7 +35,7 @@ impl EsploraClient {
             builder = builder.max_retries(max_transport_retries);
         }
         let async_client = builder
-            .build_async_with_sleeper::<WasmSleeper>()
+            .build_async()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
         Ok(Self { async_client })
     }
@@ -62,7 +61,7 @@ impl EsploraClient {
     ///
     /// Used by WASM wrappers that need to separate the request-building
     /// step (which borrows the wallet) from the async network call.
-    pub fn inner(&self) -> &bdk_esplora::esplora_client::AsyncClient<WasmSleeper> {
+    pub fn inner(&self) -> &bdk_esplora::esplora_client::AsyncClient {
         &self.async_client
     }
 }

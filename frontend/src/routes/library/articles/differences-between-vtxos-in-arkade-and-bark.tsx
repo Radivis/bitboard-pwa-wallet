@@ -90,6 +90,8 @@ export const article: LibraryArticle = {
           <ArticleLink slug={ARKADE_LIBRARY_SLUGS.vtxo}>What is a VTXO?</ArticleLink>. For leaving
           Arkade, read{' '}
           <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>.
+          What the operator sees, and what a later exit prints on the chain, is covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>.
         </p>
       </ArticleSection>
 

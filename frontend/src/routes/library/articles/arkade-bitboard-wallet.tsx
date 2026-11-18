@@ -7,7 +7,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
   slug: 'arkade-bitboard-wallet',
-  title: 'Arkade in Bitboard Wallet',
+  title: 'Arkade in Bitcoin Codex',
   tagIds: ['bitcoin', 'wallets'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
@@ -15,8 +15,8 @@ export const article: LibraryArticle = {
         <p>
           Arkade is an offchain Bitcoin layer using <strong>virtual balance units (VTXOs)</strong>.
           Bitboard uses the same BIP39 mnemonic as your on-chain wallet, but Arkade addresses (
-          <code className="text-sm">ark1</code> / <code className="text-sm">tark1</code>) are
-          separate from your <code className="text-sm">bc1</code> receive address.
+          <code className="design-type-addresses">ark1</code> / <code className="design-type-addresses">tark1</code>) are
+          separate from your <code className="design-type-addresses">bc1</code> receive address.
         </p>
       </ArticleSection>
 
@@ -33,11 +33,11 @@ export const article: LibraryArticle = {
       <ArticleSection title="Your three address types">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <code className="text-sm">bc1</code> — on-chain receive (Receive → Bitcoin). For normal
+            <code className="design-type-addresses">bc1</code> — on-chain receive (Receive → Bitcoin). For normal
             blockchain payments.
           </li>
           <li>
-            <code className="text-sm">ark1</code> / <code className="text-sm">tark1</code> — Arkade
+            <code className="design-type-addresses">ark1</code> / <code className="design-type-addresses">tark1</code> — Arkade
             receive (Receive → Arkade). For instant offchain Arkade payments.
           </li>
           <li>

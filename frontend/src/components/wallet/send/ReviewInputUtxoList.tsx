@@ -1,5 +1,5 @@
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { utxoOutpointKey } from '@/lib/wallet/manual-utxo-selection'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
@@ -21,30 +21,24 @@ export function ReviewInputUtxoList({
         return (
         <div
           key={outpointKey}
-          className="flex items-center justify-between gap-2 text-sm"
+          className="design-type-regular flex items-center justify-between gap-2"
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {action != null && onAction != null ? (
-              <Button
+              <DesignButton
                 type="button"
-                variant="outline"
-                size="icon"
-                className="h-7 w-7 shrink-0"
+                appearance="secondary"
+                className="shrink-0"
                 aria-label={
                   action === 'add'
                     ? `Add UTXO ${outpointKey} to selected inputs`
                     : `Remove UTXO ${outpointKey} from selected inputs`
                 }
                 onClick={() => onAction(utxo)}
-              >
-                {action === 'add' ? (
-                  <Plus className="h-4 w-4" />
-                ) : (
-                  <Minus className="h-4 w-4" />
-                )}
-              </Button>
+                icon={action === 'add' ? <Plus /> : <Minus />}
+              />
             ) : null}
-            <span className="font-mono text-muted-foreground truncate">
+            <span className="design-type-addresses text-muted-foreground truncate">
               {truncateAddress(utxo.address)}
             </span>
           </div>

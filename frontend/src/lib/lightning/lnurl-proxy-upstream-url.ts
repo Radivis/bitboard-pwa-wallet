@@ -1,4 +1,4 @@
-import { MAX_LNURL_BECH32_LENGTH } from './lightning-input-limits'
+import { MAX_LNURL_BECH32_LENGTH } from './lightning-input-limits.ts'
 
 function isPrivateOrReservedIpv4(hostname: string): boolean {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname)

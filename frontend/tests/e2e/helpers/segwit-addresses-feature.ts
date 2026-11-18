@@ -1,4 +1,6 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './design-on-off-switch'
 import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 
 /**
@@ -8,13 +10,7 @@ import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 export async function ensureSegwitAddressesFeatureOn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
-  const segwitFeatureSwitch = page.getByRole('switch', {
-    name: 'Enable SegWit address options and labels',
-  })
-  await segwitFeatureSwitch.scrollIntoViewIfNeeded()
-  if (!(await segwitFeatureSwitch.isChecked())) {
-    await segwitFeatureSwitch.click()
-  }
+  await turnDesignOnOffOn(designOnOffGroup(page, 'Enable SegWit address options and labels'))
   await openSettingsMainTab(page)
 }
 
@@ -22,8 +18,7 @@ export async function ensureSegwitAddressesFeatureOn(page: Page): Promise<void> 
  * Opens Settings and enables SegWit address options (pickers and badges).
  */
 export async function enableSegwitAddressesFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /^Settings$/i }).click()
-  await page.waitForURL(/\/settings/)
+  await clickDrawerNavLink(page, 'Settings')
   await openSettingsMainTab(page)
   await ensureSegwitAddressesFeatureOn(page)
 }

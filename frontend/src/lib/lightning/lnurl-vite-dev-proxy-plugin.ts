@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite'
-import { forwardLnurlProxyRequest } from './lnurl-proxy-forward'
+import { forwardLnurlProxyRequest } from './lnurl-proxy-forward.ts'
 
 const LNURL_PROXY_FETCH_PATH = '/api/lnurl/fetch'
 

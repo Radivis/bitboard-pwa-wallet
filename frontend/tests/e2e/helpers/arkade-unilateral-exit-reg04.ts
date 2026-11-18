@@ -1,5 +1,10 @@
 import { expect, type Page } from '@playwright/test'
 import { mineRegtestBlocks, reorgExcludingMempool } from './arkade-regtest'
+import {
+  designOnOffButton,
+  designOnOffIsOn,
+  turnDesignOnOffOff,
+} from './design-on-off-switch'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 import { isUnilateralExitBranchCompleteInPage } from './arkade-unilateral-exit-branch-complete'
 
@@ -19,9 +24,9 @@ async function isBranchComplete(page: Page): Promise<boolean> {
 
 async function ensureManualUnilateralExitMode(page: Page): Promise<void> {
   const autoSwitch = page.getByTestId('unilateral-exit-proceed-automatically')
-  if ((await autoSwitch.count()) > 0 && (await autoSwitch.isChecked())) {
-    await autoSwitch.click()
-    await expect(autoSwitch).not.toBeChecked()
+  if ((await autoSwitch.count()) > 0 && (await designOnOffIsOn(autoSwitch))) {
+    await turnDesignOnOffOff(autoSwitch)
+    await expect(designOnOffButton(autoSwitch, 'On')).toHaveAttribute('aria-pressed', 'false')
   }
 }
 
@@ -148,9 +153,9 @@ async function selectFirstLeafIfUnchecked(page: Page): Promise<void> {
   }
   await leaf.click()
   const leafSwitch = page.getByTestId('unilateral-exit-leaf-select-switch')
-  if ((await leafSwitch.isVisible()) && !(await leafSwitch.isChecked())) {
-    await leafSwitch.click()
-    await expect(leafSwitch).toBeChecked()
+  if ((await leafSwitch.isVisible()) && !(await designOnOffIsOn(leafSwitch))) {
+    await designOnOffButton(leafSwitch, 'On').click()
+    await expect(designOnOffButton(leafSwitch, 'On')).toHaveAttribute('aria-pressed', 'true')
   }
 }
 
@@ -268,7 +273,9 @@ export async function runManualUnilateralUnrollUntilBranchComplete(page: Page): 
       continue
     }
 
-    const automationOn = await page.getByTestId('unilateral-exit-proceed-automatically').isChecked()
+    const automationOn = await designOnOffIsOn(
+      page.getByTestId('unilateral-exit-proceed-automatically'),
+    )
     if (automationOn) {
       throw new Error(
         'Unilateral exit automation is enabled — disable it for the manual REG-04 loop',

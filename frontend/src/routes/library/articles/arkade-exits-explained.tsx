@@ -14,7 +14,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="In a Nutshell">
         <p>
           <strong>Exiting</strong> moves Bitcoin from Arkade back to a normal on-chain{' '}
-          <code className="text-sm">bc1</code> address. Bitboard offers two paths:{' '}
+          <code className="design-type-addresses">bc1</code> address. Bitboard offers two paths:{' '}
           <strong>collaborative</strong> (with the operator, usually faster) and{' '}
           <strong>unilateral</strong> (without the operator, slower but trustless per VTXO).
         </p>
@@ -81,13 +81,15 @@ export const article: LibraryArticle = {
       <ArticleSection title="Related topics">
         <p>
           VTXOs must be renewed while offchain—see{' '}
-          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. For unilateral
+          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. What each
+          exit reveals on the chain is covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>. For unilateral
           exit risks see{' '}
           <ArticleLink slug="risks-of-arkade-unilateral-exits">
             Risks of Arkade unilateral exit
           </ArticleLink>
           . For Arkade basics, read{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> and{' '}
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink> and{' '}
           <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink>.
         </p>
       </ArticleSection>

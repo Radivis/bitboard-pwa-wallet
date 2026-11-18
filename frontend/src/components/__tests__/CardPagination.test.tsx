@@ -23,5 +23,7 @@ describe('CardPagination', () => {
     expect(screen.getByText('Page content')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'First page' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Last page' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Page 1/2' })).toHaveTextContent('1/2')
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 })

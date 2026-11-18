@@ -1,8 +1,11 @@
 import { test, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './helpers/design-on-off-switch'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './helpers/settings-waits'
@@ -12,11 +15,11 @@ test.describe('Settings Page', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-    const testnetButton = page.getByRole('button', { name: 'Testnet' })
-    const signetButton = page.getByRole('button', { name: 'Signet' })
+    const testnetButton = settingsNetworkButton(page, 'Testnet')
+    const signetButton = settingsNetworkButton(page, 'Signet')
     await expect(testnetButton).toBeVisible()
     await expect(signetButton).toBeVisible()
 
@@ -30,15 +33,11 @@ test.describe('Settings Page', () => {
   test('settings address type switch', async ({ page }) => {
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await openSettingsFeaturesTab(page)
-    const segwitFeatureSwitch = page.getByRole('switch', {
-      name: 'Enable SegWit address options and labels',
-    })
-    await segwitFeatureSwitch.scrollIntoViewIfNeeded()
-    await segwitFeatureSwitch.click()
+    await turnDesignOnOffOn(designOnOffGroup(page, 'Enable SegWit address options and labels'))
     await openSettingsMainTab(page)
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
@@ -49,22 +48,19 @@ test.describe('Settings Page', () => {
   })
 
   test('settings Esplora endpoint', async ({ page }) => {
+    test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
     await openSettingsFeaturesTab(page)
-    const regtestModeSwitch = page.getByRole('switch', {
-      name: 'Enable Regtest mode for developers',
-    })
-    await regtestModeSwitch.scrollIntoViewIfNeeded()
-    await regtestModeSwitch.click()
+    await turnDesignOnOffOn(designOnOffGroup(page, 'Enable Regtest mode for developers'))
     await openSettingsMainTab(page)
 
-    await page.getByRole('button', { name: 'Regtest' }).click()
+    await settingsNetworkButton(page, 'Regtest').click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
@@ -75,7 +71,7 @@ test.describe('Settings Page', () => {
       page.getByRole('button', { name: 'Save Endpoint' }),
     ).toBeVisible()
     await expect(
-      page.getByRole('button', { name: 'Reset to Default' }),
+      page.getByRole('button', { name: 'Reset to default' }),
     ).toBeVisible()
 
     await urlInput.fill('http://custom-esplora:3002')
@@ -84,7 +80,7 @@ test.describe('Settings Page', () => {
     await page.getByRole('button', { name: 'Save Endpoint' }).click()
 
     // Persisted custom URL (TanStack Query refetch) enables reset; more reliable than toast or badge timing.
-    await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeEnabled({
+    await expect(page.getByRole('button', { name: 'Reset to default' })).toBeEnabled({
       timeout: 20000,
     })
     await expect(urlInput).toHaveValue('http://custom-esplora:3002', { timeout: 5000 })
@@ -96,12 +92,14 @@ test.describe('Settings Page', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await waitForSettingsNetworkSwitchComplete(page)
-    // Mainnet uses aria-disabled when access is off; Playwright treats that as non-clickable without force.
-    await page.getByRole('button', { name: 'Mainnet' }).click({ force: true })
+    // Mainnet is aria-disabled until Features access is on. A DOM click still runs the handler.
+    await settingsNetworkButton(page, 'Mainnet').evaluate((mainnetButton) => {
+      mainnetButton.click()
+    })
     await expect(
       page.getByText('Activate Mainnet access in Settings → Features before selecting Mainnet.'),
     ).toBeVisible({ timeout: 10000 })

@@ -2,14 +2,13 @@ import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
-import { ThemeSelector } from '@/components/settings/ThemeSelector'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardFooter,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCardCommittedDescriptor'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
@@ -48,11 +47,11 @@ export function SettingsMainPage() {
     fiatRateProvider,
   )
   const fiatSettingsSelectClassName =
-    'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'design-type-addresses rounded-md border border-input bg-background px-2 py-1 text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" icon={Settings} />
+      <PageHeader title="Settings" icon={Settings} variant="area" />
 
       <InfomodeWrapper
         infoId="settings-network-card"
@@ -60,22 +59,22 @@ export function SettingsMainPage() {
         infoText="Bitcoin exists on more than one network. Mainnet is the real-money chain; the others are mainly for practice, learning, and software testing, using coins that are not worth real dollars. Choose the network that matches what you are doing so balances and transactions line up with the right environment."
         className="rounded-xl"
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Network</CardTitle>
-            <CardDescription>
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>Network</DesignCardTitle>
+            <DesignCardDescription>
               Select the Bitcoin network to connect to.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </DesignCardDescription>
+          </DesignCardHeader>
+          <DesignCardContent>
             <NetworkSelector />
-          </CardContent>
+          </DesignCardContent>
           {hasWallets ? (
-            <CardFooter className="flex-col items-stretch border-t pt-6">
+            <DesignCardFooter className="flex-col items-stretch border-t pt-6">
               <NetworkCardCommittedDescriptor />
-            </CardFooter>
+            </DesignCardFooter>
           ) : null}
-        </Card>
+        </DesignCard>
       </InfomodeWrapper>
 
       {isSegwitAddressesEnabled ? (
@@ -85,44 +84,34 @@ export function SettingsMainPage() {
           infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
           className="rounded-xl"
         >
-          <Card>
-            <CardHeader>
-              <CardTitle>Address Type</CardTitle>
-              <CardDescription>
+          <DesignCard>
+            <DesignCardHeader>
+              <DesignCardTitle>Address Type</DesignCardTitle>
+              <DesignCardDescription>
                 Choose the address format for new wallets.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </DesignCardDescription>
+            </DesignCardHeader>
+            <DesignCardContent>
               <AddressTypeSelector />
-            </CardContent>
-          </Card>
+            </DesignCardContent>
+          </DesignCard>
         </InfomodeWrapper>
       ) : null}
 
       {isPeriodicSyncEnabled ? <PeriodicSyncSettings /> : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Choose your preferred color scheme.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeSelector />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Currency / unit defaults</CardTitle>
-          <CardDescription>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Currency / unit defaults</DesignCardTitle>
+          <DesignCardDescription>
             Default Bitcoin display unit, fiat currency for mainnet conversion, and which
             public ticker feeds indicative amounts. On mainnet you can still switch between
             Bitcoin and fiat display on Dashboard, Send, and Receive.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Default Bitcoin unit</span>
+            <span className="design-type-regular text-muted-foreground">Default Bitcoin unit</span>
             <BitcoinUnitSelect
               value={defaultBitcoinUnit}
               onChange={setDefaultBitcoinUnit}
@@ -130,7 +119,7 @@ export function SettingsMainPage() {
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Currency rate service</span>
+            <span className="design-type-regular text-muted-foreground">Currency rate service</span>
             <select
               className={fiatSettingsSelectClassName}
               value={fiatRateProvider}
@@ -153,18 +142,18 @@ export function SettingsMainPage() {
               onDefaultFiatCurrencyChange={setDefaultFiatCurrency}
               supportedCurrenciesQuery={fiatProviderSupportedCurrenciesQuery}
             />
-            <p className="text-xs text-muted-foreground sm:text-right">
+            <p className="design-type-regular text-muted-foreground sm:text-right">
               Available options depend on the selected rate service.
             </p>
             {fiatProviderSupportedCurrenciesQuery.isError ? (
-              <p className="text-xs text-destructive sm:text-right" role="alert">
+              <p className="design-type-regular text-destructive sm:text-right" role="alert">
                 Could not load the currency list for this service. Try again or pick
                 another rate service.
               </p>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
       <EsploraUrlSettings />
     </div>

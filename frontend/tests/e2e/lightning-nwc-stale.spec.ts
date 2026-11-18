@@ -7,6 +7,12 @@ import {
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
 import { runLightningRailSyncUntilIdle } from './helpers/dashboard-sync'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
+import {
+  designOnOffButton,
+  designOnOffGroup,
+  designOnOffIsOn,
+} from './helpers/design-on-off-switch'
 
 const E2E_NWC_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 const E2E_NWC_LABEL = 'E2E Mock Wallet'
@@ -37,7 +43,7 @@ async function addE2eNwcPayment(page: Page, paymentHash: string) {
 }
 
 async function switchToNetworkInSettings(page: Page, networkLabel: 'Signet' | 'Testnet') {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('button', { name: networkLabel }).click()
   await waitForSettingsNetworkSwitchComplete(page)
@@ -56,12 +62,10 @@ test.describe('Lightning NWC stale cache @nwc', () => {
 
     await switchToNetworkInSettings(page, 'Signet')
     await openSettingsFeaturesTab(page)
-    const lightningToggle = page.getByRole('switch', {
-      name: 'Enable Lightning Network',
-    })
-    if ((await lightningToggle.getAttribute('aria-checked')) !== 'true') {
-      await lightningToggle.click()
-      await expect(lightningToggle).toHaveAttribute('aria-checked', 'true')
+    const lightningToggle = designOnOffGroup(page, 'Enable Lightning Network')
+    if (!(await designOnOffIsOn(lightningToggle))) {
+      await designOnOffButton(lightningToggle, 'On').click()
+      await expect(designOnOffButton(lightningToggle, 'On')).toHaveAttribute('aria-pressed', 'true')
     }
 
     await goToWalletTab(page, 'Management')

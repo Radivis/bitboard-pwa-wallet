@@ -18,10 +18,7 @@ export async function writeUnilateralExitProgressQueryCache(
   }
   const { appQueryClient } = await import('@/lib/shared/app-query-client')
   appQueryClient.setQueryData(
-    arkadeUnilateralExitProgressQueryKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.arkadeAccountId,
+    arkadeUnilateralExitProgressQueryKey({ walletId: scope.walletId, networkMode: scope.networkMode, arkadeAccountId: scope.arkadeAccountId }, 
       sortArkadeVtxoOutpoints(outpoints),
     ),
     progress,
@@ -41,13 +38,9 @@ export async function invalidateUnilateralExitQueries(
     await writeUnilateralExitProgressQueryCache(scope, outpoints, progress)
   }
   await appQueryClient.invalidateQueries({
-    queryKey: arkadeBalanceQueryKey(scope.walletId, scope.networkMode, scope.arkadeAccountId),
+    queryKey: arkadeBalanceQueryKey({ walletId: scope.walletId, networkMode: scope.networkMode, arkadeAccountId: scope.arkadeAccountId }),
   })
   await appQueryClient.invalidateQueries({
-    queryKey: arkadeUnilateralExitTopologyScopeKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.arkadeAccountId,
-    ),
+    queryKey: arkadeUnilateralExitTopologyScopeKey({ walletId: scope.walletId, networkMode: scope.networkMode, arkadeAccountId: scope.arkadeAccountId }),
   })
 }

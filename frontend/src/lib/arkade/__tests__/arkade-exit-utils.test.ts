@@ -57,6 +57,12 @@ describe('parseCollaborativeExitAmountSats', () => {
     expect(parseCollaborativeExitAmountSats('abc').ok).toBe(false)
     expect(parseCollaborativeExitAmountSats('0').ok).toBe(false)
   })
+
+  it('accepts a Bitcoin display unit other than sat', () => {
+    expect(
+      parseCollaborativeExitAmountSats('0.0006', { mode: 'bitcoin', bitcoinUnit: 'BTC' }),
+    ).toEqual({ ok: true, amountSats: 60_000 })
+  })
 })
 
 describe('unilateral exit timelock display', () => {

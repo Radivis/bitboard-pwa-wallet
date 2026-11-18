@@ -13,6 +13,7 @@ import type {
 } from './crypto-types';
 import {
   mapWireBalanceToDomain,
+  mapWireExternalReceiveGapToDomain,
   mapWireCreateWalletResultToDomain,
   mapWireDescriptorPairToDomain,
   mapWireDraftPsbtResultToDomain,
@@ -26,6 +27,7 @@ import {
 import type { WalletUtxoRow } from './crypto-api';
 import type {
   WireBalanceInfo,
+  WireExternalReceiveGap,
   WireCreateWalletResult,
   WireDescriptorPair,
   WireDraftPsbtResult,
@@ -389,6 +391,11 @@ const cryptoService = {
 
   async getCurrentAddress(): Promise<string> {
     return invokeWasmCrypto((wasmModule) => wasmModule.get_current_address());
+  },
+
+  async getExternalReceiveGap(): Promise<import('./crypto-api').ExternalReceiveGap> {
+    const wire = await invokeWasmCrypto((wasmModule) => wasmModule.get_external_receive_gap());
+    return mapWireExternalReceiveGapToDomain(wire as WireExternalReceiveGap);
   },
 
   async buildAndSignLabTransaction(params: {

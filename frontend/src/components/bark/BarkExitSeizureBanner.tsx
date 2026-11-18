@@ -1,5 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import {
   barkExitSeizureWarningParts,
   seizureBannerSections,
@@ -42,18 +41,16 @@ export function BarkExitSeizureBanner() {
     <div
       role="alert"
       data-testid="bark-exit-seizure-banner"
-      className="border-b border-red-900/80 bg-red-600 px-4 py-3 text-red-50 shadow-md dark:bg-red-950 dark:text-red-50"
+      className="mx-auto flex max-w-screen-xl flex-col gap-4 px-4 py-3"
     >
-      <div className="mx-auto flex max-w-screen-xl flex-col gap-4">
-        {noticeSections.map((section) => (
-          <NoticeSection
-            key={section.testId}
-            walletId={walletId}
-            networkMode={networkMode}
-            section={section}
-          />
-        ))}
-      </div>
+      {noticeSections.map((section) => (
+        <NoticeSection
+          key={section.testId}
+          walletId={walletId}
+          networkMode={networkMode}
+          section={section}
+        />
+      ))}
     </div>
   )
 }
@@ -65,52 +62,44 @@ function NoticeSection(props: {
 }) {
   const spentOutput = spentOutputOfSection(props.section)
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <div className="flex min-w-0 gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-100" aria-hidden />
-        <div className="min-w-0 space-y-2">
-          <SeizureWarning section={props.section} />
-          <ul
-            className="list-disc pl-5 text-sm leading-relaxed"
-            data-testid={`${props.section.testId}-ids`}
-          >
-            {props.section.vtxoIds.map((vtxoId) => (
-              <li key={vtxoId} className="break-all font-mono">
-                {vtxoId}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="shrink-0 bg-white text-red-900 hover:bg-red-50 dark:bg-red-100 dark:hover:bg-white"
-        data-testid={`${props.section.testId}-dismiss`}
-        onClick={() => {
+    <DesignBanner
+      status="error"
+      role="alert"
+      data-testid={props.section.testId}
+      title={<SeizureWarning section={props.section} />}
+      optionalContent={
+        <ul className="list-disc pl-5" data-testid={`${props.section.testId}-ids`}>
+          {props.section.vtxoIds.map((vtxoId) => (
+            <li key={vtxoId} className="break-all font-mono">
+              {vtxoId}
+            </li>
+          ))}
+        </ul>
+      }
+      secondaryAction={{
+        label: 'Dismiss',
+        testId: `${props.section.testId}-dismiss`,
+        onClick: () => {
           void useBarkExitChainNoticeStore
             .getState()
             .dismissNotice(props.walletId, props.networkMode, props.section.kind, spentOutput)
             .catch(() => {
               // The Bark account still has this list, so the section stays.
             })
-        }}
-      >
-        Dismiss
-      </Button>
-    </div>
+        },
+      }}
+    />
   )
 }
 
 function SeizureWarning(props: { section: BarkExitSeizureSection }) {
   const parts = barkExitSeizureWarningParts(props.section)
   return (
-    <p className="text-sm leading-relaxed">
+    <>
       {parts.beforeTxid}
       {parts.txid != null ? <span className="break-all font-mono">{parts.txid}</span> : null}
       {parts.afterTxid}
-    </p>
+    </>
   )
 }
 

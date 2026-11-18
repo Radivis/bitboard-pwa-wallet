@@ -9,6 +9,7 @@ import {
   usePendingBatchIntents,
 } from '@/hooks/useArkadeQueries'
 import { parseCollaborativeExitAmountSats } from '@/lib/arkade/arkade-exit-utils'
+import { useUniversalAmountEntry } from '@/lib/wallet/universal-amount'
 import {
   ARKADE_INTENT_LIFECYCLE_PHASES,
   isIntentSubmitPhase,
@@ -33,8 +34,9 @@ export function useCollaborativeExitFlow() {
   // "Loading…" until the amount is edited.
   const [collabDestination, setCollabDestination] = useState(currentAddress ?? '')
   const [collabAmountSats, setCollabAmountSats] = useState('')
+  const amountEntry = useUniversalAmountEntry()
 
-  const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
+  const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats, amountEntry)
   const collabAmountValid = collabAmountParse.ok
   const collabAmount = collabAmountParse.ok ? collabAmountParse.amountSats : undefined
   const collabAmountError = collabAmountParse.ok ? null : collabAmountParse.message

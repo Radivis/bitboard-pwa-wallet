@@ -100,7 +100,7 @@ feature:
         - recent transactions list
           - paginated activity list (5 / 8 / 10 items per page on small / medium / large viewports; page navigator when more than one page)
           - on public networks, on-chain and Lightning activity are merged in one list
-          - lab network dashboard uses the same pagination for wallet-scoped lab transactions
+          - the Labnet dashboard uses the same pagination for wallet-scoped lab transactions
           - each transaction shows: direction (sent/received), amount, date, confirmation status
             - sent amount in list = net paid to recipients (excludes fee)
             - received amount in list = net received (unchanged)
@@ -119,7 +119,7 @@ feature:
         - If wallet is locked, show unlock prompt (Bitboard app password)
         - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
         - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
-        - Lab network does not use Esplora timestamps; lab dashboard uses simulator chain state only
+        - Labnet does not use Esplora timestamps; the lab dashboard uses simulator chain state only
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive
@@ -132,10 +132,23 @@ feature:
             - copy address to clipboard, show confirmation toast
         - new address button
           - click_event:
-            - derive next unused address, update display
+            - when the trailing unused gap is 0, derive the next address and update the display
+            - when chain history is not available yet on a public network and the gap is under 20, derive the next address and update the display
+            - when chain history is available and the gap is 1 through 19, ask for confirmation first; the text states the unused run after this click, which is the current gap plus one; cancelling leaves the current address in place
+            - when the gap is 20 or greater, ask with a hard warning and an unchecked opt-in, including before chain history is available; the reveal stays disabled until the box is checked, and the choice is not remembered
+            - confirming reads the gap again and follows the new band: reveal immediately only when the gap is now 0, stay on the hard warning if the gap has moved to 20 or greater
         - address type indicator (Taproot or SegWit)
+        - payment count for the current address, including 0, once chain history is available (`Payments to this address: N`). Copy stays the filled button while that count is 0, including before the count is known. Generate takes the filled style once the count is above 0. The buttons keep their places
+          - infomode: address reuse links payments to one recipient and is a deanonymization risk; a count of 0 means the address is still fresh. Links to the article Address reuse and deanonymization
+        - unused-gap line only when the gap is 2 or greater (`Unused gap: N. A normal wallet looks ahead 20 addresses.`)
+          - infomode: a normal scan stops after 20 unused addresses; passing that limit does not destroy coins, but a seed-only restore and most other wallets will not find later addresses. This wallet still can, because it remembers revealed addresses. Generating past 20 asks for an opt-in. Links to the article The gap limit
+        - saved-state note when a public network has a prior Esplora sync that this session has not verified
       - requirements:
         - Wallet must be unlocked
+        - Counts and the gap come from the loaded wallet's canonical outputs (`list_output`) on the external chain. A spent payment still counts. Two outputs of one transaction count once. Change outputs do not move the external gap. The gap is the run of revealed external addresses after the highest index that has a canonical payment; with no payment yet it is `last revealed index + 1`
+        - On a public network, the count, the gap line, and the soft confirmation stay hidden until a successful Esplora sync exists (`lastSuccessfulEsploraSyncAt` or a sync completed this session). The hard warning still uses the loaded wallet's gap before that sync, because a missing sync can only hide payments and that shrinks the gap
+        - On Labnet, the count, the gap line, and both confirmations use the local chain as soon as an external address has been revealed. There is no Esplora saved-state note
+        - The first reveal, when the page has no address yet, does not ask for confirmation
     - Send:
       - description: "Send Bitcoin to a recipient address"
       - path: /wallet/send
@@ -146,7 +159,7 @@ feature:
           - paste button
             - click_event:
               - paste address from clipboard
-          - amount input field with BTC/sats toggle
+          - amount input field using the Settings Bitcoin unit (sat when unset), with a per-send unit selector, and the fiat currency when fiat denomination mode is on for mainnet
           - available balance display
           - send max button
             - click_event:

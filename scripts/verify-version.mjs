@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * Ensures repository root `VERSION` matches Cargo workspace, npm packages, lockfile roots,
- * and workspace crates in `Cargo.lock`. Used in CI.
+ * Ensures repository root `VERSION` matches Cargo workspace, explicit crate versions,
+ * npm packages, lockfile roots, and workspace crates in `Cargo.lock`. Used in CI.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import {
   escapeRegExpLiteral,
+  EXPLICIT_CARGO_PACKAGE_VERSION_PATHS,
+  getCargoPackageVersion,
   getCargoWorkspacePackageVersion,
   getRepositoryRoot,
   readTrimmedVersionFile,
@@ -65,6 +67,21 @@ try {
   }
 } catch (error) {
   validationErrors.push(String(error))
+}
+
+for (const cargoTomlRelativePath of EXPLICIT_CARGO_PACKAGE_VERSION_PATHS) {
+  try {
+    const cargoPackageVersion = getCargoPackageVersion(
+      path.join(repositoryRoot, cargoTomlRelativePath),
+    )
+    if (cargoPackageVersion !== expectedVersion) {
+      validationErrors.push(
+        `${cargoTomlRelativePath} version "${cargoPackageVersion}" !== VERSION (${expectedVersion})`,
+      )
+    }
+  } catch (error) {
+    validationErrors.push(String(error))
+  }
 }
 
 const frontendPackageJsonPath = path.join(repositoryRoot, 'frontend', 'package.json')

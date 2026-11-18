@@ -17,6 +17,7 @@ import {
 } from './helpers/arkade-regtest'
 import { restartArkadeOperator } from './helpers/regtest'
 import { ensureOnChainBumperFunds, goToArkadeManagementPanel } from './helpers/arkade-management'
+import { designOnOffButton } from './helpers/design-on-off-switch'
 import {
   prepareCollaborativeExitScenario,
   prepareUnilateralUnrollScenario,
@@ -45,7 +46,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByRole('link', { name: 'Collaborative exit' }).click()
     await expect(page.getByRole('heading', { name: 'Collaborative exit' })).toBeVisible()
     await page.getByRole('button', { name: 'Use current receive address' }).click()
-    await page.getByLabel('Amount (sats, optional)').fill('50000')
+    await page.getByLabel('Amount (sat, optional)').fill('50000')
     await page.getByRole('button', { name: 'Confirm exit' }).click()
     await expect(
       page.getByRole('button', { name: 'Exiting…' }).or(
@@ -68,7 +69,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByTestId('arkade-unilateral-exit-control').click()
     await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
     await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
-    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
+    await designOnOffButton(page.getByTestId('unilateral-exit-leaf-select-switch'), 'On').click()
     await ensureOnChainBumperFunds(page, 100_000)
     await runManualUnilateralUnrollUntilBranchComplete(page)
 
@@ -102,7 +103,7 @@ async function readOnChainReceiveAddress(page: Page): Promise<string> {
   await goToWalletTab(page, 'Receive')
   const addressEl = page
     .locator('[data-infomode-id="receive-receiving-address-card"]')
-    .locator('.font-mono')
+    .locator('.design-type-addresses:not(input):not(textarea):not(select)')
   await expect(addressEl).toBeVisible({ timeout: 15_000 })
   const address = (await addressEl.textContent())?.trim() ?? ''
   if (!address.startsWith('bcrt1')) {

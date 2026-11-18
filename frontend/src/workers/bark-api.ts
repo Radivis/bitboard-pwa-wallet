@@ -232,6 +232,7 @@ export interface BarkService {
   openSession(params: OpenBarkSessionParams): Promise<OpenBarkSessionResult>
   closeSession(): Promise<void>
   peekReceiveAddress(index: number): Promise<string>
+  receivePaymentCount(index: number): Promise<number>
   revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress>
   sync(): Promise<BarkSyncResult>
   readSpendableBalance(): Promise<BarkBalanceParts>

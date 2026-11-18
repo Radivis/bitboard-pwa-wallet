@@ -143,6 +143,25 @@ export async function loadCustomEsploraUrl(
 /** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
 const FULL_SCAN_STOP_GAP = 20
 
+let blockchainScanGeneration = 0
+let cancelledBlockchainScanGeneration = 0
+let activeBlockchainScanToastId: string | number | undefined
+
+/**
+ * Drop the "Scanning blockchain…" toast when a switch or lock abandons the scan.
+ * A later resolution of that scan must not apply balance onto a newer wallet.
+ */
+export function dismissAbandonedBlockchainScan(): void {
+  cancelledBlockchainScanGeneration = blockchainScanGeneration
+  if (activeBlockchainScanToastId == null) return
+  toast.dismiss(activeBlockchainScanToastId)
+  activeBlockchainScanToastId = undefined
+}
+
+function blockchainScanWasCancelled(generation: number): boolean {
+  return generation !== 0 && generation === cancelledBlockchainScanGeneration
+}
+
 /** Stable id so a Lab switch can dismiss a scan that is still waiting on Esplora. */
 export const ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID = 'onchain-blockchain-scan'
 
@@ -183,16 +202,25 @@ export async function syncActiveWalletAndUpdateState(
 
   let fullScanToastId: string | number | undefined
   if (options?.useFullScan) {
+    const scanGeneration = ++blockchainScanGeneration
     fullScanToastId = toast.loading('Scanning blockchain…', {
       id: ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID,
     })
+    activeBlockchainScanToastId = fullScanToastId
     try {
       await withEsploraFullScanRetries(async () => {
         throwIfLoadedDescriptorLeftSync(options?.walletId, networkMode)
         await fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP)
       })
+      if (blockchainScanWasCancelled(scanGeneration)) {
+        toast.dismiss(fullScanToastId)
+        throw new Error('On-chain scan cancelled')
+      }
     } catch (err) {
       toast.dismiss(fullScanToastId)
+      if (activeBlockchainScanToastId === fullScanToastId) {
+        activeBlockchainScanToastId = undefined
+      }
       throw err
     }
   } else {
@@ -214,11 +242,17 @@ export async function syncActiveWalletAndUpdateState(
   if (!onchainSyncStillTargetsActiveWallet(options?.walletId, networkMode)) {
     if (fullScanToastId != null) {
       toast.dismiss(fullScanToastId)
+      if (activeBlockchainScanToastId === fullScanToastId) {
+        activeBlockchainScanToastId = undefined
+      }
     }
     return
   }
   if (fullScanToastId != null) {
     toast.success('Wallet synced', { id: fullScanToastId })
+    if (activeBlockchainScanToastId === fullScanToastId) {
+      activeBlockchainScanToastId = undefined
+    }
   }
   setBalance(balance)
   setTransactions(transactionList)

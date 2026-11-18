@@ -1,5 +1,6 @@
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DialogDescription } from '@/components/ui/dialog'
 import { ArticleLink } from '@/lib/library/article-shared'
 import { ARKADE_LIBRARY_SLUGS } from '@/lib/arkade/arkade-infomode'
@@ -16,20 +17,18 @@ export function AbortUnilateralExitInfoModal({
   onContinue,
 }: AbortUnilateralExitInfoModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Abort unilateral exit?"
-      contentClassName="sm:max-w-lg"
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             data-testid="unilateral-exit-abort-info-continue"
             onClick={() => {
               onContinue()
@@ -37,13 +36,12 @@ export function AbortUnilateralExitInfoModal({
             }}
           >
             Continue
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div
-        className="space-y-4 text-sm text-muted-foreground"
+        className="design-type-regular space-y-4 text-muted-foreground"
         data-testid="unilateral-exit-abort-info-modal"
       >
         <DialogDescription className="sr-only">
@@ -68,6 +66,6 @@ export function AbortUnilateralExitInfoModal({
           </ArticleLink>
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

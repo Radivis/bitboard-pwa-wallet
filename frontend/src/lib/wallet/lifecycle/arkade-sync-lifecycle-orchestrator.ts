@@ -192,18 +192,10 @@ async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): P
   }
   const { appQueryClient } = await import('@/lib/shared/app-query-client')
   await appQueryClient.invalidateQueries({
-    queryKey: arkadeOperatorTrustStatusQueryKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.arkadeAccountId,
-    ),
+    queryKey: arkadeOperatorTrustStatusQueryKey({ walletId: scope.walletId, networkMode: scope.networkMode, arkadeAccountId: scope.arkadeAccountId }),
   })
   await appQueryClient.invalidateQueries({
-    queryKey: arkadeOperatorConfigDiffQueryKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.arkadeAccountId,
-    ),
+    queryKey: arkadeOperatorConfigDiffQueryKey({ walletId: scope.walletId, networkMode: scope.networkMode, arkadeAccountId: scope.arkadeAccountId }),
   })
 }
 

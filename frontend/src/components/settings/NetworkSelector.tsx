@@ -1,18 +1,9 @@
-import { useCallback } from 'react'
-import { toast } from 'sonner'
-import {
-  useWalletStore,
-  NETWORK_LABELS,
-  selectCommittedNetworkMode,
-  type NetworkMode,
-} from '@/stores/walletStore'
-import { useFeatureStore } from '@/stores/featureStore'
-import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
+import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
+import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { cn } from '@/lib/shared/utils'
-import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -45,41 +36,25 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
     text: '“Regression test” mode: usually a private or local chain developers run for automated tests and experiments. Not the same as the public internet Bitcoin networks most users pick.',
   },
   lab: {
-    title: 'Lab',
+    title: 'Labnet',
     text: 'Bitboard’s in-app simulator: a fake blockchain that runs inside your browser for safe practice—mine blocks, try transactions, and learn without touching mainnet or public testnets.',
   },
 }
 
 export function NetworkSelector() {
-  const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
-  const isMainnetAccessEnabled = useFeatureStore((featureState) => featureState.isMainnetAccessEnabled)
-  const isRegtestModeEnabled = useFeatureStore((featureState) => featureState.isRegtestModeEnabled)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const { runWhenUnlocked, unlockDialog } = useRequireUnlockedWallet()
+  const {
+    displayNetworkMode,
+    regtestEnabled,
+    mainnetSelectionBlocked,
+    isSwitching,
+    statusLine,
+    selectNetwork,
+    unlockDialog,
+  } = useNetworkModeSelection()
 
-  const mainnetSelectionBlocked =
-    !isMainnetAccessEnabled && displayNetworkMode !== 'mainnet'
-
-  const networkOptionsVisible: NetworkMode[] = isRegtestModeEnabled
+  const networkOptionsVisible: NetworkMode[] = regtestEnabled
     ? NETWORK_OPTIONS
-    : NETWORK_OPTIONS.filter((n) => n !== 'regtest')
-
-  const { mutate: switchMutate, isSwitching, statusLine } =
-    useDescriptorWalletSwitchMutation('network')
-
-  const handleNetworkChange = useCallback(
-    (network: NetworkMode) => {
-      if (network === displayNetworkMode) return
-
-      if (activeWalletId !== null) {
-        runWhenUnlocked(() => switchMutate(network))
-        return
-      }
-
-      switchMutate(network)
-    },
-    [displayNetworkMode, activeWalletId, switchMutate, runWhenUnlocked],
-  )
+    : NETWORK_OPTIONS.filter((network) => network !== 'regtest')
 
   return (
     <div className="space-y-2">
@@ -94,18 +69,9 @@ export function NetworkSelector() {
               infoTitle={title}
               infoText={text}
             >
-              <Button
-                variant={displayNetworkMode === network ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  if (isMainnetBlocked) {
-                    toast.info(
-                      'Activate Mainnet access in Settings → Features before selecting Mainnet.',
-                    )
-                    return
-                  }
-                  handleNetworkChange(network)
-                }}
+              <DesignButton
+                appearance={displayNetworkMode === network ? 'primary' : 'secondary'}
+                onClick={() => selectNetwork(network)}
                 disabled={isSwitching}
                 aria-disabled={isMainnetBlocked || undefined}
                 className={cn(
@@ -114,7 +80,7 @@ export function NetworkSelector() {
                 )}
               >
                 {NETWORK_LABELS[network]}
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
           )
         })}
@@ -122,7 +88,7 @@ export function NetworkSelector() {
       {isSwitching && statusLine && (
         <LoadingSpinner
           text={statusLine}
-          className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug"
+          className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left"
         />
       )}
 

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SaveLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
-import { AlertTriangle } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
-import { Button } from '@/components/ui/button'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
@@ -71,43 +70,23 @@ function SaveErrorBannerBlock({
 
   return (
     <>
-      <div
+      <DesignBanner
         role="alert"
+        status="warning"
         data-testid={`wallet-save-error-banner-${rail}`}
-        className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="flex min-w-0 flex-1 gap-3">
-          <AlertTriangle
-            className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-500"
-            aria-hidden
-          />
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">{title}</p>
-            <p className="text-xs break-words text-muted-foreground">{errorMessage}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={isSaving}
-            onClick={onRetry}
-          >
-            {isSaving ? 'Saving...' : 'Retry'}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            disabled={isSaving}
-            onClick={() => setLockAnywayOpen(true)}
-          >
-            Lock anyway
-          </Button>
-        </div>
-      </div>
+        title={title}
+        description={errorMessage}
+        primaryAction={{
+          label: isSaving ? 'Saving...' : 'Retry',
+          onClick: onRetry,
+          disabled: isSaving,
+        }}
+        secondaryAction={{
+          label: 'Lock anyway',
+          onClick: () => setLockAnywayOpen(true),
+          disabled: isSaving,
+        }}
+      />
 
       <ConfirmationDialog
         open={lockAnywayOpen}

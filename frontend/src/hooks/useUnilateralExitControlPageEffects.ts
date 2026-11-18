@@ -83,10 +83,7 @@ export function useUnilateralExitControlHydrationEffects(params: {
       return
     }
     void queryClient.refetchQueries({
-      queryKey: arkadeUnilateralExitTopologyQueryKey(
-        activeWalletId,
-        networkMode,
-        activeArkadeAccountId,
+      queryKey: arkadeUnilateralExitTopologyQueryKey({ walletId: activeWalletId, networkMode, arkadeAccountId: activeArkadeAccountId }, 
         topologyRequestOutpoints,
       ),
     })

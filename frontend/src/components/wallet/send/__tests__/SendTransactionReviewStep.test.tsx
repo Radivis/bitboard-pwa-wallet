@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 const reviewInputUtxos = [
   {
@@ -52,6 +53,10 @@ const defaultProps = {
 }
 
 describe('SendTransactionReviewStep', () => {
+  beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
+  })
+
   it('renders Fee, Total deducted, Balance remaining, Change, and Immediately spendable balance remaining', () => {
     renderWithProviders(<SendTransactionReviewStep {...defaultProps} />)
 

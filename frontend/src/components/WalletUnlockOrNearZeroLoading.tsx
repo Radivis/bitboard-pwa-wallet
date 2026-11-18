@@ -37,7 +37,7 @@ function NearZeroGatedFailureNotice({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-      <p className="max-w-sm text-sm text-muted-foreground">{message}</p>
+      <p className="design-type-regular max-w-sm text-muted-foreground">{message}</p>
       <Button type="button" onClick={onRetry}>
         Try again
       </Button>

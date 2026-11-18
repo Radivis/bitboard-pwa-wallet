@@ -30,7 +30,10 @@ import {
 import {
   awaitLightningSyncQuiescence,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
-import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import {
+  abandonInFlightOnchainSync,
+  orchestrateOnchainPostUnlockSync,
+} from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
   awaitOnchainSaveQuiescence,
   isOnchainSaveBlockingLock,
@@ -301,9 +304,9 @@ export async function orchestrateLock(): Promise<void> {
     await awaitArkadeLoadQuiescence()
     await awaitBarkLoadQuiescence()
     await awaitLightningLoadQuiescence()
-    // Lock terminates the crypto worker, so an in-flight Esplora scan cannot
-    // apply afterwards. Waiting for it kept Management on screen for minutes
-    // whenever the public indexer stalled.
+    // Abandon detaches a stalled Esplora scan. Lock does not wait for it:
+    // waiting kept Management on screen for minutes when the public indexer stalled.
+    await abandonInFlightOnchainSync()
     await awaitOnchainSaveQuiescence()
     await awaitArkadeSyncQuiescence()
     await awaitArkadeSaveQuiescence()

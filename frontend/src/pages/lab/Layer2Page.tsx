@@ -1,28 +1,28 @@
 import { Zap } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 
 export function Layer2Page() {
   return (
     <>
       <PageHeader title="Layer 2" icon={Zap} />
-      <Card>
-        <CardHeader>
-          <CardTitle>Lightning</CardTitle>
-          <CardDescription>Lab layer two</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Lightning</DesignCardTitle>
+          <DesignCardDescription>Lab layer two</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
+          <p className="design-type-regular text-muted-foreground">
             Lightning in the lab is under construction.
           </p>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </>
   )
 }

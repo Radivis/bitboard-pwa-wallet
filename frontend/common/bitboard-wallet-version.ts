@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /**
- * Bitboard Wallet release version. Single source of truth: repository root `VERSION` file
+ * Bitcoin Codex release version. Single source of truth: repository root `VERSION` file
  * (synced into Cargo workspace and npm `package.json` files by `scripts/sync-version.mjs`).
  */
 export function readBitboardWalletVersion(): string {

@@ -1,9 +1,9 @@
-import { BARK_SERVER_NOTICE_PATH } from '../../src/lib/bark/bark-server-notice-path'
+import { BARK_SERVER_NOTICE_PATH } from '../../src/lib/bark/bark-server-notice-path.ts'
 import {
   BARK_PUBLIC_SERVER_ORIGINS,
   readBarkHandshakePublicNotice,
   type BarkPublicServerNetwork,
-} from './read-handshake-psa'
+} from './read-handshake-psa.ts'
 
 export { BARK_SERVER_NOTICE_PATH }
 

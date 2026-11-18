@@ -1,8 +1,6 @@
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/shared/utils'
-import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { getFiatCurrencyUiMeta } from '@/lib/fiat/supported-fiat-currencies'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 
 type BitcoinFiatDenominationSwitchProps = {
   disabled?: boolean
@@ -10,6 +8,8 @@ type BitcoinFiatDenominationSwitchProps = {
   /** Called when the user toggles (after state update). */
   onFiatModeChange?: (nextFiatMode: boolean) => void
 }
+
+type DenominationValue = 'bitcoin' | 'fiat'
 
 /**
  * Mainnet-only placement: shows ₿ vs the current default fiat symbol.
@@ -29,35 +29,28 @@ export function BitcoinFiatDenominationSwitch({
   )
   const fiatSymbol = getFiatCurrencyUiMeta(defaultFiatCurrency).symbol
 
+  function selectDenomination(next: DenominationValue) {
+    const nextFiatMode = next === 'fiat'
+    if (nextFiatMode === fiatMode) return
+    setFiatDenominationMode(nextFiatMode)
+    onFiatModeChange?.(nextFiatMode)
+  }
+
   return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2',
-        className,
-      )}
-    >
-      <Label
-        htmlFor="bitcoin-fiat-denomination-switch"
-        className="flex flex-1 cursor-pointer items-center justify-between gap-3 text-sm font-medium"
-      >
-        <span className="tabular-nums" aria-hidden>
-          ₿
-        </span>
-        <Switch
-          id="bitcoin-fiat-denomination-switch"
-          className="shrink-0"
-          checked={fiatMode}
-          onCheckedChange={(v) => {
-            setFiatDenominationMode(v)
-            onFiatModeChange?.(v)
-          }}
-          disabled={disabled}
-          aria-label={`Denomination: ${fiatMode ? `${defaultFiatCurrency} (fiat)` : 'Bitcoin'}`}
-        />
-        <span className="tabular-nums" aria-hidden>
-          {fiatSymbol}
-        </span>
-      </Label>
-    </div>
+    <DesignSwitch
+      aria-label="Denomination"
+      className={className}
+      disabled={disabled}
+      value={fiatMode ? 'fiat' : 'bitcoin'}
+      onValueChange={selectDenomination}
+      options={[
+        { value: 'bitcoin', label: 'Bitcoin', icon: <span aria-hidden>₿</span> },
+        {
+          value: 'fiat',
+          label: defaultFiatCurrency,
+          icon: <span aria-hidden>{fiatSymbol}</span>,
+        },
+      ]}
+    />
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PageHeader } from '@/components/PageHeader'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
@@ -11,7 +12,6 @@ import {
   BarkEmergencyExitStartCard,
   BarkEmergencyExitTreeCard,
 } from '@/components/bark/BarkEmergencyExitSections'
-import { Button } from '@/components/ui/button'
 import {
   BARK_EMERGENCY_EXIT_CANCEL_NOTE,
   useBarkEmergencyExitPage,
@@ -48,8 +48,8 @@ export function BarkEmergencyExitPage() {
         }}
       />
       <PageHeader title="Bark emergency exit" />
-      <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
+      <p className="design-type-regular text-muted-foreground">
         Proceed automatically advances an exit when a new block arrives. A successful Bark sync
         also progresses an exit that is already started.
       </p>
@@ -115,9 +115,9 @@ export function BarkEmergencyExitPage() {
         onClaim={page.onClaim}
       />
 
-      <Button type="button" variant="outline" asChild>
+      <DesignButton type="button" appearance="secondary" asChild>
         <Link to="/wallet/management">Back to management</Link>
-      </Button>
+      </DesignButton>
     </div>
   )
 }

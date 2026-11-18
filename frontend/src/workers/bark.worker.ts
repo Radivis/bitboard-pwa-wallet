@@ -1,5 +1,6 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
+import { readBarkReceivePaymentCount } from '@/lib/bark/bark-receive-count'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
 import {
   readBarkExitChainNotices,
@@ -367,6 +368,14 @@ async function peekReceiveAddressImpl(index: number): Promise<string> {
     throw new Error('Bark peek did not return an address')
   }
   return address
+}
+
+async function receivePaymentCountImpl(index: number): Promise<number> {
+  if (!isBarkReceiveKeyIndex(index)) {
+    throw new Error('Bark receive key index is invalid')
+  }
+  const wasmModule = await getBarkWasm()
+  return readBarkReceivePaymentCount(await wasmModule.bark_receive_payment_count(index))
 }
 
 async function revealNextReceiveAddressImpl(): Promise<BarkRevealedReceiveAddress> {
@@ -753,6 +762,10 @@ const barkService: BarkService = {
 
   peekReceiveAddress(index: number): Promise<string> {
     return callBark(() => peekReceiveAddressImpl(index))
+  },
+
+  receivePaymentCount(index: number): Promise<number> {
+    return callBark(() => receivePaymentCountImpl(index))
   },
 
   revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress> {

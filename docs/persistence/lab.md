@@ -59,9 +59,9 @@ flowchart TB
 
 After a successful persist commit, `notifyLabStatePersistedAfterCommit` (`lab-cross-tab-sync.ts`) notifies other tabs. Writes are serialized with the `bitboard-lab-writer` Web Lock (`opfs-writer-lock.ts`).
 
-## Main wallet in lab mode
+## Main wallet on Labnet
 
-When the user switches to lab network mode, the app exports the current main-wallet descriptor changeset before loading the lab wallet in WASM (`switch-to-lab-network.ts`). On-chain persistence for the real wallet remains in `bitboard-wallet`; see [bitcoin-onchain.md](bitcoin-onchain.md).
+When the user switches to Labnet, the app exports the current main-wallet descriptor changeset before loading the lab wallet in WASM (`switch-to-lab-network.ts`). On-chain persistence for the real wallet remains in `bitboard-wallet`; see [bitcoin-onchain.md](bitcoin-onchain.md).
 
 ## Backup
 

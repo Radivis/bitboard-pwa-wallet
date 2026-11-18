@@ -364,7 +364,7 @@ export function useSendFlowLightning({
           </>
         )}
       >
-        <DialogDescription className="text-left text-sm text-muted-foreground">
+        <DialogDescription className="design-type-regular text-left text-muted-foreground">
           {bolt11SignetFamilyConfirmationText(networkMode)}
         </DialogDescription>
       </AppModal>

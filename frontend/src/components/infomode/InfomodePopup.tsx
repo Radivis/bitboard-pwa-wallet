@@ -1,50 +1,65 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { XIcon } from 'lucide-react'
-import { cn } from '@/lib/shared/utils'
+import { designFocusClassName } from '@/components/design/design-classes'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
-
-const VIEWPORT_MARGIN_PX = 8
-const GAP_PX = 8
+import {
+  computeInfomodePopupPosition,
+  type InfomodePopupPlacement,
+} from '@/lib/infomode/infomode-popup-position'
 
 interface InfomodePopupProps {
   open: boolean
   anchorElement: HTMLElement | null
+  placement: InfomodePopupPlacement
+  pointerX: number
+  pointerY: number
   entry: InfomodeRegistryEntry | null
   onRequestClose: () => void
 }
 
-function computePopupPosition(
-  anchorElement: HTMLElement,
+function measurePopupPosition(
   popupElement: HTMLElement,
+  anchorElement: HTMLElement,
+  placement: InfomodePopupPlacement,
+  pointerX: number,
+  pointerY: number,
 ): { top: number; left: number } {
-  const anchorRect = anchorElement.getBoundingClientRect()
   const popupRect = popupElement.getBoundingClientRect()
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-
-  let top = anchorRect.bottom + GAP_PX
-  let left = anchorRect.left
-
-  if (top + popupRect.height > viewportHeight - VIEWPORT_MARGIN_PX) {
-    top = anchorRect.top - popupRect.height - GAP_PX
-  }
-  if (left + popupRect.width > viewportWidth - VIEWPORT_MARGIN_PX) {
-    left = viewportWidth - popupRect.width - VIEWPORT_MARGIN_PX
-  }
-  if (left < VIEWPORT_MARGIN_PX) {
-    left = VIEWPORT_MARGIN_PX
-  }
-  if (top < VIEWPORT_MARGIN_PX) {
-    top = VIEWPORT_MARGIN_PX
+  const popupSizeAndViewport = {
+    popupWidth: popupRect.width,
+    popupHeight: popupRect.height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
   }
 
-  return { top, left }
+  if (placement === 'pointer') {
+    return computeInfomodePopupPosition({
+      placement,
+      pointerX,
+      pointerY,
+      ...popupSizeAndViewport,
+    })
+  }
+
+  const anchorRect = anchorElement.getBoundingClientRect()
+  return computeInfomodePopupPosition({
+    placement,
+    anchorBox: {
+      top: anchorRect.top,
+      left: anchorRect.left,
+      bottom: anchorRect.bottom,
+    },
+    ...popupSizeAndViewport,
+  })
 }
 
 export function InfomodePopup({
   open,
   anchorElement,
+  placement,
+  pointerX,
+  pointerY,
   entry,
   onRequestClose,
 }: InfomodePopupProps) {
@@ -61,17 +76,17 @@ export function InfomodePopup({
       if (!anchorElement || !popupRef.current) {
         return
       }
-      setPosition(computePopupPosition(anchorElement, popupRef.current))
+      setPosition(
+        measurePopupPosition(popupRef.current, anchorElement, placement, pointerX, pointerY),
+      )
     }
 
     updatePosition()
-    window.addEventListener('scroll', updatePosition, true)
     window.addEventListener('resize', updatePosition)
     return () => {
-      window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
     }
-  }, [open, anchorElement, entry])
+  }, [open, anchorElement, entry, placement, pointerX, pointerY])
 
   useLayoutEffect(() => {
     if (!open || !anchorElement || !entry) {
@@ -107,11 +122,11 @@ export function InfomodePopup({
 
   const content =
     entry.kind === 'inline' ? (
-      <div className="space-y-2">
-        <h2 className="text-base font-semibold leading-tight text-popover-foreground">
+      <div className="contents">
+        <h2 className="design-type-emphasis text-[var(--design-text-regular)]">
           {entry.title}
         </h2>
-        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+        <p className="design-type-regular whitespace-pre-line text-[var(--design-text-subdued)]">
           {entry.text}
         </p>
       </div>
@@ -126,11 +141,8 @@ export function InfomodePopup({
       role="dialog"
       aria-modal="false"
       aria-label="Infomode explanation"
-      className={cn(
-        'fixed z-[100] max-h-[min(50vh,24rem)] w-[min(calc(100vw-2rem),20rem)] overflow-y-auto rounded-lg border border-border',
-        /* Do not add `relative` here — tailwind-merge would drop `fixed` and break viewport positioning. */
-        'bg-popover py-3 pl-4 pr-11 text-popover-foreground shadow-lg',
-      )}
+      /* Do not add `relative` here — tailwind-merge would drop `fixed` and break viewport positioning. */
+      className="design-ui fixed z-[100]"
       style={{ top: position.top, left: position.left }}
     >
       <button
@@ -138,12 +150,7 @@ export function InfomodePopup({
         type="button"
         onClick={onRequestClose}
         aria-label="Close explanation"
-        className={cn(
-          'absolute top-2 right-2 rounded-md p-1.5 text-muted-foreground opacity-60',
-          'transition-[opacity,background-color,color] hover:bg-accent/80 hover:text-foreground hover:opacity-100',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-          '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-        )}
+        className={designFocusClassName}
       >
         <XIcon />
         <span className="sr-only">Close</span>
