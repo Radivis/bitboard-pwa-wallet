@@ -10,7 +10,10 @@ pub struct OffchainReceiveGapReading {
     pub index: u32,
     pub receive_count: u32,
     pub gap: u32,
+    /// Batch gap of the index Generate would reveal.
     pub batch_gap: u32,
+    /// Batch gap of the address on screen. 2 or more means a seed restore will not ask about it.
+    pub displayed_batch_gap: u32,
     pub snapshot_present: bool,
 }
 
@@ -33,6 +36,7 @@ pub fn describe_offchain_receive_gap(
             receive_count,
             gap: 0,
             batch_gap: batch_gap_for_index(0, last_hit, batch_size),
+            displayed_batch_gap: batch_gap_for_index(0, last_hit, batch_size),
             snapshot_present,
         };
     }
@@ -47,6 +51,7 @@ pub fn describe_offchain_receive_gap(
         receive_count,
         gap,
         batch_gap: batch_gap_for_index(next_index, last_hit, batch_size),
+        displayed_batch_gap: batch_gap_for_index(index, last_hit, batch_size),
         snapshot_present,
     }
 }
@@ -170,6 +175,28 @@ mod tests {
         assert_eq!(reading.index, 40);
         assert_eq!(reading.gap, 0);
         assert_eq!(reading.batch_gap, 2);
+    }
+
+    #[test]
+    fn displayed_index_can_still_be_scanned_when_the_next_one_is_not() {
+        let reading = describe_offchain_receive_gap(20, &HashSet::new(), 0, BATCH, true);
+        assert_eq!(reading.index, 19);
+        assert_eq!(reading.displayed_batch_gap, 1);
+        assert_eq!(reading.batch_gap, 2);
+    }
+
+    #[test]
+    fn displayed_index_past_the_empty_batch_is_unscanned() {
+        let nothing_used = describe_offchain_receive_gap(21, &HashSet::new(), 0, BATCH, true);
+        assert_eq!(nothing_used.index, 20);
+        assert_eq!(nothing_used.displayed_batch_gap, 2);
+
+        let paid_first_batch = describe_offchain_receive_gap(41, &used(&[0]), 1, BATCH, true);
+        assert_eq!(paid_first_batch.index, 40);
+        assert_eq!(paid_first_batch.displayed_batch_gap, 2);
+
+        let still_inside_lookahead = describe_offchain_receive_gap(21, &used(&[0]), 1, BATCH, true);
+        assert_eq!(still_inside_lookahead.displayed_batch_gap, 1);
     }
 
     #[test]

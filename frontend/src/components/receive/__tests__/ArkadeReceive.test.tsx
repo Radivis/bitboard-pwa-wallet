@@ -25,6 +25,7 @@ const unrevealedGap: ArkadeOffchainReceiveGap = {
   receiveCount: 0,
   gap: 0,
   batchGap: 1,
+  displayedBatchGap: 0,
   snapshotPresent: false,
 }
 
@@ -183,5 +184,46 @@ describe('ArkadeReceive', () => {
     )
     expect(screen.getByTestId('arkade-receive-unused-gap')).toHaveTextContent('Unused gap: 2')
     expect(screen.getByTestId('arkade-receive-unused-gap').textContent).not.toContain('looks ahead')
+  })
+
+  it('keeps a restore warning on an address a seed restore will not ask about', async () => {
+    gapQueryMock.mockReturnValue({
+      data: {
+        ...unrevealedGap,
+        revealed: true,
+        receiveCount: 1,
+        gap: 0,
+        batchGap: 2,
+        displayedBatchGap: 2,
+        snapshotPresent: true,
+      },
+    })
+    renderWithProviders(<ArkadeReceive />)
+    expect(await screen.findByTestId('arkade-receive-restore-warning')).toHaveTextContent(
+      'will not ask about this address',
+    )
+  })
+
+  it('asks before generating when the key was used without an incoming payment', async () => {
+    const mutateAsync = vi.fn()
+    newAddressMutationMock.mockReturnValue({
+      isPending: false,
+      mutate: mutateAsync,
+      mutateAsync,
+    })
+    readGapMock.mockResolvedValue({
+      ...unrevealedGap,
+      revealed: true,
+      receiveCount: 0,
+      gap: 0,
+      batchGap: 1,
+      displayedBatchGap: 0,
+      snapshotPresent: true,
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<ArkadeReceive />)
+    await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
+    expect(await screen.findByText(/has not received a payment/)).toBeInTheDocument()
+    expect(mutateAsync).not.toHaveBeenCalled()
   })
 })

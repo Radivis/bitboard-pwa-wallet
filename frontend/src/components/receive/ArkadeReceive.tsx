@@ -19,6 +19,8 @@ import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   ARKADE_HARD_GAP_OPT_IN_LABEL,
+  arkadeCurrentAddressRestoreWarning,
+  arkadeCurrentIndexMissesRestore,
   arkadeGenerateConfirmKind,
   arkadeHardGapConfirmBody,
   arkadePaymentCountLabel,
@@ -148,7 +150,12 @@ function ArkadeReceiveAddress({
   onConfirm: () => Promise<void>
 }) {
   const gapQuery = useArkadeOffchainReceiveGapQuery(address)
-  const gapSurface = arkadeReceiveGapSurface(gapQuery.data ?? null)
+  const gapReading = gapQuery.data ?? null
+  const gapSurface = arkadeReceiveGapSurface(gapReading)
+  const restoreWarning =
+    gapReading != null && arkadeCurrentIndexMissesRestore(gapReading)
+      ? arkadeCurrentAddressRestoreWarning()
+      : null
   const promptIsHard = gapPromptKind === 'hard'
 
   return (
@@ -220,6 +227,15 @@ function ArkadeReceiveAddress({
                   icon={<Copy />}
                 />
               </div>
+              {restoreWarning != null ? (
+                <InfomodeWrapper
+                  infoId={ARKADE_INFOMODE_IDS.receiveUnusedGap}
+                  infoComponent={ArkadeReceiveUnusedGapInfomodeContent}
+                  className="rounded-md"
+                >
+                  <p data-testid="arkade-receive-restore-warning">{restoreWarning}</p>
+                </InfomodeWrapper>
+              ) : null}
               {gapSurface.kind === 'visible' ? (
                 <div className="space-y-2" data-testid="arkade-receive-gap-summary">
                   <InfomodeWrapper

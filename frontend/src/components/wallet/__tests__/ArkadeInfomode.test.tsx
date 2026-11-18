@@ -65,6 +65,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
       receiveCount: 0,
       gap: 0,
       batchGap: 0,
+      displayedBatchGap: 0,
       snapshotPresent: false,
     }),
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),

@@ -109,6 +109,27 @@ impl EsploraBlockchain {
             .collect()
     }
 
+    /// Insert an address UTXO cache row at a chosen timestamp. Tests use this to check the
+    /// receive-gap TTL without calling Esplora.
+    #[cfg(test)]
+    pub(crate) fn insert_address_utxos_for_test(
+        &self,
+        address: String,
+        fetched_at_ms: u64,
+        utxos: Vec<ExplorerUtxo>,
+    ) {
+        let mut cache = self
+            .address_utxo_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        cache.by_address.insert(address, (fetched_at_ms, utxos));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn address_cache_now_ms_for_test(&self) -> u64 {
+        now_ms()
+    }
+
     /// Client for `esplora_url`. An empty URL is rejected. Each request times out after
     /// [`ESPLORA_HTTP_TIMEOUT_SECS`] and sends cache-busting headers.
     pub fn new(esplora_url: &str) -> ArkResult<Self> {

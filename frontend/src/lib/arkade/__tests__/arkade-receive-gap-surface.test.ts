@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  arkadeCurrentAddressRestoreWarning,
+  arkadeCurrentIndexMissesRestore,
   arkadeGenerateConfirmKind,
   arkadeHardGapConfirmBody,
   arkadeReceiveGapSurface,
+  arkadeSoftGapConfirmBody,
   arkadeUnusedGapLabel,
   type ArkadeOffchainReceiveGap,
 } from '@/lib/arkade/arkade-receive-gap-surface'
@@ -13,6 +16,7 @@ const revealed: ArkadeOffchainReceiveGap = {
   receiveCount: 0,
   gap: 0,
   batchGap: 1,
+  displayedBatchGap: 0,
   snapshotPresent: true,
 }
 
@@ -67,6 +71,19 @@ describe('arkadeGenerateConfirmKind', () => {
     expect(arkadeGenerateConfirmKind({ ...revealed, gap: 1, batchGap: 1 })).toBe('soft')
   })
 
+  it('asks softly when boarding or change used the key and nobody has paid this script', () => {
+    expect(
+      arkadeGenerateConfirmKind({ ...revealed, gap: 0, receiveCount: 0, batchGap: 1 }),
+    ).toBe('soft')
+    expect(arkadeSoftGapConfirmBody(0)).toContain('boarding deposit')
+  })
+
+  it('does not ask when this script already has an incoming payment and the gap is closed', () => {
+    expect(
+      arkadeGenerateConfirmKind({ ...revealed, gap: 0, receiveCount: 1, batchGap: 1 }),
+    ).toBe('none')
+  })
+
   it('uses the hard dialog when the next key would make the batch gap 2', () => {
     expect(arkadeGenerateConfirmKind({ ...revealed, gap: 19, batchGap: 2 })).toBe('hard')
   })
@@ -74,5 +91,19 @@ describe('arkadeGenerateConfirmKind', () => {
   it('does not describe an Esplora scan in the hard explanation', () => {
     expect(arkadeHardGapConfirmBody()).not.toContain('Esplora')
     expect(arkadeHardGapConfirmBody()).toContain('20 keys at a time')
+  })
+})
+
+describe('arkadeCurrentIndexMissesRestore', () => {
+  it('warns when the address on screen is already past the scanned batches', () => {
+    expect(arkadeCurrentIndexMissesRestore({ ...revealed, displayedBatchGap: 2 })).toBe(true)
+    expect(arkadeCurrentAddressRestoreWarning()).toContain('will not ask about this address')
+  })
+
+  it('stays quiet for an address restore still scans, and before any reveal', () => {
+    expect(arkadeCurrentIndexMissesRestore({ ...revealed, displayedBatchGap: 1 })).toBe(false)
+    expect(
+      arkadeCurrentIndexMissesRestore({ ...revealed, revealed: false, displayedBatchGap: 2 }),
+    ).toBe(false)
   })
 })

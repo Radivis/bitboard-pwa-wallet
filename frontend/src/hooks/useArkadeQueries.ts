@@ -276,6 +276,9 @@ async function invalidateArkadeWalletDataQueries(
     queryClient.invalidateQueries({
       queryKey: arkadeRecoverableVtxoFeeQueryKey({ walletId, networkMode, arkadeAccountId }),
     }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeReceiveGapQueryKey({ walletId, networkMode, arkadeAccountId }),
+    }),
   ]
 
   if (!options?.skipBalance) {

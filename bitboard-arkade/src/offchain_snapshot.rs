@@ -51,6 +51,34 @@ impl OffchainBalanceBuckets {
     }
 }
 
+/// Incoming payments on `script`. Change and a same-value renewal do not count.
+/// A spent incoming payment still counts.
+///
+/// Confirmed rows with no commitment txid are omitted. The history rule indexes that
+/// txid, and a gap read must not panic on a partial snapshot.
+pub fn incoming_payment_count_on_script(
+    snapshot: &OffchainVtxoSnapshot,
+    script: &ScriptBuf,
+) -> ArkResult<u32> {
+    let safe_snapshot = OffchainVtxoSnapshot {
+        synced_at: snapshot.synced_at,
+        dust_sats: snapshot.dust_sats,
+        virtual_tx_outpoints: snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .filter(|record| record.is_preconfirmed || !record.commitment_txids.is_empty())
+            .cloned()
+            .collect(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: snapshot.full_listed_at,
+    };
+    let vtxo_list = vtxo_list_from_snapshot(&safe_snapshot)?;
+    let spent = vtxo_list.unspendable().cloned().collect::<Vec<_>>();
+    let spendable = vtxo_list.all_unspent().cloned().collect::<Vec<_>>();
+    history::count_incoming_payments_on_script(&spent, &spendable, &[], script)
+        .map_err(ArkWasmError::from)
+}
+
 pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<VtxoList> {
     let dust = Amount::from_sat(snapshot.dust_sats);
     let points = snapshot

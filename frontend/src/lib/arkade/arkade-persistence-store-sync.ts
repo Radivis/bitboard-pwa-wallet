@@ -2,6 +2,7 @@ import {
   arkadeAddressQueryKey,
   arkadeBalanceQueryKey,
   arkadeHistoryQueryKey,
+  arkadeReceiveGapQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -41,6 +42,15 @@ function syncArkadeDashboardQueryCaches(params: {
       params.receiveAddress,
     )
   }
+  // The gap card reads the VTXO snapshot. Refresh it when that snapshot is published,
+  // including while Receive stays open.
+  void appQueryClient.invalidateQueries({
+    queryKey: arkadeReceiveGapQueryKey({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+      arkadeAccountId: params.arkadeAccountId,
+    }),
+  })
 }
 
 function writeArkadeDashboardState(params: {

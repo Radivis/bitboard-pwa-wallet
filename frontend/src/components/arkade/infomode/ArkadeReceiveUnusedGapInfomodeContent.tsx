@@ -19,8 +19,8 @@ export function ArkadeReceiveUnusedGapInfomodeContent() {
       <InfomodeParagraph>
         Generating a key in the batch after that empty one makes the batch gap 2. The app then asks
         you to opt in. The coins are not destroyed. This wallet still has the revealed key. A
-        restore from the seed alone will not ask about that later batch. As restore from seed is
-        crucial for wallet interoperability, the opt-in will break the complete restore. That opt-in
+        restore from the seed alone will not ask about that later batch. A restore from seed is
+        crucial for wallet interoperability, so the opt-in breaks a complete restore. That opt-in
         only exists for learning purposes.
       </InfomodeParagraph>
     </div>

@@ -64,7 +64,10 @@ export interface ArkadeOffchainReceiveGap {
   index: number
   receiveCount: number
   gap: number
+  /** Batch gap of the index Generate would reveal. */
   batchGap: number
+  /** Batch gap of the address on screen. 2 or more means a seed restore will not ask about it. */
+  displayedBatchGap: number
   snapshotPresent: boolean
 }
 

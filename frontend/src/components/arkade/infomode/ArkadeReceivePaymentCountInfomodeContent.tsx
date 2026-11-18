@@ -11,8 +11,14 @@ export function ArkadeReceivePaymentCountInfomodeContent() {
     <div className={INFOMODE_CONTENT_CLASS}>
       <InfomodeHeading>Payments to this address</InfomodeHeading>
       <InfomodeParagraph>
-        This count is the number of payments on this Arkade script. A count of 0 means the script
-        is still fresh.
+        This count is the number of incoming payments on this Arkade script. A payment still
+        counts after it is spent. Change from your own send, and a renewal of a coin already
+        counted, are not extra payments. A count of 0 means nobody has paid this script.
+      </InfomodeParagraph>
+      <InfomodeParagraph>
+        An unspent boarding deposit uses this key without paying the Arkade script, so Generate
+        can skip the unused-address question while the count stays 0. Settling that boarding
+        output onto this script counts once.
       </InfomodeParagraph>
       <InfomodeParagraph>
         The operator can already connect your VTXO movements. The count is for the chain. A
