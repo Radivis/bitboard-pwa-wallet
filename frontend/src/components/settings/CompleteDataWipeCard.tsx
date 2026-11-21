@@ -3,6 +3,7 @@ import { Eraser } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDatabase, ensureSchemaAndDataMigrated, isWalletDatabaseTeardownBlockedError, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
 import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
 import {
   type MainnetPositiveWalletRow,
@@ -263,7 +264,12 @@ export function CompleteDataWipeCard() {
                   <span className="text-foreground">{row.name}</span>
                   {' — '}
                   <span className="design-type-addresses tabular-nums">
-                    {formatSats(row.totalSats)} sats ({formatBTC(row.totalSats)} BTC)
+                    {formatSats(row.totalSats)}<BitcoinSatUnit
+                      indicator={null}
+                      className="ml-[0.5ch]"
+                    />{' '}
+                    (
+                    {formatBTC(row.totalSats)} BTC)
                   </span>
                 </li>
               ))}

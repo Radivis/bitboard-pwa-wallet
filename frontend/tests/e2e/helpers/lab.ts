@@ -661,10 +661,7 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
         })
         if (await changeFeesHeading.isVisible().catch(() => false)) {
           const dialog = page.getByRole('dialog').filter({ has: changeFeesHeading })
-          const dialogText =
-            (await dialog.innerText().catch(() => '')) ||
-            (await dialog.textContent().catch(() => '')) ||
-            ''
+          const dialogText = (await dialog.textContent().catch(() => '')) || ''
           if (
             textReflectsSatsInFormattedDisplaysOrLiteral(
               dialogText,

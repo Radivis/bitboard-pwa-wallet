@@ -3,6 +3,9 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { BarkIcon } from '@/components/icons/BarkIcon'
 import { format, formatDistanceToNow } from 'date-fns'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
+import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
 import { barkMovementActivityLabel } from '@/lib/bark/bark-history'
 import { cn } from '@/lib/shared/utils'
@@ -20,6 +23,7 @@ interface BarkMovementItemProps {
 }
 
 export function BarkMovementItem({ movement }: BarkMovementItemProps) {
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const [expanded, setExpanded] = useState(false)
   const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
   const isDecrease = movement.effectiveBalanceSats < 0
@@ -93,7 +97,12 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
         <div className="design-type-regular mt-3 space-y-1 border-t border-border pt-3 text-muted-foreground">
           <p>Kind: {movement.subsystemKind}</p>
           {movement.offchainFeeSats > 0 ? (
-            <p>Off-chain fee: {movement.offchainFeeSats} sats</p>
+            <p>
+              Off-chain fee: {movement.offchainFeeSats}<BitcoinSatUnit
+                indicator={getNetworkUnitIndicator(networkMode)}
+                className="ml-[0.5ch]"
+              />
+            </p>
           ) : null}
         </div>
       ) : null}

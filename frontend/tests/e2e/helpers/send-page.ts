@@ -6,7 +6,7 @@ async function readSendPageAvailableSectionText(page: Page): Promise<string> {
   if (!(await availableRow.isVisible().catch(() => false))) {
     return ''
   }
-  return (await availableRow.innerText()) ?? ''
+  return (await availableRow.textContent()) ?? ''
 }
 
 /** Strict: dashboard must already show spendable balance; no dashboard re-sync retries. */

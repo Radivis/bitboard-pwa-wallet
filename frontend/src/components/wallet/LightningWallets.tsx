@@ -32,7 +32,8 @@ import {
 } from '@/lib/lightning/lightning-input-limits'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/wallet/bitcoin-utils'
-import { getPrefixedBitcoinDisplayUnitLabel } from '@/lib/wallet/bitcoin-display-unit'
+import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
 import {
   Dialog,
   DialogContent,
@@ -207,8 +208,10 @@ function WalletRow({
               <>
                 <span>
                   <span className="design-type-addresses tabular-nums">
-                    {balanceQuery.data.balanceSats.toLocaleString()}{' '}
-                    {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
+                    {balanceQuery.data.balanceSats.toLocaleString()}<BitcoinSatUnit
+                      indicator={getNetworkUnitIndicator(wallet.networkMode)}
+                      className="ml-[0.5ch]"
+                    />
                   </span>
                   {balanceQuery.data.isStaleBalance ? (
                     <span className="ml-1.5 text-amber-700 dark:text-amber-400">

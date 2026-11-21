@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
+import type { BitcoinDisplayUnit, NetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
 import {
   BITCOIN_DISPLAY_UNIT_LABEL,
   formatAmountInBitcoinDisplayUnit,
@@ -8,6 +8,7 @@ import {
 } from '@/lib/wallet/bitcoin-display-unit'
 import { useBitcoinUnit } from '@/hooks/useBitcoinUnit'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
 import { NetworkUnitPrefix } from '@/components/NetworkUnitPrefix'
 import {
   designTypeClassName,
@@ -22,6 +23,26 @@ const SIZE_CLASSES: Record<BitcoinAmountDisplaySize, string> = {
   sm: designTypeClassName.smallBalances,
   md: designTypeClassName.smallBalances,
   lg: designTypeClassName.largeBalances,
+}
+
+function AmountUnitMark({
+  unit,
+  unitLabel,
+  indicator,
+}: {
+  unit: BitcoinDisplayUnit
+  unitLabel: string
+  indicator: NetworkUnitIndicator
+}) {
+  if (unit === 'sat' || unit === 'ksat') {
+    return <BitcoinSatUnit indicator={indicator} kilo={unit === 'ksat'} />
+  }
+  return (
+    <>
+      <NetworkUnitPrefix indicator={indicator} />
+      {unitLabel}
+    </>
+  )
 }
 
 type BitcoinAmountDisplayProps = {
@@ -103,14 +124,16 @@ export function BitcoinAmountDisplay({
         )}
       >
         {formatted}
-      </span>{' '}
-      {!allowUnitToggle ? (
-        <span className={cn(tabular && 'tabular-nums')}>
-          <NetworkUnitPrefix indicator={networkUnitIndicator} />
-          {unitLabel}
+      </span>{!allowUnitToggle ? (
+        <span className={cn(tabular && 'tabular-nums', 'ml-[0.5ch]')}>
+          <AmountUnitMark
+            unit={effectiveUnit}
+            unitLabel={unitLabel}
+            indicator={networkUnitIndicator}
+          />
         </span>
       ) : isSelectingUnit ? (
-        <span className="pointer-events-auto inline-flex items-baseline gap-0 align-middle">
+        <span className="pointer-events-auto ml-[0.5ch] inline-flex items-baseline gap-0 align-middle">
           <NetworkUnitPrefix indicator={networkUnitIndicator} />
           <BitcoinUnitSelect
             ref={selectRef}
@@ -129,7 +152,7 @@ export function BitcoinAmountDisplay({
           type="button"
           aria-label={accessibleUnitLabel}
           className={cn(
-            'pointer-events-auto inline rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60',
+            'pointer-events-auto ml-[0.5ch] inline rounded px-0.5 hover:bg-muted/60',
             tabular && 'tabular-nums',
           )}
           onClick={(e) => {
@@ -139,8 +162,11 @@ export function BitcoinAmountDisplay({
           onPointerDown={stopParentPointer}
           onMouseDown={stopParentPointer}
         >
-          <NetworkUnitPrefix indicator={networkUnitIndicator} />
-          {unitLabel}
+          <AmountUnitMark
+            unit={effectiveUnit}
+            unitLabel={unitLabel}
+            indicator={networkUnitIndicator}
+          />
         </button>
       )}
     </span>

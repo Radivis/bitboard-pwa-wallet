@@ -5,7 +5,8 @@ import { parseAllSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/wall
  * E2E helpers for reading amounts the same way `BitcoinAmountDisplay` formats them, via
  * `parseAllSatsInTextFromFormattedBitcoinAmountDisplays` / re-exports below.
  * Use `satsFromFirstFormattedBitcoinDisplayInRoot` when the locator is the display root; use
- * the parse helpers for `innerText` of larger regions (e.g. balance cards, review steps).
+ * the parse helpers for `textContent` of larger regions (e.g. balance cards, review steps).
+ * `textContent` keeps the screen-reader unit word (`sat` / `ksat`) that the visible mark replaces.
  * Dust-floor assertions can use `textReflectsSatsInFormattedDisplaysOrLiteral` together with
  * `UX_DUST_FLOOR_SATS` from `@/lib/wallet/bitcoin-dust`.
  */
@@ -24,7 +25,7 @@ export {
 export async function satsFromFirstFormattedBitcoinDisplayInRoot(
   root: Locator,
 ): Promise<number | null> {
-  const displayText = (await root.innerText()).replace(/\s+/g, ' ').trim()
+  const displayText = ((await root.textContent()) ?? '').replace(/\s+/g, ' ').trim()
   const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(displayText, {
     includeZeroSats: true,
   })

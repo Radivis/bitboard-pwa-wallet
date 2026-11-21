@@ -127,7 +127,7 @@ export async function collectRegtestOnchainBalanceDiagnosticSnapshot(
     esploraConfirmedSats,
     esploraUnconfirmedSats,
     esploraFundingTxStatuses: await fetchEsploraFundingTxStatuses(utxos),
-    dashboardCardText: (await card.innerText().catch(() => '')) ?? '',
+    dashboardCardText: (await card.textContent().catch(() => '')) ?? '',
     onchainLoadPhase: await onchainRail.getAttribute('data-rail-onchain-load'),
     onchainSyncPhase: await onchainRail.getAttribute('data-rail-onchain-sync'),
     syncButtonText: ((await syncButton.innerText().catch(() => '')) ?? '').trim(),
@@ -163,7 +163,7 @@ export async function assertDashboardSpendableOnChainBalance(
   const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
   await expect(card).toBeVisible({ timeout: 10_000 })
 
-  const cardText = (await card.innerText()) ?? ''
+  const cardText = (await card.textContent()) ?? ''
   const parsedSpendableSats = onChainSpendableSatsFromDashboardBalanceCardText(cardText)
   if (parsedSpendableSats >= options.minConfirmedSats) {
     return

@@ -1,4 +1,7 @@
 import { Check, Loader2 } from 'lucide-react'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
+import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { ArkadeSharedLeafUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeSharedLeafUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignSwitch } from '@/components/design/DesignSwitch'
@@ -46,7 +49,7 @@ type NodeDetailVtxoRow = {
   key: string
   txid: string
   vout: number
-  amountLabel: string | null
+  amountSats: number | null
   expiryLabel: string | null
 }
 
@@ -73,7 +76,7 @@ function vtxoRowsForFocusedTx(params: {
       key: `${hostOutpoint.txid}:${hostOutpoint.vout}`,
       txid: hostOutpoint.txid,
       vout: hostOutpoint.vout,
-      amountLabel: `${hostOutpoint.amountSats} sats`,
+      amountSats: hostOutpoint.amountSats,
       expiryLabel: formatUnilateralExitVtxoExpiryRemaining(
         hostOutpoint.expiresAt,
         params.nowSeconds,
@@ -84,7 +87,7 @@ function vtxoRowsForFocusedTx(params: {
     key: `${leafOutpoint.txid}:${leafOutpoint.vout}`,
     txid: leafOutpoint.txid,
     vout: leafOutpoint.vout,
-    amountLabel: null,
+    amountSats: null,
     expiryLabel: null,
   }))
 }
@@ -96,12 +99,18 @@ function NodeDetailVtxoOutpointRow({
   vtxoRow: NodeDetailVtxoRow
   phaseLabel: string
 }) {
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   return (
     <li className="design-type-regular flex items-center justify-between gap-3 rounded-md border px-3 py-2">
       <span>Outpoint {vtxoRow.vout}</span>
       <span className="text-right text-muted-foreground">
-        {vtxoRow.amountLabel != null ? (
-          <span className="design-type-addresses block tabular-nums">{vtxoRow.amountLabel}</span>
+        {vtxoRow.amountSats != null ? (
+          <span className="design-type-addresses block tabular-nums">
+            {vtxoRow.amountSats}<BitcoinSatUnit
+              indicator={getNetworkUnitIndicator(networkMode)}
+              className="ml-[0.5ch]"
+            />
+          </span>
         ) : null}
         {phaseLabel !== '' ? (
           <span className="block" data-testid="unilateral-exit-vtxo-phase">

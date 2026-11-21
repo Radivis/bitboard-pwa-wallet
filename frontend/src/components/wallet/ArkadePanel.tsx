@@ -46,6 +46,8 @@ import {
   isArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
+import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
@@ -166,7 +168,13 @@ export function ArkadePanel() {
           >
             <p className="design-type-regular text-muted-foreground">
               Delegator service fee:{' '}
-              <span className="design-type-addresses tabular-nums">{delegateFee} sats</span> per renewal (
+              <span className="design-type-addresses tabular-nums">
+                {delegateFee}<BitcoinSatUnit
+                  indicator={getNetworkUnitIndicator(networkMode)}
+                  className="ml-[0.5ch]"
+                />
+              </span>{' '}
+              per renewal (
               {delegatorLabel})
             </p>
           </InfomodeWrapper>

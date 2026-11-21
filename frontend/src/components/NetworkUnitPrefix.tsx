@@ -10,9 +10,7 @@ type NetworkUnitPrefixProps = {
 export function NetworkUnitPrefix({ indicator, className }: NetworkUnitPrefixProps) {
   if (indicator === 'test') {
     return (
-      <span className={cn('text-muted-foreground', className)} aria-hidden>
-        t
-      </span>
+      <span className={cn('text-muted-foreground', className)} aria-hidden>t</span>
     )
   }
   if (indicator === 'lab') {
