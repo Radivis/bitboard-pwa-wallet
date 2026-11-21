@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { ArkadeAutonomousModeInfomodeContent } from '@/components/arkade/infomode/ArkadeAutonomousModeInfomodeContent'
 import {
   useArkadeAutonomousModeMutation,
@@ -54,6 +53,12 @@ export function ArkadeAutonomousModeSwitch() {
       return
     }
     autonomousModeMutation.mutate(nextChecked)
+  }
+
+  const selectAutonomousMode = (next: 'off' | 'on') => {
+    const nextChecked = next === 'on'
+    if (nextChecked === checked) return
+    handleCheckedChange(nextChecked)
   }
 
   const handleEnableConfirm = () => {
@@ -108,18 +113,20 @@ export function ArkadeAutonomousModeSwitch() {
               infoComponent={ArkadeAutonomousModeInfomodeContent}
               as="span"
             >
-              <Label htmlFor="arkade-autonomous-mode" className="design-type-emphasis">
-                Autonomous mode
-              </Label>
+              <span className="design-type-emphasis">Autonomous mode</span>
             </InfomodeWrapper>
             <div className="flex shrink-0 items-center gap-2 pt-0.5">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              <Switch
-                id="arkade-autonomous-mode"
-                checked={checked}
-                disabled={pending || (!checked && !canEnable) || (checked && !canDisable)}
-                onCheckedChange={handleCheckedChange}
+              <DesignSwitch
                 aria-label="Autonomous mode"
+                className="shrink-0"
+                disabled={pending || (!checked && !canEnable) || (checked && !canDisable)}
+                value={checked ? 'on' : 'off'}
+                onValueChange={selectAutonomousMode}
+                options={[
+                  { value: 'off', label: 'Off' },
+                  { value: 'on', label: 'On' },
+                ]}
               />
             </div>
           </div>

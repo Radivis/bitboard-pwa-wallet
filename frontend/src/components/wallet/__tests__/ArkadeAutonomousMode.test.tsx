@@ -107,7 +107,7 @@ describe('Arkade autonomous mode UI', () => {
     expect(
       screen.queryByRole('img', { name: /castaway building a small boat/i }),
     ).not.toBeInTheDocument()
-    await user.click(screen.getByRole('switch', { name: 'Autonomous mode' }))
+    await user.click(screen.getByRole('button', { name: 'On' }))
     expect(screen.getByRole('dialog', { name: 'Enable autonomous mode' })).toBeInTheDocument()
     expect(
       screen.getByText(/persists for this operator and blocks all contact/i),

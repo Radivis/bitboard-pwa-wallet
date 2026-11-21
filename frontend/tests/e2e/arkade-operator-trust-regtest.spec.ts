@@ -20,6 +20,7 @@ import {
 import { goToWalletTab } from './helpers/wallet-nav'
 import { TEST_PASSWORD } from './helpers/wallet-setup'
 import { goToArkadeManagementPanel } from './helpers/arkade-management'
+import { designOnOffButton } from './helpers/design-on-off-switch'
 
 const ARKADE_OPERATOR_TRUST_REGTEST_TIMEOUT_MS = 600_000
 
@@ -39,10 +40,11 @@ async function expectArkadeOperatorSyncSucceeded(page: Page): Promise<void> {
   })
 }
 
-function autonomousModeSwitch(page: Page) {
-  return page
-    .getByTestId('arkade-autonomous-mode-switch')
-    .getByRole('switch', { name: 'Autonomous mode' })
+function autonomousModeOnButton(page: Page) {
+  return designOnOffButton(
+    page.getByTestId('arkade-autonomous-mode-switch').getByRole('group', { name: 'Autonomous mode' }),
+    'On',
+  )
 }
 
 function operatorConfigDiffTable(page: Page) {
@@ -133,7 +135,7 @@ test.describe('Arkade operator trust regtest @arkade-operator-trust-regtest', ()
     await expect(page.getByTestId('arkade-operator-trust-review-banner')).toBeVisible({
       timeout: 30_000,
     })
-    await expect(autonomousModeSwitch(page)).toHaveAttribute('aria-checked', 'true', {
+    await expect(autonomousModeOnButton(page)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 30_000,
     })
 
@@ -160,7 +162,7 @@ test.describe('Arkade operator trust regtest @arkade-operator-trust-regtest', ()
     await expect(page.getByTestId('arkade-operator-trust-review-banner')).toBeVisible({
       timeout: 30_000,
     })
-    await expect(autonomousModeSwitch(page)).toHaveAttribute('aria-checked', 'true', {
+    await expect(autonomousModeOnButton(page)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 30_000,
     })
 
@@ -200,7 +202,7 @@ test.describe('Arkade operator trust regtest @arkade-operator-trust-regtest', ()
     await expect(page.getByTestId('arkade-operator-trust-review-banner')).not.toBeVisible({
       timeout: 120_000,
     })
-    await expect(autonomousModeSwitch(page)).toHaveAttribute('aria-checked', 'false', {
+    await expect(autonomousModeOnButton(page)).toHaveAttribute('aria-pressed', 'false', {
       timeout: 30_000,
     })
     await expect(
