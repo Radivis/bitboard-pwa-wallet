@@ -11,7 +11,7 @@ const walletStoreState = vi.hoisted(() => ({
   arkadeBalance: null as { confirmedSats: number; totalSats: number } | null,
   arkadeSignerMigrationHint: null as {
     previousSignerPkHex: string
-    deprecatedStatus: 'migratable'
+    deprecatedStatus: 'migratable' | 'expired'
     cutoffUnix: number
   } | null,
 }))
@@ -61,15 +61,31 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     error: null,
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
-  useArkadeAutonomousModeActive: () => false,
+  useArkadeAutonomousModeActive: () => dashboardActionState.autonomousModeActive,
+  useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeVtxoExpiryQuery: () => vtxoExpiryQueryMock(),
   useHasPendingBatchIntent: () => false,
-  useHasPendingBatchIntentKind: () => false,
+  useHasPendingBatchIntentKind: (kind: string) =>
+    kind === 'collaborative_exit' && dashboardActionState.pendingCollaborativeExit,
   usePendingBatchIntent: () => null,
   usePendingBatchIntents: () => [],
   useArkadeBoardingStatusQuery: () => ({ data: undefined }),
   useArkadeCancelPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeRetryPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
+
+const dashboardActionState = vi.hoisted(() => ({
+  autonomousModeActive: false,
+  pendingCollaborativeExit: false,
+}))
+
+const vtxoExpiryQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    isLoading: false,
+    isError: false,
+    data: { earliestExpiresAt: null as number | null, expiringSoonCount: 0 },
+  })),
+)
 
 const recoverableFeeQueryMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -142,6 +158,13 @@ describe('ArkadeDashboardBalance', () => {
     walletStoreState.networkMode = 'mutinynet'
     walletStoreState.arkadeBalance = null
     walletStoreState.arkadeSignerMigrationHint = null
+    dashboardActionState.autonomousModeActive = false
+    dashboardActionState.pendingCollaborativeExit = false
+    vtxoExpiryQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { earliestExpiresAt: null, expiringSoonCount: 0 },
+    })
     arkadeLifecycleState.rail = {
       loadPhase: 'loaded',
       syncPhase: 'not-syncing',
@@ -203,7 +226,10 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toHaveTextContent('0.00230603')
     expect(screen.getByTestId('arkade-balance-boarding-spendable')).toHaveTextContent(
-      'ready to settle in management',
+      'ready to settle',
+    )
+    expect(screen.getByTestId('arkade-balance-boarding-spendable')).not.toHaveTextContent(
+      'in management',
     )
     expect(screen.getByTestId('arkade-balance-settle-in-management-link')).toHaveAttribute(
       'href',
@@ -328,6 +354,82 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('arkade-recoverable-vtxo-banner')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Recover now' })).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-50 links to Board from on-chain', () => {
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-board-link')).toHaveAttribute(
+      'href',
+      '/wallet/arkade/board',
+    )
+  })
+
+  it('DASH-ARK-50 disables boarding while autonomous mode is active', () => {
+    dashboardActionState.autonomousModeActive = true
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-board-link')).toBeDisabled()
+    expect(screen.queryByRole('link', { name: 'Board from on-chain' })).not.toBeInTheDocument()
+  })
+
+  it('DASH-ARK-51 links to Collaborative exit when it is available', () => {
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-collaborative-exit-link')).toHaveAttribute(
+      'href',
+      '/wallet/arkade/collaborative-exit',
+    )
+    expect(screen.queryByTestId('arkade-exit-collab-unavailable')).not.toBeInTheDocument()
+  })
+
+  it('DASH-ARK-52 disables collaborative exit while autonomous mode is active', () => {
+    dashboardActionState.autonomousModeActive = true
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeDisabled()
+    expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
+      /autonomous mode/i,
+    )
+  })
+
+  it('DASH-ARK-52 disables collaborative exit while a collaborative intent is pending', () => {
+    dashboardActionState.pendingCollaborativeExit = true
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeDisabled()
+    expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
+      /batch intent/i,
+    )
+  })
+
+  it('DASH-ARK-52 disables collaborative exit after signer rotation cutoff', () => {
+    walletStoreState.arkadeSignerMigrationHint = {
+      previousSignerPkHex: '02abc',
+      deprecatedStatus: 'expired',
+      cutoffUnix: 1_785_312_000,
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeDisabled()
+    expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
+      /signer rotation cutoff/i,
+    )
+  })
+
+  it('DASH-ARK-53 shows VTXO expiry and puts Renew VTXOs now first', () => {
+    vtxoExpiryQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        earliestExpiresAt: Math.floor(Date.now() / 1000) + 3_600,
+        expiringSoonCount: 1,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-vtxo-expiry-indicator')).toHaveTextContent(
+      /1 need renewal soon/,
+    )
+    const renew = screen.getByRole('button', { name: 'Renew VTXOs now' })
+    expect(renew).toHaveAttribute('data-type', 'primary')
+    expect(
+      renew.compareDocumentPosition(screen.getByTestId('dashboard-arkade-board-link')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {

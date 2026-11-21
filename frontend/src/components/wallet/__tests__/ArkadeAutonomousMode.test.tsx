@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ArkadeAutonomousModeSwitch } from '@/components/wallet/ArkadeAutonomousModeSwitch'
-import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
+import { ArkadeDashboardEntryActions } from '@/components/wallet/ArkadeDashboardEntryActions'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -44,6 +44,10 @@ vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
     }),
     useArkadeDelegateInfoQuery: () => ({ data: null }),
     useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+    useArkadeVtxoExpiryQuery: () => ({
+      isLoading: false,
+      data: { earliestExpiresAt: null, expiringSoonCount: 0 },
+    }),
     useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
     useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
     useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -126,7 +130,7 @@ describe('Arkade autonomous mode UI', () => {
 
   it('disables collaborative exit while autonomous mode is active', async () => {
     autonomousActive = true
-    renderWithProviders(<ArkadeExitSection />)
+    renderWithProviders(<ArkadeDashboardEntryActions />)
     expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeDisabled()
     expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
       /autonomous mode/i,

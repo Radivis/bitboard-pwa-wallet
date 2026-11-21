@@ -80,6 +80,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
   useArkadeAutonomousModeActive: () => false,
+  useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
   useHasPendingBatchIntent: () => false,
   useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,
@@ -156,12 +157,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/wallet/ArkadeExitSection', () => ({
-  ArkadeExitSection: () => (
-    <div data-infomode-id="arkade-exit-section">Exit to on-chain</div>
-  ),
-}))
-
 describe('Arkade Infomode zones', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -184,6 +179,15 @@ describe('Arkade Infomode zones', () => {
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.dashboardBalance}"]`),
     ).not.toBeNull()
     expect(screen.getByText('Arkade balance')).toBeInTheDocument()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.boardFromOnchain}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.renewVtxos}"]`),
+    ).not.toBeNull()
   })
 
   it('ArkadePanel exposes management card action infomode ids', () => {
@@ -193,15 +197,18 @@ describe('Arkade Infomode zones', () => {
     ).not.toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.delegatorFee}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.exitSection}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.boardFromOnchain}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.renewVtxos}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.unilateralExit}"]`),
     ).not.toBeNull()
   })
 

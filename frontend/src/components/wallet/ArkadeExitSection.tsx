@@ -1,117 +1,45 @@
 import { Link } from '@tanstack/react-router'
-import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
-import { ArkadeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeExitInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignButton } from '@/components/design/DesignButton'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
-import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
 import { useHasUnilateralExitInProgress } from '@/hooks/useHasUnilateralExitInProgress'
-import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
-import { useWalletStore } from '@/stores/walletStore'
-
-function collaborativeExitUnavailableReason(params: {
-  hasPendingCollaborativeIntent: boolean
-  autonomousModeActive: boolean
-}): string {
-  if (params.hasPendingCollaborativeIntent) {
-    return 'Collaborative exit is unavailable while a batch intent is waiting for the operator.'
-  }
-  if (params.autonomousModeActive) {
-    return 'Collaborative exit is unavailable in autonomous mode. Use unilateral exit or disable autonomous mode.'
-  }
-  return 'Cooperative exit is unavailable after signer rotation cutoff. Migrate to a new signer or use unilateral exit.'
-}
 
 export function ArkadeExitSection() {
   const { hasUnilateralExitInProgress } = useHasUnilateralExitInProgress()
-  const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
-  const collaborativeExitBlockedByRotation =
-    isSignerRotationCooperativeExitBlocked(signerMigrationHint)
-  const autonomousModeActive = useArkadeAutonomousModeActive()
-  const hasPendingCollaborativeIntent = useHasPendingBatchIntentKind('collaborative_exit')
-  const collaborativeExitUnavailable =
-    collaborativeExitBlockedByRotation || autonomousModeActive || hasPendingCollaborativeIntent
 
   return (
-    <div className="space-y-2 border-t pt-4">
-      <p className="design-type-emphasis">
-        <InfomodeWrapper
-          infoId={ARKADE_INFOMODE_IDS.exitSection}
-          infoComponent={ArkadeExitInfomodeContent}
-          as="span"
-        >
-          Exit to on-chain
-        </InfomodeWrapper>
-      </p>
-      <p className="design-type-regular text-muted-foreground">
-        Move Arkade funds back to a normal Bitcoin address.{' '}
-        <InfomodeWrapper
-          infoId={ARKADE_INFOMODE_IDS.learnAboutExits}
-          infoComponent={ArkadeExitInfomodeContent}
-          as="span"
+    <>
+      <InfomodeWrapper
+        infoId={ARKADE_INFOMODE_IDS.unilateralExit}
+        infoComponent={ArkadeUnilateralExitInfomodeContent}
+        as="span"
+      >
+        <DesignButton
+          type="button"
+          appearance={hasUnilateralExitInProgress ? 'primary' : 'tertiary'}
+          asChild
         >
           <Link
-            to="/library/articles/$slug"
-            params={{ slug: 'arkade-vtxo-expiry' }}
-            className="text-primary underline-offset-4 hover:underline"
+            to="/wallet/arkade/unilateral-exit"
+            data-testid="arkade-unilateral-exit-control"
           >
-            Learn about exits
+            {hasUnilateralExitInProgress
+              ? 'Control unilateral exit'
+              : 'Start unilateral exit'}
           </Link>
-        </InfomodeWrapper>
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <InfomodeWrapper
-          infoId={ARKADE_INFOMODE_IDS.collaborativeExit}
-          infoComponent={ArkadeCollaborativeExitInfomodeContent}
-          as="span"
-        >
-          {collaborativeExitUnavailable ? (
-            <DesignButton type="button" appearance="secondary" disabled>
-              Collaborative exit
-            </DesignButton>
-          ) : (
-            <DesignButton type="button" appearance="secondary" asChild>
-              <Link to="/wallet/arkade/collaborative-exit">Collaborative exit</Link>
-            </DesignButton>
-          )}
-        </InfomodeWrapper>
-        <InfomodeWrapper
-          infoId={ARKADE_INFOMODE_IDS.unilateralExit}
-          infoComponent={ArkadeUnilateralExitInfomodeContent}
-          as="span"
-        >
-          <DesignButton type="button" appearance="secondary" asChild>
-            <Link
-              to="/wallet/arkade/unilateral-exit"
-              data-testid="arkade-unilateral-exit-control"
-            >
-              {hasUnilateralExitInProgress
-                ? 'Control unilateral exit'
-                : 'Start unilateral exit'}
-            </Link>
-          </DesignButton>
-        </InfomodeWrapper>
-        {hasUnilateralExitInProgress && (
-          <DesignButton type="button" appearance="secondary" asChild>
-            <Link
-              to="/wallet/arkade/complete-unilateral-exit"
-              data-testid="arkade-complete-unilateral-exit"
-            >
-              Complete unilateral exit
-            </Link>
-          </DesignButton>
-        )}
-      </div>
-      {collaborativeExitUnavailable && (
-        <p className="design-type-regular text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
-          {collaborativeExitUnavailableReason({
-            hasPendingCollaborativeIntent,
-            autonomousModeActive,
-          })}
-        </p>
+        </DesignButton>
+      </InfomodeWrapper>
+      {hasUnilateralExitInProgress && (
+        <DesignButton type="button" appearance="secondary" asChild>
+          <Link
+            to="/wallet/arkade/complete-unilateral-exit"
+            data-testid="arkade-complete-unilateral-exit"
+          >
+            Complete unilateral exit
+          </Link>
+        </DesignButton>
       )}
-
-    </div>
+    </>
   )
 }

@@ -47,7 +47,10 @@ export async function switchToRegtestNetwork(page: Page): Promise<void> {
 export async function goToArkadeManagementPanel(page: Page): Promise<void> {
   await goToWalletTab(page, 'Management')
   await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
-  await expect(page.getByText('Arkade (offchain layer)')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-infomode-id="arkade-management-panel"]')).toHaveText(
+    'Arkade',
+    { timeout: 60_000 },
+  )
 }
 
 /**
@@ -70,8 +73,12 @@ export async function setupRegtestArkadeWallet(
 }
 
 export async function goToArkadeBoardPage(page: Page): Promise<void> {
-  await goToArkadeManagementPanel(page)
-  await page.getByRole('link', { name: 'Board from on-chain' }).click()
+  await goToWalletTab(page, 'Dashboard')
+  await waitForArkadeLoadReady(page)
+  await page
+    .getByTestId('dashboard-arkade-balance-card')
+    .getByRole('link', { name: 'Board from on-chain' })
+    .click()
   await expect(page.getByRole('heading', { name: 'Board to Arkade' })).toBeVisible()
 }
 

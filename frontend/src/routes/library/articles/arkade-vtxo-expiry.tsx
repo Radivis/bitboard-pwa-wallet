@@ -46,10 +46,11 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="Exiting to on-chain">
         <p>
-          If you prefer to leave Arkade instead of renewing, use exit paths in Management.{' '}
-          <strong>Collaborative exit</strong> withdraws VTXOs with the operator—fastest when the
-          network is reachable. <strong>Unilateral exit</strong> reclaims one VTXO without the
-          operator; you fund a small bumper wallet for on-chain fees.
+          If you prefer to leave Arkade instead of renewing, use the exit paths.{' '}
+          <strong>Collaborative exit</strong> is on the dashboard and withdraws VTXOs with the
+          operator—fastest when the network is reachable. <strong>Unilateral exit</strong> stays in
+          Management and reclaims one VTXO without the operator; you fund a small bumper wallet for
+          on-chain fees.
         </p>
         <p>
           Full comparison:{' '}

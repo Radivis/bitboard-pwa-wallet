@@ -465,7 +465,10 @@ feature:
           timestamps, and a last line Unilateral exit phase: {copy} from the VTXO child snapshot
           when the coin is not idle (ARK-EXIT-32). Idle VTXOs omit that line.
       - id: ARK-ARK-MGMT-01
-        description: Arkade management panel shows next operator batch window when getInfo scheduledSession is available, or an explicit not-published message when it is null
+        description: >-
+          The next operator batch window indicator remains implemented (scheduledSession when
+          getInfo publishes it, or an explicit not-published message when it is null) but is not
+          mounted on the Management Arkade card. A later page will surface it.
       - id: ARK-VTX-03
         description: Hide finalized defaults on; toggle shows finalized cards
       - id: ARK-VTX-04
@@ -481,25 +484,23 @@ feature:
       - description: "Arkade status on Management page"
       - file: frontend/src/components/wallet/ArkadePanel.tsx
       - visible_elements:
-        - Arkade balance (confirmed/total when available)
-        - Arkade receive address with copy
-        - delegator fee from getDelegateInfo when reachable
+        - card title Arkade
         - expiring VTXO count when session open
-        - operator batch round schedule when operator publishes scheduledSession
-        - Collaborative exit link to /wallet/arkade/collaborative-exit when cooperative exit is available; disabled while signer rotation, autonomous mode, or a pending collaborative intent blocks it
-        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; a second unroll may start on other startable leaves after branch-complete while leftover unrolled coins wait to be claimed (ARK-EXIT-32)
-        - Complete unilateral exit link to /wallet/arkade/complete-unilateral-exit when an exit is in progress
+        - Start unilateral exit is tertiary (select VTXO, unroll) with bumper fee estimate; the same control is primary and labeled Control unilateral exit while an exit is in progress. A second unroll may start on other startable leaves after branch-complete while leftover unrolled coins wait to be claimed (ARK-EXIT-32)
+        - Complete unilateral exit stays secondary and links to /wallet/arkade/complete-unilateral-exit only when an exit is in progress
+        - Renew VTXOs now is the first action. It is primary when expiringSoonCount is greater than zero, otherwise secondary (including while expiry is still loading)
+        - View VTXOs stays secondary and links to /wallet/arkade/vtxos
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
         - pending_recovery_due_to_expired_signer_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
-        - autonomous mode switch (persisted per ASP; confirm before enable)
-        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present); Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
-        - View VTXOs link to /wallet/arkade/vtxos
+        - autonomous mode switch at the bottom of the card (persisted per ASP; confirm before enable)
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present); Recover now, Renew, and migrate disabled only when that action would register overlapping outpoints
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
-        - Collaborative exit and fee estimates via bitboard-arkade WASM in arkade.worker
+        - Balance, receive address, delegator fee, and the operator batch window are not shown on this card
+        - Board from on-chain and Collaborative exit are on the dashboard Arkade card
         - Unilateral exit via ark-rs unroll APIs; bumper balance and fee estimates from worker
     - WalletReceiveArkadeMode:
       - description: "Arkade receive integrated in main Receive page"
@@ -607,4 +608,8 @@ feature:
       - visible_elements:
         - Arkade balance label
         - confirmed and optional pending balance display
+        - VTXO expiry line once the Arkade session is loaded, including the renewal-soon count
+        - Renew VTXOs now is the first action. It is primary when expiringSoonCount is greater than zero, otherwise secondary
+        - Board from on-chain link to /wallet/arkade/board; disabled button while autonomous mode is active
+        - Collaborative exit link to /wallet/arkade/collaborative-exit; disabled with a reason while signer rotation cutoff, autonomous mode, or a pending collaborative intent blocks it
         - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)

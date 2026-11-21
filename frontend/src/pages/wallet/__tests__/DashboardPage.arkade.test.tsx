@@ -143,6 +143,11 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
   useArkadeAutonomousModeActive: () => false,
+  useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeVtxoExpiryQuery: () => ({
+    isLoading: false,
+    data: { earliestExpiresAt: null, expiringSoonCount: 0 },
+  }),
   useHasPendingBatchIntent: () => false,
   useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,

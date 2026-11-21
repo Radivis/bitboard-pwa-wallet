@@ -22,7 +22,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="Step by step">
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Open <strong>Management → Board from on-chain</strong> (or the board page from your
+            Open <strong>Dashboard → Board from on-chain</strong> (or the board page from your
             Arkade balance breakdown).
           </li>
           <li>Copy the <strong>boarding address</strong> shown there.</li>

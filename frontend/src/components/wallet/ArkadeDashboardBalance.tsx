@@ -13,6 +13,8 @@ import {
 } from '@/components/design/DesignCard'
 import { DesignBanner } from '@/components/design/DesignBanner'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadeDashboardEntryActions } from '@/components/wallet/ArkadeDashboardEntryActions'
+import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
@@ -172,6 +174,8 @@ export function ArkadeDashboardBalance() {
             ) : null}
           </>
         ) : null}
+        {arkadeLoadSnapshot.loadPhase === 'loaded' ? <ArkadeVtxoExpiryIndicator /> : null}
+        <ArkadeDashboardEntryActions />
         <Link
           to="/wallet/management"
           className="design-type-regular text-primary underline-offset-4 hover:underline"

@@ -58,7 +58,7 @@ export const ARKADE_OPERATOR_STALE_INFOMODE = {
 
 export const ARKADE_BALANCE_BOARDING_INFOMODE = {
   title: 'On-chain boarding',
-  text: 'Bitcoin you sent to your boarding address and that is confirmed on-chain, but not yet settled into Arkade. Tap "settle in management" or open Board from on-chain to turn it into spendable virtual balance units (VTXOs).',
+  text: 'Bitcoin you sent to your boarding address and that is confirmed on-chain, but not yet settled into Arkade. Tap "settle" or open Board from on-chain on the dashboard to turn it into spendable virtual balance units (VTXOs).',
 } as const
 
 export const ARKADE_BALANCE_BOARDING_PENDING_INFOMODE = {

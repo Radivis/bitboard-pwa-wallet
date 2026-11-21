@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
@@ -8,7 +8,18 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    Link: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+    Link: ({
+      children,
+      to,
+      ...props
+    }: {
+      children: React.ReactNode
+      to?: string
+    }) => (
+      <a href={to ?? '#'} {...props}>
+        {children}
+      </a>
+    ),
   }
 })
 
@@ -39,6 +50,14 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
     ),
   }
 })
+
+const unilateralExitState = vi.hoisted(() => ({ inProgress: false }))
+
+vi.mock('@/hooks/useHasUnilateralExitInProgress', () => ({
+  useHasUnilateralExitInProgress: () => ({
+    hasUnilateralExitInProgress: unilateralExitState.inProgress,
+  }),
+}))
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => ({
@@ -92,18 +111,35 @@ vi.mock('@/workers/arkade-factory', () => ({
 }))
 
 describe('ArkadeExitSection', () => {
-  it('shows collaborative and unilateral exit actions', () => {
+  beforeEach(() => {
+    unilateralExitState.inProgress = false
+  })
+
+  it('shows start unilateral exit as tertiary', () => {
     const { container } = renderWithProviders(<ArkadeExitSection />)
-    expect(screen.getByRole('link', { name: 'Collaborative exit' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Start unilateral exit' })).toBeInTheDocument()
-    expect(
-      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
-    ).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Start unilateral exit' })).toHaveAttribute(
+      'data-type',
+      'tertiary',
+    )
+    expect(screen.queryByRole('link', { name: 'Complete unilateral exit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Collaborative exit' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Learn about exits')).not.toBeInTheDocument()
+    expect(screen.queryByText('Exit to on-chain')).not.toBeInTheDocument()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.unilateralExit}"]`),
     ).not.toBeNull()
-    expect(
-      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.learnAboutExits}"]`),
-    ).not.toBeNull()
+  })
+
+  it('promotes the unilateral control to primary and shows complete while an exit is in progress', () => {
+    unilateralExitState.inProgress = true
+    renderWithProviders(<ArkadeExitSection />)
+    expect(screen.getByRole('link', { name: 'Control unilateral exit' })).toHaveAttribute(
+      'data-type',
+      'primary',
+    )
+    expect(screen.getByRole('link', { name: 'Complete unilateral exit' })).toHaveAttribute(
+      'data-type',
+      'secondary',
+    )
   })
 })

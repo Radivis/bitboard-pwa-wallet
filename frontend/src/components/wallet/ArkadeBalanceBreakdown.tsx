@@ -88,7 +88,7 @@ export function ArkadeBalanceBreakdown({
                       className="text-primary underline-offset-4 hover:underline"
                       data-testid="arkade-balance-settle-in-management-link"
                     >
-                      settle in management
+                      settle
                     </Link>
                     ):
                   </>

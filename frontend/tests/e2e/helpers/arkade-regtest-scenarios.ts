@@ -119,7 +119,11 @@ async function confirmSettledVtxoAndSync(page: Page): Promise<void> {
 export async function prepareCollaborativeExitScenario(page: Page): Promise<void> {
   await prepareFundedArkadeBalance(page)
   await confirmSettledVtxoAndSync(page)
-  await goToArkadeManagementPanel(page)
+  await expect(
+    page
+      .getByTestId('dashboard-arkade-balance-card')
+      .getByRole('link', { name: 'Collaborative exit' }),
+  ).toBeVisible()
 }
 
 export async function prepareUnilateralUnrollScenario(page: Page): Promise<void> {
