@@ -11,6 +11,7 @@ import {
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
 import { useWalletStore } from '@/stores/walletStore'
 import { ArkadeRenewVtxosButton } from '@/components/wallet/ArkadeRenewVtxosButton'
+import { DashboardAdvancedActionsLink } from '@/components/wallet/DashboardAdvancedActionsLink'
 
 function collaborativeExitUnavailableReason(params: {
   hasPendingCollaborativeIntent: boolean
@@ -116,6 +117,7 @@ export function ArkadeDashboardEntryActions() {
         <ArkadeRenewVtxosButton />
         <ArkadeBoardFromOnchainButton />
         <ArkadeCollaborativeExitButton unavailable={collaborativeExit.unavailable} />
+        <DashboardAdvancedActionsLink section="arkade" />
       </div>
       {collaborativeExit.reason != null && (
         <p

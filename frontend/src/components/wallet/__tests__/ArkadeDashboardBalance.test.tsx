@@ -39,12 +39,14 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     Link: ({
       children,
       to,
+      search,
       ...props
     }: {
       children: React.ReactNode
       to: string
+      search?: { section?: string }
     }) => (
-      <a href={to} {...props}>
+      <a href={search?.section != null ? `${to}?section=${search.section}` : to} {...props}>
         {children}
       </a>
     ),
@@ -354,6 +356,15 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('arkade-recoverable-vtxo-banner')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Recover now' })).toBeInTheDocument()
+  })
+
+  it('links Advanced actions to the Arkade card in Management', () => {
+    renderWithProviders(<ArkadeDashboardBalance />)
+    const advancedActions = screen.getByTestId('dashboard-arkade-advanced-actions')
+    expect(advancedActions).toHaveTextContent('Advanced actions')
+    expect(advancedActions).toHaveAttribute('data-type', 'tertiary')
+    expect(advancedActions).toHaveClass('w-fit', 'self-start')
+    expect(advancedActions).toHaveAttribute('href', '/wallet/management?section=arkade')
   })
 
   it('DASH-ARK-50 links to Board from on-chain', () => {

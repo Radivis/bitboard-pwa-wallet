@@ -44,7 +44,7 @@ export function ArkadePanel() {
   if (!show) return null
 
   return (
-    <DesignCard>
+    <DesignCard id="management-arkade-card" className="scroll-mt-16">
       <DesignCardHeader>
         <DesignCardTitle className="flex items-center gap-2">
           <ArkadeIcon className="h-5 w-5" />

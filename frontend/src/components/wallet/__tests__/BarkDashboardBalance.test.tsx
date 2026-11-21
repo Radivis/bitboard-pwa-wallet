@@ -84,9 +84,14 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     Link: ({
       children,
       to,
+      search,
       ...props
-    }: { children: ReactNode; to: string } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a href={to} {...props}>
+    }: {
+      children: ReactNode
+      to: string
+      search?: { section?: string }
+    } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={search?.section != null ? `${to}?section=${search.section}` : to} {...props}>
         {children}
       </a>
     ),
@@ -189,6 +194,15 @@ describe('BarkDashboardBalance', () => {
       'href',
       '/wallet/bark/board',
     )
+  })
+
+  it('DASH-BARK-22 links Advanced actions to the Bark card in Management', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    const advancedActions = screen.getByTestId('dashboard-bark-advanced-actions')
+    expect(advancedActions).toHaveTextContent('Advanced actions')
+    expect(advancedActions).toHaveAttribute('data-type', 'tertiary')
+    expect(advancedActions).toHaveClass('w-fit', 'self-start')
+    expect(advancedActions).toHaveAttribute('href', '/wallet/management?section=bark')
   })
 
   it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {

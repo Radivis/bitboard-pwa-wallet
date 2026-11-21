@@ -119,6 +119,7 @@ feature:
         - If wallet is locked, show unlock prompt (Bitboard app password)
         - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
         - On-chain, Arkade, Bark, and Lightning balances are separate cards in that order. The on-chain card is titled Balance when it is the only balance card, Lab Balance on Labnet, and On-chain balance when another rail card is visible. The inner On-chain label is omitted when the title is On-chain balance
+        - The Arkade, Bark, and Lightning cards each have a tertiary Advanced actions button that opens that rail's card on Management
         - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
         - Labnet does not use Esplora timestamps; the lab dashboard uses simulator chain state only
     - Receive:

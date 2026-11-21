@@ -13,6 +13,11 @@ describe('parseManagementSearch', () => {
     expect(parseManagementSearch({ completedExitTxid: 'not-a-txid' })).toEqual({})
   })
 
+  it('keeps a known rail section and drops anything else', () => {
+    expect(parseManagementSearch({ section: 'bark' })).toEqual({ section: 'bark' })
+    expect(parseManagementSearch({ section: 'onchain' })).toEqual({})
+  })
+
   it('still recognizes the delete-wallet flag', () => {
     expect(parseManagementSearch({ openDelete: 'true', completedExitTxid: 'nope' })).toEqual({
       openDelete: true,

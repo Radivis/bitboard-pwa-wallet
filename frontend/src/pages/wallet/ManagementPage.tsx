@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -10,10 +11,19 @@ import { LightningWallets } from '@/components/wallet/LightningWallets'
 import { ArkadePanel } from '@/components/wallet/ArkadePanel'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
 import { CompletedUnilateralExitNotice } from '@/components/wallet/CompletedUnilateralExitNotice'
+import { managementRailCardElementId } from '@/lib/wallet/management-search'
 
 export function ManagementPage() {
   const navigate = useNavigate({ from: '/wallet/management' })
-  const { openDelete, completedExitTxid } = useSearch({ from: '/wallet/management' })
+  const { openDelete, completedExitTxid, section } = useSearch({ from: '/wallet/management' })
+
+  useEffect(() => {
+    if (section == null) return
+    document.getElementById(managementRailCardElementId(section))?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }, [section])
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)

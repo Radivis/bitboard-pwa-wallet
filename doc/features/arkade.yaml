@@ -612,4 +612,5 @@ feature:
         - Renew VTXOs now is the first action. It is primary when expiringSoonCount is greater than zero, otherwise secondary
         - Board from on-chain link to /wallet/arkade/board; disabled button while autonomous mode is active
         - Collaborative exit link to /wallet/arkade/collaborative-exit; disabled with a reason while signer rotation cutoff, autonomous mode, or a pending collaborative intent blocks it
+        - Tertiary Advanced actions button linking to the Arkade card on Management
         - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)

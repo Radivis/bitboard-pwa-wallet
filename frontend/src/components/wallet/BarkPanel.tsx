@@ -20,7 +20,7 @@ export function BarkPanel() {
   if (loadSnapshot.loadPhase === 'not-configured') return null
 
   return (
-    <DesignCard data-testid="bark-management-panel">
+    <DesignCard id="management-bark-card" className="scroll-mt-16" data-testid="bark-management-panel">
       <DesignCardHeader>
         <DesignCardTitle>Bark</DesignCardTitle>
       </DesignCardHeader>

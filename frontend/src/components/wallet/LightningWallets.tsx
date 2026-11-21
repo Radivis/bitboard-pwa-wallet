@@ -514,7 +514,8 @@ export function LightningWallets() {
       infoId="management-lightning-wallets-card"
       infoTitle="Connected Lightning wallets"
       infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them. With Infomode on, tap the NWC type control in Connect Lightning Wallet to open a short guide with links to Library articles on popular NWC wallets, or tap App-internal node (coming soon) to read about the planned in-app Lightning mode and its risks."
-      className="rounded-xl"
+      id="management-lightning-card"
+      className="scroll-mt-16 rounded-xl"
     >
       <DesignCard>
         <DesignCardHeader>

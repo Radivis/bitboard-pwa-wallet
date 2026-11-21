@@ -8,6 +8,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
+import { DashboardAdvancedActionsLink } from '@/components/wallet/DashboardAdvancedActionsLink'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -226,6 +227,7 @@ export function LightningDashboardBalance() {
             )}
           </>
         ) : null}
+        <DashboardAdvancedActionsLink section="lightning" />
       </DesignCardContent>
     </DesignCard>
   )

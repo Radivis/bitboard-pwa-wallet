@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { ArkadeSessionLoadError } from '@/components/arkade/ArkadeSessionLoadError'
 import { ArkadeSessionLoading } from '@/components/arkade/ArkadeSessionLoading'
@@ -175,12 +174,6 @@ export function ArkadeDashboardBalance() {
         ) : null}
         {arkadeLoadSnapshot.loadPhase === 'loaded' ? <ArkadeVtxoExpiryIndicator /> : null}
         <ArkadeDashboardEntryActions />
-        <Link
-          to="/wallet/management"
-          className="design-type-regular text-primary underline-offset-4 hover:underline"
-        >
-          Arkade in Management
-        </Link>
       </DesignCardContent>
     </DesignCard>
   )

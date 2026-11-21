@@ -196,6 +196,9 @@ feature:
       - id: DASH-BARK-20
         description: When refresh is blocked because coins are locked in an emergency exit, the card shows that warning and not the refresh notice or the rail sync error banner
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-22
+        description: The Bark balance card has a tertiary Advanced actions button that opens the Bark card on Management
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
     session_screens:
       - id: BARK-SESS-01
         description: >

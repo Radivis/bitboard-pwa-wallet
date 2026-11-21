@@ -12,6 +12,7 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
+import { DashboardAdvancedActionsLink } from '@/components/wallet/DashboardAdvancedActionsLink'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
@@ -170,6 +171,7 @@ export function BarkDashboardBalance() {
               Exit to on-chain
             </Link>
           </DesignButton>
+          <DashboardAdvancedActionsLink section="bark" />
         </div>
       </DesignCardContent>
     </DesignCard>
