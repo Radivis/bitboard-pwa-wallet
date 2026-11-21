@@ -22,13 +22,30 @@ import {
   type MainnetFiatAmountDisplayProps,
 } from '@/hooks/useMainnetFiatAmountProps'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import type { LoadLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import {
   barkRefreshNoticeText,
   barkRefreshWarningText,
   type BarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
 import { useFeatureStore } from '@/stores/featureStore'
-import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import {
+  selectCommittedNetworkMode,
+  useWalletStore,
+  type NetworkMode,
+} from '@/stores/walletStore'
+
+export function isBarkDashboardBalanceVisible(params: {
+  networkMode: NetworkMode
+  isBarkEnabled: boolean
+  loadPhase: LoadLifecyclePhase
+}): boolean {
+  return (
+    params.isBarkEnabled &&
+    isBarkNetworkMode(params.networkMode) &&
+    params.loadPhase !== 'not-configured'
+  )
+}
 
 export function BarkDashboardBalance() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -44,8 +61,12 @@ export function BarkDashboardBalance() {
     rateLoading: fiatAmount.rateLoading,
   }
 
-  const show = isBarkEnabled && isBarkNetworkMode(networkMode)
-  if (!show || loadSnapshot.loadPhase === 'not-configured') return null
+  const show = isBarkDashboardBalanceVisible({
+    networkMode,
+    isBarkEnabled,
+    loadPhase: loadSnapshot.loadPhase,
+  })
+  if (!show) return null
 
   const spendableSats = syncSnapshot.spendableSats
   const lockedSats = syncSnapshot.lockedSats ?? 0
@@ -59,7 +80,6 @@ export function BarkDashboardBalance() {
 
   return (
     <DesignCard
-      elevation={2}
       data-testid="dashboard-bark-balance-card"
       data-rail-bark-load={loadSnapshot.loadPhase}
       data-rail-bark-sync={syncSnapshot.syncPhase}

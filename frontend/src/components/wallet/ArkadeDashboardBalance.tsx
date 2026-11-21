@@ -62,7 +62,6 @@ export function ArkadeDashboardBalance() {
 
   return (
     <DesignCard
-      elevation={2}
       data-testid="dashboard-arkade-balance-card"
       data-rail-arkade-load={arkadeRail.loadPhase}
       data-rail-arkade-sync={arkadeRail.syncPhase}

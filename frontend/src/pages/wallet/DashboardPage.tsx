@@ -9,6 +9,7 @@ import {
 import {
   useWalletStore,
   NETWORK_LABELS,
+  selectCommittedNetworkMode,
   type NetworkMode,
 } from '@/stores/walletStore'
 import {
@@ -35,10 +36,7 @@ import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-displa
 import { retryInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
 import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import {
-  useLightningBalancesForDashboardQuery,
-  useLightningHistoryQuery,
-} from '@/hooks/useLightningMutations'
+import { useLightningHistoryQuery } from '@/hooks/useLightningMutations'
 import {
   useOnchainEsploraSyncMetadataQuery,
 } from '@/hooks/useOnchainDashboardQueries'
@@ -51,28 +49,25 @@ import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
 import { BarkMovementItem } from '@/components/BarkMovementItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
-import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
+import { BarkDashboardBalance, isBarkDashboardBalanceVisible } from '@/components/wallet/BarkDashboardBalance'
+import {
+  LightningDashboardBalance,
+  useIsLightningDashboardBalanceShown,
+} from '@/components/wallet/LightningDashboardBalance'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
+import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useOnchainRailSnapshot } from '@/hooks/useOnchainLifecycleSnapshots'
-import { useLightningRailSnapshot } from '@/hooks/useLightningLifecycleSnapshots'
 import {
   useOnchainLoadLifecycleSnapshot,
   useOnchainSyncLifecycleSnapshot,
 } from '@/hooks/useOnchainLifecycleSnapshots'
-import {
-  useLightningLoadLifecycleSnapshot,
-  useLightningSyncLifecycleSnapshot,
-} from '@/hooks/useLightningLifecycleSnapshots'
 import { orchestrateOnchainRetryLoad } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import { orchestrateLightningRetryLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import {
   useOnchainIncrementalSyncMutation,
   useOnchainFullRescanSyncMutation,
-  useLightningManualSyncMutation,
 } from '@/hooks/useRailManualSyncMutations'
-import { useLightningSyncMetadataQuery } from '@/hooks/useLightningDashboardQueries'
 import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
 import { useBarkHistoryQuery } from '@/hooks/useBarkHistoryQuery'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -122,24 +117,20 @@ function InitialSyncErrorBanner() {
 /** Live Esplora networks; regtest included so developers can repair after bad local chain. */
 const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet', 'mutinynet']
 
-function BalanceDesignCard() {
+function BalanceDesignCard({
+  hasCompanionRailBalance,
+}: {
+  hasCompanionRailBalance: boolean
+}) {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const balance = useWalletStore((walletState) => walletState.balance)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
-  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
-  const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
   const onchainRail = useOnchainRailSnapshot()
   const onchainLoadSnapshot = useOnchainLoadLifecycleSnapshot()
   const onchainSyncSnapshot = useOnchainSyncLifecycleSnapshot()
-  const lightningRail = useLightningRailSnapshot()
-  const lightningLoadSnapshot = useLightningLoadLifecycleSnapshot()
-  const lightningSyncSnapshot = useLightningSyncLifecycleSnapshot()
-  const lightningSyncMetadataQuery = useLightningSyncMetadataQuery()
   const onchainIncrementalSync = useOnchainIncrementalSyncMutation()
   const onchainFullRescanSync = useOnchainFullRescanSyncMutation()
-  const lightningManualSync = useLightningManualSyncMutation()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -169,54 +160,6 @@ function BalanceDesignCard() {
   const lastSuccessfulEsploraSyncAt =
     onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt
 
-  const hasMatchingLightningConnection = useMemo(
-    () =>
-      isLightningEnabled &&
-      networkMode !== 'lab' &&
-      hasNetworkConnectedWallet(
-        connectedLightningWallets,
-        activeWalletId,
-        networkMode,
-      ),
-    [
-      isLightningEnabled,
-      networkMode,
-      activeWalletId,
-      connectedLightningWallets,
-    ],
-  )
-
-  const showLightningBalances = hasMatchingLightningConnection
-
-  const isLightningBalancesSectionLoading =
-    showLightningBalances &&
-    lightningRail.loadPhase !== 'load-error' &&
-    (lightningRail.loadPhase !== 'loaded' || lightningBalancesQuery.isLoading)
-
-  const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
-  const lightningBalanceRows = useMemo(
-    () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
-    [lightningBalancesQuery.data?.lightningBalanceRows],
-  )
-  const hasStaleLightningBalance = lightningBalanceRows.some(
-    (balanceRow) => balanceRow.isStaleBalance,
-  )
-  const showLightningLoadError = lightningLoadSnapshot.loadPhase === 'load-error'
-  const showLightningBalancesSection =
-    showLightningLoadError ||
-    (showLightningBalances &&
-      lightningBalancesQuery.isSuccess &&
-      lightningBalanceRows.length > 0)
-  const newestStaleBalanceIso = useMemo(() => {
-    const times = lightningBalanceRows
-      .filter(
-        (balanceRow) => balanceRow.isStaleBalance && balanceRow.balanceSnapshotAt != null,
-      )
-      .map((balanceRow) => balanceRow.balanceSnapshotAt as string)
-    if (times.length === 0) return null
-    return times.reduce((newerIso, olderIso) => (newerIso > olderIso ? newerIso : olderIso))
-  }, [lightningBalanceRows])
-
   const fiatAmount = useMainnetFiatAmountProps()
   const fiatAmountProps = {
     showFiatLayout: fiatAmount.showFiatLayout,
@@ -237,7 +180,7 @@ function BalanceDesignCard() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <DesignCardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
-              {walletBalanceCardTitle(networkMode)}
+              {walletBalanceCardTitle(networkMode, hasCompanionRailBalance)}
             </DesignCardTitle>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {networkMode === 'mainnet' ? (
@@ -257,9 +200,11 @@ function BalanceDesignCard() {
             data-rail-onchain-load={onchainRail.loadPhase}
             data-rail-onchain-sync={onchainRail.syncPhase}
           >
-            <p className="design-type-metadata mb-2 uppercase text-muted-foreground">
-              {walletOnChainSectionLabel(networkMode)}
-            </p>
+            {hasCompanionRailBalance ? null : (
+              <p className="design-type-metadata mb-2 uppercase text-muted-foreground">
+                {walletOnChainSectionLabel(networkMode)}
+              </p>
+            )}
             {onchainLoadSnapshot.loadPhase === 'load-error' ? (
               <RailLoadErrorBanner
                 rail="onchain"
@@ -415,145 +360,24 @@ function BalanceDesignCard() {
               </>
             )}
           </div>
-
-          <ArkadeDashboardBalance />
-
-          <BarkDashboardBalance />
-
-          {isLightningBalancesSectionLoading && (
-            <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading Lightning balances…
-            </div>
-          )}
-
-          {showLightningBalancesSection && (
-              <div
-                data-rail-lightning-load={lightningRail.loadPhase}
-                data-rail-lightning-sync={lightningRail.syncPhase}
-              >
-                <p className="design-type-metadata mb-2 uppercase text-muted-foreground">
-                  Lightning (NWC)
-                </p>
-                {showLightningLoadError ? (
-                  <RailLoadErrorBanner
-                    rail="lightning"
-                    loadPhase={lightningLoadSnapshot.loadPhase}
-                    errorMessage={lightningLoadSnapshot.errorMessage}
-                    onRetry={() => {
-                      void orchestrateLightningRetryLoad()
-                    }}
-                  />
-                ) : (
-                  <>
-                {lightningBalanceRows.length === 1 ? (
-                  <p className="design-type-emphasis mb-3 text-foreground">
-                    {lightningBalanceRows[0].label}
-                  </p>
-                ) : (
-                  <p className="design-type-regular mb-3 text-muted-foreground">
-                    Total across {lightningBalanceRows.length} connected wallets
-                  </p>
-                )}
-                <FiatBtcAmountDisplay
-                  amountSats={lightningTotalSats}
-                  {...fiatAmountProps}
-                  amountTypography="largeBalances"
-                />
-                <ul className="design-type-regular mt-3 space-y-1.5 border-t border-border pt-3">
-                  {lightningBalanceRows.map((row) => (
-                    <li
-                      key={row.connectionId}
-                      className="flex justify-between gap-2"
-                    >
-                      <span className="design-type-emphasis min-w-0 truncate text-foreground">
-                        {row.label}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground">
-                        {row.error != null && !row.isStaleBalance ? (
-                          <span className="text-amber-600 dark:text-amber-400">
-                            —
-                          </span>
-                        ) : (
-                          <>
-                            <FiatBtcAmountDisplay
-                              amountSats={row.balanceSats}
-                              {...fiatAmountProps}
-                              isDetail
-                              amountTypography="smallBalances"
-                              className="inline text-muted-foreground"
-                            />
-                            {row.isStaleBalance ? (
-                              <span
-                                className="design-type-regular ml-1 text-amber-700 dark:text-amber-400"
-                                data-testid="lightning-balance-cached-tag"
-                              >
-                                cached
-                              </span>
-                            ) : null}
-                          </>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {hasStaleLightningBalance && (
-                  <DesignBanner
-                    role="status"
-                    status="warning"
-                    className="mt-2"
-                    data-testid="lightning-balance-stale-banner"
-                    title="Showing saved Lightning balance"
-                    description={
-                      <>
-                        Showing last known Lightning balance saved in this app (not a live check).
-                        NWC could not be reached.
-                        {newestStaleBalanceIso != null && (
-                          <>
-                            {' '}
-                            Updated: {new Date(newestStaleBalanceIso).toLocaleString()}.
-                          </>
-                        )}
-                      </>
-                    }
-                  />
-                )}
-                {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
-                  <p className="design-type-regular mt-2 text-amber-700 dark:text-amber-400">
-                    Some Lightning wallets could not be reached and have no saved
-                    balance yet; those show “—” and are not included in the
-                    total.
-                  </p>
-                )}
-                <RailSyncErrorBanner
-                  rail="lightning"
-                  syncPhase={lightningSyncSnapshot.syncPhase}
-                  loadPhase={lightningLoadSnapshot.loadPhase}
-                  errorMessage={lightningSyncSnapshot.errorMessage}
-                  onRetry={() => lightningManualSync.mutate()}
-                  isRetrying={
-                    lightningRail.syncPhase === 'syncing' || lightningManualSync.isPending
-                  }
-                />
-                <RailSyncControl
-                  rail="lightning"
-                  syncLabel="Sync Lightning"
-                  syncPhase={lightningRail.syncPhase}
-                  lastSyncedAt={lightningSyncMetadataQuery.data?.lastSyncedAt ?? null}
-                  onSync={() => lightningManualSync.mutate()}
-                  isSyncPending={lightningManualSync.isPending}
-                  railConfigured={lightningRail.loadPhase !== 'not-configured'}
-                  syncErrorMessage={lightningSyncSnapshot.errorMessage}
-                  syncErrorDetailInBanner={lightningLoadSnapshot.loadPhase === 'loaded'}
-                />
-                  </>
-                )}
-              </div>
-            )}
         </DesignCardContent>
       </DesignCard>
     </InfomodeWrapper>
   )
+}
+
+function useHasCompanionRailBalance(): boolean {
+  const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
+  const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const barkLoadPhase = useBarkLoadLifecycleSnapshot().loadPhase
+  const lightningShown = useIsLightningDashboardBalanceShown()
+  const arkadeShown = isArkadeActiveForNetworkMode(committedNetworkMode)
+  const barkShown = isBarkDashboardBalanceVisible({
+    networkMode: committedNetworkMode,
+    isBarkEnabled,
+    loadPhase: barkLoadPhase,
+  })
+  return arkadeShown || barkShown || lightningShown
 }
 
 function RecentTransactions() {
@@ -809,6 +633,7 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const hasCompanionRailBalance = useHasCompanionRailBalance()
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -822,7 +647,10 @@ export function DashboardPage() {
       <InitialSyncErrorBanner />
       <OnchainSaveErrorBanner />
 
-      <BalanceDesignCard />
+      <BalanceDesignCard hasCompanionRailBalance={hasCompanionRailBalance} />
+      <ArkadeDashboardBalance />
+      <BarkDashboardBalance />
+      <LightningDashboardBalance />
       <RecentTransactions />
     </div>
   )

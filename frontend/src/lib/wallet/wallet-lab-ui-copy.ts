@@ -4,6 +4,7 @@ export const WALLET_DASHBOARD_TITLE = 'Dashboard' as const
 export const LAB_WALLET_DASHBOARD_TITLE = 'Lab Wallet Dashboard' as const
 
 export const WALLET_BALANCE_CARD_TITLE = 'Balance' as const
+export const WALLET_ONCHAIN_BALANCE_CARD_TITLE = 'On-chain balance' as const
 export const LAB_WALLET_BALANCE_CARD_TITLE = 'Lab Balance' as const
 
 export const LAB_WALLET_BALANCE_DISCLAIMER =
@@ -22,8 +23,13 @@ export function walletDashboardTitle(networkMode: NetworkMode): string {
   return networkMode === 'lab' ? LAB_WALLET_DASHBOARD_TITLE : WALLET_DASHBOARD_TITLE
 }
 
-export function walletBalanceCardTitle(networkMode: NetworkMode): string {
-  return networkMode === 'lab' ? LAB_WALLET_BALANCE_CARD_TITLE : WALLET_BALANCE_CARD_TITLE
+export function walletBalanceCardTitle(
+  networkMode: NetworkMode,
+  hasCompanionRailBalance = false,
+): string {
+  if (networkMode === 'lab') return LAB_WALLET_BALANCE_CARD_TITLE
+  if (hasCompanionRailBalance) return WALLET_ONCHAIN_BALANCE_CARD_TITLE
+  return WALLET_BALANCE_CARD_TITLE
 }
 
 export function walletOnChainSectionLabel(networkMode: NetworkMode): string {

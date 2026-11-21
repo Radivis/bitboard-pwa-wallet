@@ -255,6 +255,16 @@ describe('DashboardPage Arkade contracts', () => {
     })
   })
 
+  it('shows Arkade as a sibling card and titles on-chain balance', () => {
+    renderWithProviders(<DashboardPage />)
+    expect(screen.getByText('On-chain balance')).toBeInTheDocument()
+    expect(screen.queryByText('On-chain', { exact: true })).not.toBeInTheDocument()
+    const onchainCard = screen.getByText('On-chain balance').closest('[data-slot="design-card"]')
+    const arkadeCard = screen.getByTestId('dashboard-arkade-balance-card')
+    expect(onchainCard?.contains(arkadeCard)).toBe(false)
+    expect(arkadeCard).toHaveAttribute('data-elevation', '1')
+  })
+
   it('DASH-ARK-20 merges Arkade history into activity feed', () => {
     arkadeHistoryMock.mockReturnValue({
       isLoading: false,
