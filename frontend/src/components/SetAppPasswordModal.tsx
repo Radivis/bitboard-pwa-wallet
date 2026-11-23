@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DesignModal } from '@/components/design/DesignModal'
 import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import {
@@ -22,6 +22,8 @@ const SET_APP_PASSWORD_FIELDS_CONFIG = {
     strength: 'set-app-password-strength',
   },
 } as const
+
+const SET_APP_PASSWORD_FORM_ID = 'set-app-password-form'
 
 interface SetAppPasswordModalProps {
   open: boolean
@@ -90,6 +92,20 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
       closeAriaLabel="Back to setup"
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
+      footer={
+        <>
+          <DesignButton appearance="secondary" asChild>
+            <Link to="/setup">Back to setup</Link>
+          </DesignButton>
+          <DesignButton
+            type="submit"
+            form={SET_APP_PASSWORD_FORM_ID}
+            disabled={!passwordsValid || isSubmitting}
+          >
+            Continue
+          </DesignButton>
+        </>
+      }
     >
       <div className="space-y-4">
         <DialogDescription className="design-type-regular w-full max-w-none text-left text-muted-foreground">
@@ -103,7 +119,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
 
         <AppPasswordFundsLossWarning />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id={SET_APP_PASSWORD_FORM_ID} onSubmit={handleSubmit} className="space-y-4">
           <AppPasswordFields
             config={SET_APP_PASSWORD_FIELDS_CONFIG}
             newPassword={password}
@@ -115,14 +131,6 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
           {submitError != null && (
             <p className="design-type-regular text-destructive">{submitError}</p>
           )}
-
-          <Button type="submit" className="w-full" disabled={!passwordsValid || isSubmitting}>
-            Continue
-          </Button>
-
-          <Button variant="ghost" className="w-full" asChild>
-            <Link to="/setup">Back to setup</Link>
-          </Button>
         </form>
 
         <NearZeroSecurityOptIn onSessionStarted={onSessionStarted} />

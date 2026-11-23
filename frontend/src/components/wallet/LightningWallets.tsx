@@ -12,6 +12,7 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { DesignInput } from '@/components/design/DesignInput'
+import { DesignModal } from '@/components/design/DesignModal'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -34,14 +35,7 @@ import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend
 import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/wallet/bitcoin-utils'
 import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
 import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
   nwc: 'NWC',
@@ -98,31 +92,17 @@ function RenameLightningWalletDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Rename Lightning wallet</DialogTitle>
-          <DialogDescription>
-            Choose a unique label. Names reserved for automatic labels are not
-            allowed.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor={`ln-rename-${wallet.id}`}>Label</Label>
-          <DesignInput
-            id={`ln-rename-${wallet.id}`}
-            leadingIcon={Tag}
-            value={draftLabel}
-            maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
-            onChange={(e) => setDraftLabel(e.target.value)}
-            autoComplete="off"
-          />
-        </div>
-        <DialogFooter>
+    <DesignModal
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      title="Rename Lightning wallet"
+      onCancel={() => onOpenChange(false)}
+      footer={(requestClose) => (
+        <>
           <DesignButton
             type="button"
             appearance="secondary"
-            onClick={() => onOpenChange(false)}
+            onClick={requestClose}
             disabled={savePending}
           >
             Cancel
@@ -135,9 +115,24 @@ function RenameLightningWalletDialog({
           >
             {savePending ? 'Saving…' : 'Save'}
           </DesignButton>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+    >
+      <DialogDescription className="text-left">
+        Choose a unique label. Names reserved for automatic labels are not allowed.
+      </DialogDescription>
+      <div className="space-y-2">
+        <Label htmlFor={`ln-rename-${wallet.id}`}>Label</Label>
+        <DesignInput
+          id={`ln-rename-${wallet.id}`}
+          leadingIcon={Tag}
+          value={draftLabel}
+          maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
+          onChange={(e) => setDraftLabel(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
+    </DesignModal>
   )
 }
 

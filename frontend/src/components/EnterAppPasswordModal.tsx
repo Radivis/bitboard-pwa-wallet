@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DesignModal } from '@/components/design/DesignModal'
-import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+
+const ENTER_APP_PASSWORD_FORM_ID = 'enter-app-password-form'
 
 interface ConfirmAppPasswordModalProps {
   open: boolean
@@ -64,11 +66,19 @@ export function EnterAppPasswordModal({
       onInteractOutside={(e) => {
         if (isBusy) e.preventDefault()
       }}
+      footer={
+        isBusy ? undefined : (
+          <DesignButton type="submit" form={ENTER_APP_PASSWORD_FORM_ID} disabled={!password}>
+            {submitLabel}
+          </DesignButton>
+        )
+      }
     >
       <>
         <DialogDescription>{description}</DialogDescription>
 
         <form
+          id={ENTER_APP_PASSWORD_FORM_ID}
           onSubmit={(e) => {
             e.preventDefault()
             if (!password || isBusy) return
@@ -92,13 +102,7 @@ export function EnterAppPasswordModal({
             ) : null}
           </div>
 
-          {isBusy ? (
-            <LoadingSpinner text={loadingText} />
-          ) : (
-            <Button type="submit" className="w-full" disabled={!password}>
-              {submitLabel}
-            </Button>
-          )}
+          {isBusy ? <LoadingSpinner text={loadingText} /> : null}
         </form>
       </>
     </DesignModal>

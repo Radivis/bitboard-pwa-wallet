@@ -243,4 +243,37 @@ describe('DesignInput', () => {
     expect(onReset).toHaveBeenCalledOnce()
     expect(screen.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue('https://custom')
   })
+
+  it('masks a password field, reveals it beside clear, and hides reveal when disabled', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <DesignInput aria-label="Password" type="password" defaultValue="secret" />,
+    )
+
+    const field = screen.getByLabelText('Password')
+    expect(field).toHaveAttribute('type', 'password')
+    const reveal = screen.getByRole('button', { name: 'Show password' })
+    const clear = screen.getByRole('button', { name: 'Clear' })
+    expect(reveal).toHaveAttribute('aria-pressed', 'false')
+    expect(reveal.compareDocumentPosition(clear) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.click(reveal)
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
+
+    rerender(
+      <DesignInput
+        aria-label="Password"
+        type="password"
+        value="secret"
+        onChange={() => undefined}
+        disabled
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Show password' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+  })
 })

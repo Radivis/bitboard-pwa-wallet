@@ -4,16 +4,18 @@ import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DesignModal } from '@/components/design/DesignModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateManualUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { navigateAwayFromWalletUnlockPrompt } from '@/lib/shared/app-router'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { toUserFriendlyWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
+
+const UNLOCK_WALLET_FORM_ID = 'unlock-wallet-form'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -94,6 +96,13 @@ export function WalletUnlock({
         </span>
       }
       onInteractOutside={(e) => e.preventDefault()}
+      footer={
+        unlockMutation.isPending ? undefined : (
+          <DesignButton type="submit" form={UNLOCK_WALLET_FORM_ID} disabled={!password}>
+            Unlock
+          </DesignButton>
+        )
+      }
     >
       <>
         <DialogDescription>
@@ -105,8 +114,10 @@ export function WalletUnlock({
         </DialogDescription>
 
         <form
+          id={UNLOCK_WALLET_FORM_ID}
           onSubmit={(e) => {
             e.preventDefault()
+            if (!password || unlockMutation.isPending) return
             unlockMutation.mutate(password)
           }}
           className="space-y-4"
@@ -128,13 +139,7 @@ export function WalletUnlock({
             <p className="design-type-regular text-destructive">{unlockErrorMessage}</p>
           )}
 
-          {unlockMutation.isPending ? (
-            <LoadingSpinner text="Unlocking wallet..." />
-          ) : (
-            <Button type="submit" className="w-full" disabled={!password}>
-              Unlock
-            </Button>
-          )}
+          {unlockMutation.isPending ? <LoadingSpinner text="Unlocking wallet..." /> : null}
         </form>
       </>
     </DesignModal>
