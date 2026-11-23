@@ -460,10 +460,10 @@ feature:
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
       - id: ARK-VTX-02
         description: >-
-          Each card shows id, amount, classification, true-only flag chips (including unilateral
-          exit prepared with door-open icon when cached exit materials exist), created and expiry
-          timestamps, and a last line Unilateral exit phase: {copy} from the VTXO child snapshot
-          when the coin is not idle (ARK-EXIT-32). Idle VTXOs omit that line.
+          Each card shows id, amount, classification, true-only flag chips (preconfirmed,
+          recoverable, unrolled, swept, spent), created and expiry timestamps, and a last line
+          Unilateral exit phase: {copy} from the VTXO child snapshot when the coin is not idle
+          (ARK-EXIT-32). Idle VTXOs omit that line. Cached exit materials are not shown as a chip.
       - id: ARK-ARK-MGMT-01
         description: >-
           The next operator batch window indicator remains implemented (scheduledSession when

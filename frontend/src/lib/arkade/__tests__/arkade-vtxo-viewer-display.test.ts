@@ -50,11 +50,11 @@ describe('arkade-vtxo-viewer-display', () => {
     }
   })
 
-  it('getArkadeVtxoFlagChips_includes_unilateral_exit_prepared_when_set', () => {
+  it('getArkadeVtxoFlagChips_omits_unilateral_exit_prepared', () => {
     const chips = getArkadeVtxoFlagChips(
       sampleRow({ id: 'prepared:0', isUnilateralExitPrepared: true }),
     )
-    expect(chips).toContain('unilateralExitPrepared')
+    expect(chips).toEqual([])
   })
 
   it('filter_vtxos_hide_finalized_default', () => {

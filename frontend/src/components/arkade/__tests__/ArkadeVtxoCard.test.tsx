@@ -42,7 +42,6 @@ describe('ArkadeVtxoCard', () => {
     expect(screen.queryByText('unrolled')).not.toBeInTheDocument()
     expect(screen.queryByText('swept')).not.toBeInTheDocument()
     expect(screen.queryByText('spent')).not.toBeInTheDocument()
-    expect(screen.queryByText('unilateral exit prepared')).not.toBeInTheDocument()
   })
 
   it('ArkadeVtxoCard_hides_unilateral_exit_phase_when_idle', () => {
@@ -64,7 +63,7 @@ describe('ArkadeVtxoCard', () => {
     ).toHaveTextContent('Unilateral exit phase: waiting for timelock')
   })
 
-  it('ArkadeVtxoCard_shows_unilateral_exit_prepared_chip_with_icon', () => {
+  it('ArkadeVtxoCard_hides_unilateral_exit_prepared_chip', () => {
     renderWithProviders(
       <ArkadeVtxoCard
         row={{
@@ -75,8 +74,8 @@ describe('ArkadeVtxoCard', () => {
       />,
     )
 
-    expect(screen.getByText('unilateral exit prepared')).toBeInTheDocument()
-    expect(document.querySelector('.lucide-door-open')).toBeInTheDocument()
+    expect(screen.queryByText('unilateral exit prepared')).not.toBeInTheDocument()
+    expect(document.querySelector('.lucide-door-open')).not.toBeInTheDocument()
   })
 
   it('copies vtxo id on tap', async () => {

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { DoorOpen } from 'lucide-react'
 import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { DesignTag } from '@/components/design/DesignTag'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -22,11 +21,7 @@ interface ArkadeVtxoCardProps {
 }
 
 function ArkadeVtxoFlagChipBadge({ chip }: { chip: ArkadeVtxoFlagChip }) {
-  const label = getArkadeVtxoFlagChipLabel(chip)
-  if (chip === 'unilateralExitPrepared') {
-    return <DesignTag icon={<DoorOpen aria-hidden />}>{label}</DesignTag>
-  }
-  return <DesignTag>{label}</DesignTag>
+  return <DesignTag>{getArkadeVtxoFlagChipLabel(chip)}</DesignTag>
 }
 
 export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps) {

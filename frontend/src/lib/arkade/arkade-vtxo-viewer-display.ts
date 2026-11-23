@@ -76,7 +76,6 @@ export type ArkadeVtxoFlagChip =
   | 'unrolled'
   | 'swept'
   | 'spent'
-  | 'unilateralExitPrepared'
 
 const FLAG_CHIP_LABELS: Record<ArkadeVtxoFlagChip, string> = {
   preconfirmed: 'preconfirmed',
@@ -84,7 +83,6 @@ const FLAG_CHIP_LABELS: Record<ArkadeVtxoFlagChip, string> = {
   unrolled: 'unrolled',
   swept: 'swept',
   spent: 'spent',
-  unilateralExitPrepared: 'unilateral exit prepared',
 }
 
 export function getArkadeVtxoFlagChipLabel(chip: ArkadeVtxoFlagChip): string {
@@ -98,7 +96,6 @@ export function getArkadeVtxoFlagChips(row: ArkadeVtxoRowBase): ArkadeVtxoFlagCh
   if (row.isUnrolled) chips.push('unrolled')
   if (row.isSwept) chips.push('swept')
   if (row.isSpent) chips.push('spent')
-  if (row.isUnilateralExitPrepared) chips.push('unilateralExitPrepared')
   return chips
 }
 
