@@ -565,25 +565,27 @@
 }
 
 /*
- * Transaction card. Rest is elevation 2. Hover raises the fill and the full
- * shadow stack to elevation 3. The variable keeps the focus ring from dropping
- * a shadow layer.
+ * Transaction card. The fill is elevation 2 at rest and elevation 3 on hover.
+ * Those rows sit on an elevation 1 card, and the component's elevation 2 and 3
+ * shadows are measured from the base surface, so the painted shadows are one
+ * step lower: elevation 1 at rest, elevation 2 on hover. The variable keeps
+ * the focus ring from dropping a shadow layer.
  */
 [data-slot="design-transaction-card"] {
   background: var(--design-elevation-2);
   --design-transaction-card-shadow:
-    0 2px 6px 2px rgb(0 0 0 / 0.15),
-    0 4px 10px 0 rgb(0 0 0 / 0.25),
-    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
   box-shadow: var(--design-transaction-card-shadow);
 }
 
 [data-slot="design-transaction-card"]:hover {
   background: var(--design-elevation-3);
   --design-transaction-card-shadow:
-    0 5px 12px 0 rgb(0 0 0 / 0.25),
-    0 4px 8px 3px rgb(0 0 0 / 0.15),
-    inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
 }
 
 [data-slot="design-transaction-card"]:focus-visible {

@@ -150,20 +150,23 @@ describe('DesignTransactionCard', () => {
     expect(screen.queryByText('TXID')).not.toBeInTheDocument()
   })
 
-  it('uses the transaction-card slot and the elevation 2 and 3 shadow stacks', () => {
+  it('uses the transaction-card slot and the relative elevation 1 and 2 shadow stacks', () => {
     render(
       <DesignTransactionCard direction="received" settlement="pending" amount="+1" />,
     )
     expect(screen.getByText('+1').closest('[data-slot="design-transaction-card"]')).not.toBeNull()
 
-    const cardRules = designTokens.slice(designTokens.indexOf('[data-slot="design-transaction-card"]'))
+    const cardRulesStart = designTokens.indexOf('[data-slot="design-transaction-card"]')
+    const cardRules = designTokens.slice(cardRulesStart, designTokens.indexOf('[data-slot="design-modal"]'))
     expect(cardRules).toContain('--design-elevation-2')
     expect(cardRules).toContain('--design-elevation-3')
+    expect(cardRules).toContain('0 1px 3px 1px rgb(0 0 0 / 0.15)')
+    expect(cardRules).toContain('0 3px 8px 0 rgb(0 0 0 / 0.25)')
+    expect(cardRules).toContain('inset 0 4px 7px 0 rgb(245 244 246 / 0.08)')
     expect(cardRules).toContain('0 2px 6px 2px rgb(0 0 0 / 0.15)')
     expect(cardRules).toContain('0 4px 10px 0 rgb(0 0 0 / 0.25)')
     expect(cardRules).toContain('inset 0 4px 9px 0 rgb(236 235 239 / 0.08)')
-    expect(cardRules).toContain('0 5px 12px 0 rgb(0 0 0 / 0.25)')
-    expect(cardRules).toContain('0 4px 8px 3px rgb(0 0 0 / 0.15)')
-    expect(cardRules).toContain('inset 0 4px 11px 0 rgb(229 227 232 / 0.08)')
+    expect(cardRules).not.toContain('0 5px 12px 0 rgb(0 0 0 / 0.25)')
+    expect(cardRules).not.toContain('inset 0 4px 11px 0 rgb(229 227 232 / 0.08)')
   })
 })

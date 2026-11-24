@@ -150,7 +150,7 @@ The only theme variant is Light. Dark should follow the theme mode through the `
 
 ### Transaction card
 
-The activity row on the dashboard. Resting fill and shadow are elevation 2. Hover raises both to elevation 3, and the cursor is a pointer because the row opens. Corner radius is 20. Padding is 24 by 12.
+The activity row on the dashboard. Resting fill is elevation 2. Hover raises the fill to elevation 3, and the cursor is a pointer because the row opens. The row sits on an elevation 1 card, and the component's elevation 2 and 3 shadows are measured from the base surface, so the painted shadows are one step lower: the elevation 1 stack at rest and the elevation 2 stack on hover. Corner radius is 20. Padding is 24 by 12.
 
 `direction` is received or sent. The arrow and the amount use success foreground when received and error foreground when sent. `settlement` is pending, confirmed, failed, or canceled. Pending is a clock in warning foreground. Confirmed is a check in success foreground. Failed is a banknote with a cross in error foreground. Canceled is a cross in a circle in info foreground. Bark uses those icons and does not print a status word.
 
