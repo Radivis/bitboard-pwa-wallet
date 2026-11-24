@@ -184,7 +184,8 @@
 }
 
 :root[data-network="testnet"],
-:root[data-network="signet"] {
+:root[data-network="signet"],
+:root[data-network="mutinynet"] {
   --design-accent-primary: #1CB524;
   --design-accent-secondary: #0E5D12;
   --design-accent-secondary-stroke: #0E5D1280;
@@ -246,7 +247,8 @@
 }
 
 .dark[data-network="testnet"],
-.dark[data-network="signet"] {
+.dark[data-network="signet"],
+.dark[data-network="mutinynet"] {
   --design-accent-primary: #15881B;
   --design-accent-secondary: #1EC226;
   --design-accent-secondary-stroke: #1EC22680;

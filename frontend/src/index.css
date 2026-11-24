@@ -13,10 +13,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Network hues: Mainnet 30, Testnet 120, Signet 210, Regtest 255, Lab 315 */
+/* Hues from Basics / color-scheme-basics: Mainnet 33, Testnet Signet Mutinynet 123, Neutral 213, Labnet Regtest 303. */
 /* Saturation: Taproot 100%, Segwit 50% (half) */
 :root {
-  --hue: 120;
+  --hue: 123;
   --saturation-scale: 1;
   font-family: var(--design-font-ui);
   line-height: 1.5;
@@ -110,32 +110,27 @@
 }
 
 [data-network="mainnet"] {
-  --hue: 30;
+  --hue: 33;
 }
 
-[data-network="testnet"] {
-  --hue: 120;
+[data-network="testnet"],
+[data-network="signet"],
+[data-network="mutinynet"] {
+  --hue: 123;
 }
 
-[data-network="signet"] {
-  --hue: 210;
-}
-
-[data-network="regtest"] {
-  --hue: 255;
-}
-
+[data-network="regtest"],
 [data-network="lab"] {
-  --hue: 315;
+  --hue: 303;
 }
 
 [data-address-type="segwit"] {
   --saturation-scale: 0.5;
 }
 
-/* No active wallet, locked, or not yet unlocked: cyan accent at Taproot saturation */
+/* No active wallet, locked, or not yet unlocked. Neutral wins over the network hue. */
 [data-palette="neutral"] {
-  --hue: 180;
+  --hue: 213;
   --saturation-scale: 1;
 }
 
