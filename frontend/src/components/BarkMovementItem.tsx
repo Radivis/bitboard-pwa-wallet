@@ -1,111 +1,68 @@
-import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
-import { BarkIcon } from '@/components/icons/BarkIcon'
-import { format, formatDistanceToNow } from 'date-fns'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { BitcoinSatUnit } from '@/components/icons/BitcoinSatUnit'
-import { getNetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
-import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
+import { ActivityTimeButton } from '@/components/ActivityTimeButton'
+import {
+  DesignTransactionCard,
+  type DesignTransactionSettlement,
+} from '@/components/design/DesignTransactionCard'
+import { BarkIcon } from '@/components/icons/BarkIcon'
+import { SignedBitcoinAmount } from '@/components/SignedBitcoinAmount'
 import { barkMovementActivityLabel } from '@/lib/bark/bark-history'
-import { cn } from '@/lib/shared/utils'
 import type { BarkMovementRow } from '@/workers/bark-api'
 
-const STATUS_LABEL: Record<BarkMovementRow['status'], string> = {
-  pending: 'Pending',
-  successful: 'Successful',
-  failed: 'Failed',
-  canceled: 'Canceled',
+const SETTLEMENT: Record<BarkMovementRow['status'], DesignTransactionSettlement> = {
+  pending: 'pending',
+  successful: 'confirmed',
+  failed: 'failed',
+  canceled: 'canceled',
 }
 
-interface BarkMovementItemProps {
-  movement: BarkMovementRow
-}
-
-export function BarkMovementItem({ movement }: BarkMovementItemProps) {
-  const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const [expanded, setExpanded] = useState(false)
-  const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
+export function BarkMovementItem({ movement }: { movement: BarkMovementRow }) {
   const isDecrease = movement.effectiveBalanceSats < 0
-  const Icon = isDecrease ? ArrowUpRight : ArrowDownLeft
-  const timestamp =
-    movement.createdAtUnixSeconds > 0
-      ? new Date(movement.createdAtUnixSeconds * 1000)
-      : null
   const amountSats = Math.abs(movement.effectiveBalanceSats)
-  const sign = movement.effectiveBalanceSats < 0 ? '-' : movement.effectiveBalanceSats > 0 ? '+' : ''
+  const sign =
+    movement.effectiveBalanceSats < 0 ? '-' : movement.effectiveBalanceSats > 0 ? '+' : ''
+  const details = [
+    { label: 'Kind', value: movement.subsystemKind, prose: true as const },
+    ...(movement.offchainFeeSats > 0
+      ? [
+          {
+            label: 'Off-chain fee',
+            value: (
+              <BitcoinAmountDisplay
+                amountSats={movement.offchainFeeSats}
+                amountTypography="addresses"
+              />
+            ),
+          },
+        ]
+      : []),
+  ]
 
   return (
-    <div
+    <DesignTransactionCard
       data-testid={`bark-movement-${movement.id}`}
-      className="cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
-      onClick={() => setExpanded(!expanded)}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full',
-            isDecrease ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30',
-          )}
-        >
-          <Icon
-            className={cn(
-              'h-4 w-4',
-              isDecrease ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            )}
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="design-type-emphasis">{STATUS_LABEL[movement.status]}</p>
-            <DashboardActivityRailBadge
-              icon={BarkIcon}
-              label={barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}
-            />
-          </div>
-          {timestamp != null && (
-            <button
-              type="button"
-              className="design-type-regular text-muted-foreground hover:underline"
-              onClick={(event) => {
-                event.stopPropagation()
-                setShowAbsoluteTime(!showAbsoluteTime)
-              }}
-            >
-              {showAbsoluteTime
-                ? format(timestamp, 'yyyy-MM-dd HH:mm')
-                : formatDistanceToNow(timestamp, { addSuffix: true })}
-            </button>
-          )}
-        </div>
-        <div className="text-right">
-          <p
-            className={cn(
-              'design-type-emphasis',
-              isDecrease ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            )}
-            data-testid={`bark-movement-amount-${movement.id}`}
-          >
-            <span className="inline-flex items-baseline gap-0.5">
-              {sign !== '' ? <span className="tabular-nums">{sign}</span> : null}
-              <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
-            </span>
-          </p>
-        </div>
-      </div>
-      {expanded ? (
-        <div className="design-type-regular mt-3 space-y-1 border-t border-border pt-3 text-muted-foreground">
-          <p>Kind: {movement.subsystemKind}</p>
-          {movement.offchainFeeSats > 0 ? (
-            <p>
-              Off-chain fee: {movement.offchainFeeSats}<BitcoinSatUnit
-                indicator={getNetworkUnitIndicator(networkMode)}
-                className="ml-[0.5ch]"
-              />
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+      direction={isDecrease ? 'sent' : 'received'}
+      settlement={SETTLEMENT[movement.status]}
+      amount={
+        <SignedBitcoinAmount
+          sign={sign}
+          amountSats={amountSats}
+          testId={`bark-movement-amount-${movement.id}`}
+        />
+      }
+      time={
+        movement.createdAtUnixSeconds > 0 ? (
+          <ActivityTimeButton unixSeconds={movement.createdAtUnixSeconds} />
+        ) : undefined
+      }
+      tags={
+        <DashboardActivityRailBadge
+          icon={BarkIcon}
+          label={barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}
+        />
+      }
+      details={details}
+    />
   )
 }

@@ -28,6 +28,7 @@ import {
 } from '@/components/design/DesignCard'
 import { Badge } from '@/components/ui/badge'
 import { CardPagination } from '@/components/CardPagination'
+import { DashboardOnchainTransactionCard } from '@/components/DashboardOnchainTransactionCard'
 import { TransactionItem } from '@/components/TransactionItem'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
@@ -36,6 +37,7 @@ import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-displa
 import { retryInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
 import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { useOnchainLocalTipHeightQuery } from '@/hooks/useOnchainLocalTipHeightQuery'
 import { useLightningHistoryQuery } from '@/hooks/useLightningMutations'
 import {
   useOnchainEsploraSyncMetadataQuery,
@@ -383,6 +385,8 @@ function useHasCompanionRailBalance(): boolean {
 function RecentTransactions() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const transactions = useWalletStore((walletState) => walletState.transactions)
+  const localTipHeightQuery = useOnchainLocalTipHeightQuery()
+  const localTipHeight = localTipHeightQuery.data ?? null
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
@@ -590,10 +594,11 @@ function RecentTransactions() {
                 : mergedPageRows.map((activityItem) => {
                     if (activityItem.kind === 'chain') {
                       return (
-                        <TransactionItem
+                        <DashboardOnchainTransactionCard
                           key={activityItem.tx.txid}
                           transaction={activityItem.tx}
                           activityLabel={activityItem.activityLabel}
+                          localTipHeight={localTipHeight}
                         />
                       )
                     }

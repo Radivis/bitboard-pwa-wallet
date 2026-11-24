@@ -148,6 +148,20 @@ The only theme variant is Light. Dark should follow the theme mode through the `
 
 `theme` is Light or Dark, and `elevation` is 1 or 2. Elevation 2 is for a card nested inside another card. The surface, title, and description follow the theme (`surface/card`, `text/card/title`, `text/card/description`). `stroke/card` is bound and the border is hidden. Light and Dark use the same shadow stack for that step: two drop shadows and an inner shadow, matching elevation 1 or elevation 2 on the Basics elevation-patterns frame. An action inside the card is a Button, so that action follows the network.
 
+### Transaction card
+
+The activity row on the dashboard. Resting fill and shadow are elevation 2. Hover raises both to elevation 3, and the cursor is a pointer because the row opens. Corner radius is 20. Padding is 24 by 12.
+
+`direction` is received or sent. The arrow and the amount use success foreground when received and error foreground when sent. `settlement` is pending, confirmed, failed, or canceled. Pending is a clock in warning foreground. Confirmed is a check in success foreground. Failed is a banknote with a cross in error foreground. Canceled is a cross in a circle in info foreground. Bark uses those icons and does not print a status word.
+
+The amount slot keeps the unit switcher. The time slot keeps the tap that switches a relative time to an absolute timestamp. Those controls, an infomode tag, and the copy icon stop the click so the row does not open or close.
+
+Collapsed content is the arrow, the signed amount, optional tags, the time, and the settlement icon. Expanded rows are label left and value right. On-chain rows show the txid, the fee when it is known, the total including fee for a send, the confirmation count, and the block height when the transaction is confirmed. Pending is 0 confirmations and has no block height. A confirmed count is the local chain tip minus the block height, plus one. Until that tip is known, the confirmations row stays off. There is no status row.
+
+Arkade shows the txid, the activity kind that the tag already names, and a memo when there is one. Bark shows the movement kind and an off-chain fee when that fee is above zero. Bark history has no transaction id, so that row is not shown. Lightning shows the Lightning wallet, the payment hash, and a memo when there is one, plus the fee and the total including fee when those apply. Lightning no longer shows a status row. The txid and the payment hash each have a copy icon. A successful copy raises a success toast.
+
+Lab activity does not use this card.
+
 ### Modal
 
 `theme` is Light or Dark. The panel fill is `elevation/4`. Light and Dark use the elevation 4 shadow stack from the Basics elevation-patterns frame. It does not follow the network.

@@ -319,7 +319,8 @@ describe('DashboardPage Arkade contracts', () => {
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByTestId('bark-movement-3')).toBeInTheDocument()
-    expect(screen.getByText('Successful')).toBeInTheDocument()
+    expect(screen.getByLabelText('Confirmed')).toHaveClass('lucide-circle-check')
+    expect(screen.getByTestId('bark-movement-3')).not.toHaveTextContent('Successful')
   })
 
   it('DASH-ARK-30 preserves Arkade balance after remount simulating navigation return', () => {
