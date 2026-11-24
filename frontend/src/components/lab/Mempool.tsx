@@ -7,8 +7,9 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { LabTxCard } from '@/components/lab/LabTxCard'
+import { DesignLabTransactionCard } from '@/components/design/DesignLabTransactionCard'
 import { netMovedSatsFromMempoolEntry } from '@/lib/lab/lab-tx-net-moved'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import type { MempoolEntry } from '@/workers/lab-api'
 import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -40,7 +41,7 @@ export function LabMempoolCard({
               Mempool is empty. Create a transaction to see it here.
             </p>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               {mempool.map((tx) => {
                 const amountSats = netMovedSatsFromMempoolEntry(tx)
                 return (
@@ -48,10 +49,10 @@ export function LabMempoolCard({
                     key={tx.txid}
                     to="/lab/tx/$txid"
                     params={{ txid: tx.txid }}
-                    className="block min-w-0 rounded-lg border border-border p-2 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="block w-fit max-w-full rounded-[20px] outline-none"
+                    aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
                   >
-                    <LabTxCard
-                      txid={tx.txid}
+                    <DesignLabTransactionCard
                       sender={tx.sender}
                       receiver={tx.receiver}
                       amountSats={amountSats}

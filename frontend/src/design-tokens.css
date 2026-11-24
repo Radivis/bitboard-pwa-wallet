@@ -592,6 +592,37 @@
   box-shadow: var(--design-transaction-card-shadow), 0 0 0 2px var(--design-focus-ring);
 }
 
+/*
+ * Lab transaction card. Fill is elevation 2 at rest and elevation 3 on hover.
+ * The row sits on an elevation 1 card, so the painted shadows are one step
+ * lower: elevation 1 at rest and elevation 2 on hover. Both themes use the
+ * elevation color tokens, and they share these shadow stacks. The variable
+ * keeps the focus ring from dropping a layer. A wrapping link receives the
+ * pointer, so hover and focus are also matched there.
+ */
+[data-slot="design-lab-transaction-card"] {
+  background: var(--design-elevation-2);
+  --design-lab-transaction-card-shadow:
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+  box-shadow: var(--design-lab-transaction-card-shadow);
+}
+
+[data-slot="design-lab-transaction-card"]:hover,
+a:hover [data-slot="design-lab-transaction-card"] {
+  background: var(--design-elevation-3);
+  --design-lab-transaction-card-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+}
+
+[data-slot="design-lab-transaction-card"]:focus-visible,
+a:focus-visible [data-slot="design-lab-transaction-card"] {
+  box-shadow: var(--design-lab-transaction-card-shadow), 0 0 0 2px var(--design-focus-ring);
+}
+
 /* Set on the element, not through a Tailwind shadow utility. DialogContent also
    applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
 [data-slot="design-modal"] {

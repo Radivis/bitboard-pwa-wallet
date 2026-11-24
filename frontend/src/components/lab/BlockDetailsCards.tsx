@@ -11,7 +11,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
-import { LabTxCard } from '@/components/lab/LabTxCard'
+import { DesignLabTransactionCard } from '@/components/design/DesignLabTransactionCard'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
 import {
@@ -184,13 +184,6 @@ export function LabBlockMetadataCard({
   )
 }
 
-/** Bordered cell matching lab Previous blocks grid cards; inner content stays pointer-events-none when overlay link is used. */
-const labBlockTxCellClassName = 'min-w-0 rounded-lg border border-border p-2'
-const labBlockTxRowInnerClassName = 'pointer-events-none relative z-10 min-w-0'
-/** Full-row hit target behind content; avoids nested <button>/<select> inside <a>. */
-const labBlockTxRowLinkOverlayClassName =
-  'absolute inset-0 z-0 rounded-lg outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring'
-
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
   wallets: WalletSummary[],
@@ -202,13 +195,12 @@ function labBlockTxList(
   isTemplate: boolean,
 ) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       {txs.map((tx) => {
         const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
         const isCoinbaseTx = isCoinbase(tx)
         const transactionCard = (
-          <LabTxCard
-            txid={tx.txid}
+          <DesignLabTransactionCard
             sender={tx.sender}
             receiver={tx.receiver}
             amountSats={tx.amountSats}
@@ -219,19 +211,19 @@ function labBlockTxList(
           />
         )
         return coinbaseNoTxPageYet ? (
-          <div key={tx.txid} className={labBlockTxCellClassName}>
+          <div key={tx.txid} className="w-fit max-w-full">
             {transactionCard}
           </div>
         ) : (
-          <div key={tx.txid} className={`relative ${labBlockTxCellClassName}`}>
-            <Link
-              to="/lab/tx/$txid"
-              params={{ txid: tx.txid }}
-              className={labBlockTxRowLinkOverlayClassName}
-              aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
-            />
-            <div className={labBlockTxRowInnerClassName}>{transactionCard}</div>
-          </div>
+          <Link
+            key={tx.txid}
+            to="/lab/tx/$txid"
+            params={{ txid: tx.txid }}
+            className="block w-fit max-w-full rounded-[20px] outline-none"
+            aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
+          >
+            {transactionCard}
+          </Link>
         )
       })}
     </div>

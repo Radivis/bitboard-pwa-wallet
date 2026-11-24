@@ -160,7 +160,13 @@ The direction arrow is its own column and spans the header. The header column be
 
 Arkade shows the txid, the activity kind that the tag already names, and a memo when there is one. Bark shows the movement kind and an off-chain fee when that fee is above zero. Bark history has no transaction id, so that row is not shown. Lightning shows the Lightning wallet, the payment hash, and a memo when there is one, plus the fee and the total including fee when those apply. Lightning no longer shows a status row. The txid and the payment hash each have a copy icon. A successful copy raises a success toast.
 
-Lab activity does not use this card.
+Lab chain rows use this card. Their confirmation tip is the highest lab block.
+
+### Lab transaction card
+
+The transaction row in the lab block Transactions card and the Mempool card. It is a wide rectangle sized to its content, and the list wraps so as many cards fit on a row as the width allows. Corner radius is 20. Padding is 24 by 12. The vertical gap is 8. Resting fill is elevation 2. Hover raises the fill to elevation 3 in both themes. The row sits on an elevation 1 card, and the component's elevation 2 and 3 shadows are measured from the base surface, so the painted shadows are one step lower: the elevation 1 stack at rest and the elevation 2 stack on hover.
+
+A transfer keeps the sender on the left. The arrow and the recipient stay on the right. Below the md breakpoint the sender is its own row and the arrow with the recipient is the next row. From md up they share one row. Coinbase shows a Coinbase tag that hugs its label, then the arrow and the recipient, with no sender. The amount and the fee each have their own row, icon on the left and amount on the right. A coinbase fee is shown as 0. The transaction id is not on the card. The row links to the transaction page, except a coinbase that does not have a page yet.
 
 ### Modal
 

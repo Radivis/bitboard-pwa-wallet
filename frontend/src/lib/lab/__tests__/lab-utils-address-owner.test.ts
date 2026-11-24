@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assertLabAddressOwnerResolved,
   groupLabRowsByResolvedOwner,
+  labChainTipHeight,
   labTransactionsForWallet,
   lookupLabAddressOwner,
   mergeAddressesWithUtxos,
@@ -162,6 +163,17 @@ describe('sumLabWalletUtxoSats', () => {
         1,
       ),
     ).toBe(15_000)
+  })
+})
+
+describe('labChainTipHeight', () => {
+  it('returns null when the lab has no blocks', () => {
+    expect(labChainTipHeight(undefined)).toBeNull()
+    expect(labChainTipHeight([])).toBeNull()
+  })
+
+  it('returns the highest block height', () => {
+    expect(labChainTipHeight([{ height: 2 }, { height: 5 }, { height: 3 }])).toBe(5)
   })
 })
 

@@ -190,6 +190,18 @@ export function mergeAddressesWithUtxos(
   return [...byKey.values()]
 }
 
+/** Highest mined lab block. Confirmation counts use this as the chain tip. */
+export function labChainTipHeight(
+  blocks: readonly { height: number }[] | undefined,
+): number | null {
+  if (blocks == null || blocks.length === 0) return null
+  let tipHeight = blocks[0].height
+  for (const block of blocks) {
+    if (block.height > tipHeight) tipHeight = block.height
+  }
+  return tipHeight
+}
+
 export function labTransactionsForWallet(
   labState: {
     transactions: LabTxRecord[]

@@ -29,13 +29,12 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { CardPagination } from '@/components/CardPagination'
 import { DashboardOnchainTransactionCard } from '@/components/DashboardOnchainTransactionCard'
-import { TransactionItem } from '@/components/TransactionItem'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
 import { retryInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
-import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
+import { labChainTipHeight, labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useOnchainLocalTipHeightQuery } from '@/hooks/useOnchainLocalTipHeightQuery'
 import { useLightningHistoryQuery } from '@/hooks/useLightningMutations'
@@ -409,6 +408,7 @@ function RecentTransactions() {
   const labTxDetails = labState?.txDetails ?? []
   const labMempool = labState?.mempool ?? []
   const labChainReady = networkMode === 'lab' && labState != null && !labChainPending
+  const labTipHeight = labChainTipHeight(labState?.blocks)
 
   const labTransactionsForActiveWallet =
     networkMode === 'lab' && activeWalletId != null && labChainReady
@@ -589,7 +589,11 @@ function RecentTransactions() {
             <div className="space-y-2">
               {networkMode === 'lab'
                 ? labPageRows.map((tx) => (
-                    <TransactionItem key={tx.txid} transaction={tx} />
+                    <DashboardOnchainTransactionCard
+                      key={tx.txid}
+                      transaction={tx}
+                      localTipHeight={labTipHeight}
+                    />
                   ))
                 : mergedPageRows.map((activityItem) => {
                     if (activityItem.kind === 'chain') {
