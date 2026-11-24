@@ -82,21 +82,46 @@ export function DesignTransactionCard({
       {...props}
     >
       <div className={cn('flex flex-col', expanded && details.length > 0 && 'gap-4')}>
-        <div className="flex items-center gap-2">
-          <DirectionIcon className={cn('size-6 shrink-0', directionColor[direction])} aria-hidden />
-          <div className="flex min-w-0 flex-col items-start gap-2.5">
-            <div className={cn('flex items-center gap-1 whitespace-nowrap', designTypeClassName.addresses, directionColor[direction])}>
-              {amount}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5">
+          <DirectionIcon
+            className={cn(
+              'col-start-1 col-end-2 row-start-1 size-6 shrink-0 self-center',
+              directionColor[direction],
+              tags != null ? 'row-end-4 md:row-end-3' : 'row-end-3',
+            )}
+            aria-hidden
+          />
+          {tags != null ? (
+            <div className="col-start-2 col-end-4 row-start-2 row-end-3 min-w-0 md:col-end-3 md:row-start-1 md:row-end-2">
+              {tags}
             </div>
-            {tags}
-            <div className="flex items-center gap-2.5">
-              {time}
-              <SettlementIcon
-                className={cn('size-6 shrink-0', settlementColor[settlement])}
-                aria-label={settlementLabel ?? settlementName[settlement]}
-              />
-            </div>
+          ) : null}
+          <div
+            className={cn(
+              'col-start-2 col-end-4 row-start-1 row-end-2 flex items-center justify-end gap-1 whitespace-nowrap',
+              designTypeClassName.addresses,
+              directionColor[direction],
+              tags != null && 'md:col-start-3',
+            )}
+          >
+            {amount}
           </div>
+          <div
+            className={cn(
+              'col-start-2 col-end-3 min-w-0',
+              tags != null ? 'row-start-3 row-end-4 md:row-start-2 md:row-end-3' : 'row-start-2 row-end-3',
+            )}
+          >
+            {time}
+          </div>
+          <SettlementIcon
+            className={cn(
+              'col-start-3 col-end-4 size-6 shrink-0 justify-self-end',
+              settlementColor[settlement],
+              tags != null ? 'row-start-3 row-end-4 md:row-start-2 md:row-end-3' : 'row-start-2 row-end-3',
+            )}
+            aria-label={settlementLabel ?? settlementName[settlement]}
+          />
         </div>
         {expanded && details.length > 0 ? <DesignTransactionDetails details={details} /> : null}
       </div>

@@ -150,6 +150,37 @@ describe('DesignTransactionCard', () => {
     expect(screen.queryByText('TXID')).not.toBeInTheDocument()
   })
 
+  it('puts the amount above the tags until the md breakpoint', () => {
+    render(
+      <DesignTransactionCard
+        direction="received"
+        settlement="confirmed"
+        amount="+1"
+        tags={<span>Lightning</span>}
+      />,
+    )
+
+    const card = screen.getByText('+1').closest('[data-slot="design-transaction-card"]')
+    const arrow = card?.querySelector('svg')
+    expect(arrow?.classList.contains('col-start-1')).toBe(true)
+    expect(arrow?.classList.contains('col-end-2')).toBe(true)
+    expect(arrow?.classList.contains('row-end-4')).toBe(true)
+    expect(arrow?.classList.contains('md:row-end-3')).toBe(true)
+
+    const tags = screen.getByText('Lightning').parentElement
+    expect(tags?.classList.contains('col-start-2')).toBe(true)
+    expect(tags?.classList.contains('col-end-4')).toBe(true)
+    expect(tags?.classList.contains('row-start-2')).toBe(true)
+    expect(tags?.classList.contains('md:col-end-3')).toBe(true)
+    expect(tags?.classList.contains('md:row-start-1')).toBe(true)
+
+    const amount = screen.getByText('+1')
+    expect(amount.classList.contains('col-start-2')).toBe(true)
+    expect(amount.classList.contains('col-end-4')).toBe(true)
+    expect(amount.classList.contains('md:col-start-3')).toBe(true)
+    expect(amount.className).not.toContain('col-span')
+  })
+
   it('uses the transaction-card slot and the relative elevation 1 and 2 shadow stacks', () => {
     render(
       <DesignTransactionCard direction="received" settlement="pending" amount="+1" />,
