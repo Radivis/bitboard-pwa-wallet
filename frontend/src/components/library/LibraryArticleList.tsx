@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
+import { useLibraryBookmarks, useSetArticleBookmark } from '@/db'
 import type { LibraryArticle } from '@/lib/library/articles'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
@@ -22,6 +23,10 @@ export function LibraryArticleList({
   surface = 'raised',
   excludeTagId,
 }: LibraryArticleListProps) {
+  const { data: bookmarkSlugs } = useLibraryBookmarks()
+  const setBookmark = useSetArticleBookmark()
+  const pendingBookmarkSlug = setBookmark.isPending ? setBookmark.variables?.articleSlug : undefined
+
   if (articles.length === 0) {
     return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
   }
@@ -37,12 +42,21 @@ export function LibraryArticleList({
           excludeTagId != null
             ? article.tagIds.filter((id) => id !== excludeTagId)
             : article.tagIds
+        const isBookmarked = bookmarkSlugs?.has(article.slug) === true
         return (
           <li key={article.slug} className="min-w-0">
             <DesignLibraryCard
               title={article.title}
               articleSlug={article.slug}
               level={article.level}
+              isBookmarked={isBookmarked}
+              bookmarkPending={pendingBookmarkSlug === article.slug}
+              onToggleBookmark={() =>
+                void setBookmark.mutateAsync({
+                  articleSlug: article.slug,
+                  isBookmarked: !isBookmarked,
+                })
+              }
               tags={
                 tagIdsToShow.length > 0
                   ? tagIdsToShow.map((tagId) => (

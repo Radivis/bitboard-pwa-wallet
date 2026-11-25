@@ -70,15 +70,15 @@ describe('applyLibraryFilterSort', () => {
     ).toEqual(['What is a wallet', 'ECDSA', 'Dust Transactions'])
   })
 
-  it('keeps only starred articles when the scope is favorites', () => {
+  it('keeps only bookmarked articles when the scope is bookmarks', () => {
     const articles = [wallet, dust, ecdsa]
-    const favoriteSlugs = new Set([wallet.slug, ecdsa.slug])
+    const bookmarkSlugs = new Set([wallet.slug, ecdsa.slug])
     expect(
-      applyLibraryFilterSort(articles, { ...openCriteria, scope: 'favorites' }, favoriteSlugs).map(
+      applyLibraryFilterSort(articles, { ...openCriteria, scope: 'bookmarks' }, bookmarkSlugs).map(
         (item) => item.title,
       ),
     ).toEqual(['ECDSA', 'What is a wallet'])
-    expect(applyLibraryFilterSort(articles, openCriteria, favoriteSlugs).map((item) => item.title)).toEqual([
+    expect(applyLibraryFilterSort(articles, openCriteria, bookmarkSlugs).map((item) => item.title)).toEqual([
       'Dust Transactions',
       'ECDSA',
       'What is a wallet',

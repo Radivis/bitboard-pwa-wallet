@@ -2,9 +2,9 @@ import type { Kysely } from 'kysely'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Database } from '../schema'
 import {
-  getAllFavoriteSlugs,
-  getFavoriteBySlug,
-  setArticleFavorite,
+  getAllBookmarkSlugs,
+  getBookmarkBySlug,
+  setArticleBookmark,
 } from '../library-articles'
 import { createTestDatabase } from '../test-helpers'
 
@@ -21,23 +21,23 @@ describe('library_articles', () => {
     expect(rows).toEqual([])
   })
 
-  it('getFavoriteBySlug returns false when row absent', async () => {
+  it('getBookmarkBySlug returns false when row absent', async () => {
     walletDb = await createTestDatabase()
-    await expect(getFavoriteBySlug(walletDb, 'bitcoin')).resolves.toBe(false)
+    await expect(getBookmarkBySlug(walletDb, 'bitcoin')).resolves.toBe(false)
   })
 
-  it('setArticleFavorite true then getFavoriteBySlug and getAllFavoriteSlugs', async () => {
+  it('setArticleBookmark true then getBookmarkBySlug and getAllBookmarkSlugs', async () => {
     walletDb = await createTestDatabase()
-    await setArticleFavorite(walletDb, 'bitcoin', true)
-    await expect(getFavoriteBySlug(walletDb, 'bitcoin')).resolves.toBe(true)
-    await expect(getAllFavoriteSlugs(walletDb)).resolves.toEqual(['bitcoin'])
+    await setArticleBookmark(walletDb, 'bitcoin', true)
+    await expect(getBookmarkBySlug(walletDb, 'bitcoin')).resolves.toBe(true)
+    await expect(getAllBookmarkSlugs(walletDb)).resolves.toEqual(['bitcoin'])
   })
 
-  it('setArticleFavorite false removes row', async () => {
+  it('setArticleBookmark false removes row', async () => {
     walletDb = await createTestDatabase()
-    await setArticleFavorite(walletDb, 'segwit', true)
-    await setArticleFavorite(walletDb, 'segwit', false)
-    await expect(getFavoriteBySlug(walletDb, 'segwit')).resolves.toBe(false)
+    await setArticleBookmark(walletDb, 'segwit', true)
+    await setArticleBookmark(walletDb, 'segwit', false)
+    await expect(getBookmarkBySlug(walletDb, 'segwit')).resolves.toBe(false)
     const count = await walletDb
       .selectFrom('library_articles')
       .select(walletDb.fn.countAll<number>().as('count'))
@@ -45,10 +45,10 @@ describe('library_articles', () => {
     expect(Number(count.count)).toBe(0)
   })
 
-  it('setArticleFavorite true twice is idempotent', async () => {
+  it('setArticleBookmark true twice is idempotent', async () => {
     walletDb = await createTestDatabase()
-    await setArticleFavorite(walletDb, 'what-is-a-wallet', true)
-    await setArticleFavorite(walletDb, 'what-is-a-wallet', true)
-    await expect(getAllFavoriteSlugs(walletDb)).resolves.toEqual(['what-is-a-wallet'])
+    await setArticleBookmark(walletDb, 'what-is-a-wallet', true)
+    await setArticleBookmark(walletDb, 'what-is-a-wallet', true)
+    await expect(getAllBookmarkSlugs(walletDb)).resolves.toEqual(['what-is-a-wallet'])
   })
 })

@@ -14,7 +14,12 @@ import { isLibraryTagId, type LibraryTagId } from '@/lib/library/tags'
 import { useLibraryFilterSortStore } from '@/stores/libraryFilterSortStore'
 
 vi.mock('@/db', () => ({
-  useLibraryFavorites: () => ({ data: new Set<string>(), isLoading: false }),
+  useLibraryBookmarks: () => ({ data: new Set<string>(), isLoading: false }),
+  useSetArticleBookmark: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+    variables: undefined,
+  }),
 }))
 
 function renderTagsPage(initialEntry: string) {
@@ -97,12 +102,12 @@ describe('TagsPage', () => {
     expect(document.querySelector('[id^="library-tag-"]')).toBeNull()
   })
 
-  it('shows the empty-favorites message when Favorites matches nothing', async () => {
-    useLibraryFilterSortStore.setState({ scope: 'favorites' })
+  it('shows the empty-bookmarks message when Bookmarked matches nothing', async () => {
+    useLibraryFilterSortStore.setState({ scope: 'bookmarks' })
     renderTagsPage('/library/tags')
 
     expect(
-      await screen.findByText('No favorites yet. Open an article and tap the star to add one.'),
+      await screen.findByText('No bookmarks yet. Open an article and tap the bookmark to add one.'),
     ).toBeInTheDocument()
     expect(document.querySelector('[id^="library-tag-"]')).toBeNull()
   })

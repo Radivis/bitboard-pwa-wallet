@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Link } from '@tanstack/react-router'
 
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
@@ -19,6 +20,8 @@ describe('DesignLibraryCard', () => {
         title="What is a wallet"
         articleSlug="what-is-a-wallet"
         level={1}
+        isBookmarked={false}
+        onToggleBookmark={() => {}}
         tags={
           <DesignTag asChild>
             <Link to="/library/tags" search={{ tag: 'bitcoin' }}>
@@ -50,6 +53,8 @@ describe('DesignLibraryCard', () => {
         title="Security models for cryptocurrencies and conventional currencies"
         articleSlug="security-models-for-cryptocurrencies-and-conventional-currencies"
         level={2}
+        isBookmarked={false}
+        onToggleBookmark={() => {}}
       />,
     )
 
@@ -61,7 +66,13 @@ describe('DesignLibraryCard', () => {
 
   it('fills its grid cell, with a 20px radius and a 16px stack gap', async () => {
     renderWithLibraryRouter(
-      <DesignLibraryCard title="What is a wallet" articleSlug="what-is-a-wallet" level={1} />,
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+        onToggleBookmark={() => {}}
+      />,
     )
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
@@ -89,5 +100,68 @@ describe('DesignLibraryCard', () => {
     expect(cardRules).toContain('0 4px 10px 0 rgb(0 0 0 / 0.25)')
     expect(cardRules).toContain('inset 0 4px 9px 0 rgb(236 235 239 / 0.08)')
     expect(cardRules).not.toContain('0 5px 12px 0 rgb(0 0 0 / 0.25)')
+  })
+
+  it('toggles the bookmark from the corner icon without opening the article', async () => {
+    const user = userEvent.setup()
+    const onToggleBookmark = vi.fn()
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+        onToggleBookmark={onToggleBookmark}
+      />,
+    )
+
+    const bookmark = await screen.findByRole('button', { name: 'Add What is a wallet to bookmarks' })
+    expect(bookmark).toHaveAttribute('aria-pressed', 'false')
+    expect(bookmark.className).toContain('absolute')
+    expect(bookmark.className).toContain('bottom-3')
+    expect(bookmark.className).toContain('right-4')
+    expect(bookmark.className).toContain('z-10')
+    expect(bookmark.className).toContain('size-6')
+    await user.click(bookmark)
+    expect(onToggleBookmark).toHaveBeenCalledOnce()
+    expect(screen.getByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+  })
+
+  it('fills the bookmark when the article is already bookmarked', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked
+        onToggleBookmark={() => {}}
+      />,
+    )
+
+    const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
+    expect(bookmark).toHaveAttribute('aria-pressed', 'true')
+    expect(bookmark.querySelector('svg')?.getAttribute('class')).toContain(
+      'fill-[var(--design-text-regular)]',
+    )
+  })
+
+  it('ignores a tap while that bookmark is still saving', async () => {
+    const user = userEvent.setup()
+    const onToggleBookmark = vi.fn()
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked
+        bookmarkPending
+        onToggleBookmark={onToggleBookmark}
+      />,
+    )
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' }),
+    )
+    expect(onToggleBookmark).not.toHaveBeenCalled()
   })
 })

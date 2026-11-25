@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { GraduationCap } from 'lucide-react'
+import { Bookmark, GraduationCap } from 'lucide-react'
 
+import { designFocusClassName } from '@/components/design/design-classes'
 import { designTypeClassName } from '@/components/design/design-type'
 import { LIBRARY_LEVEL_LABEL, type LibraryLevel } from '@/lib/library/library-level'
 import { cn } from '@/lib/shared/utils'
@@ -11,6 +12,9 @@ export function DesignLibraryCard({
   articleSlug,
   level,
   tags,
+  isBookmarked,
+  onToggleBookmark,
+  bookmarkPending = false,
   className,
 }: {
   title: string
@@ -18,6 +22,9 @@ export function DesignLibraryCard({
   level: LibraryLevel
   /** Tag links. They sit above the stretched title so each tag keeps its own target. */
   tags?: ReactNode
+  isBookmarked: boolean
+  onToggleBookmark: () => void
+  bookmarkPending?: boolean
   className?: string
 }) {
   return (
@@ -49,6 +56,27 @@ export function DesignLibraryCard({
           />
         ))}
       </div>
+      <button
+        type="button"
+        className={cn(
+          designFocusClassName,
+          'absolute bottom-3 right-4 z-10 size-6 p-0 text-[var(--design-text-regular)]',
+        )}
+        aria-pressed={isBookmarked}
+        aria-disabled={bookmarkPending || undefined}
+        aria-label={
+          isBookmarked ? `Remove ${title} from bookmarks` : `Add ${title} to bookmarks`
+        }
+        onClick={() => {
+          if (bookmarkPending) return
+          onToggleBookmark()
+        }}
+      >
+        <Bookmark
+          className={cn('size-6', isBookmarked && 'fill-[var(--design-text-regular)]')}
+          aria-hidden
+        />
+      </button>
     </article>
   )
 }

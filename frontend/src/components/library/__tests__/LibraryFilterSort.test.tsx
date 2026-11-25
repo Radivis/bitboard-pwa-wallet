@@ -37,12 +37,12 @@ describe('LibraryFilterSort', () => {
     })
   })
 
-  it('writes All and Favorites to the store', async () => {
+  it('writes All and Bookmarked to the store', async () => {
     const user = userEvent.setup()
     renderWithLibraryRouter(<LibraryFilterSort />)
 
-    await user.click(await screen.findByRole('button', { name: 'Favorites' }))
-    expect(useLibraryFilterSortStore.getState().scope).toBe('favorites')
+    await user.click(await screen.findByRole('button', { name: 'Bookmarked' }))
+    expect(useLibraryFilterSortStore.getState().scope).toBe('bookmarks')
 
     await user.click(screen.getByRole('button', { name: 'All' }))
     expect(useLibraryFilterSortStore.getState().scope).toBe('all')

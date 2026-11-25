@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureSchemaAndDataMigrated } from './database'
-import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
+import { getAllBookmarkSlugs, setArticleBookmark } from './library-articles'
 import { listLibraryHistory } from './library-history'
 import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
 import { deleteWalletCompletely } from './wallet-persistence'
@@ -118,26 +118,26 @@ export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
   })
 }
 
-export function useLibraryFavorites() {
+export function useLibraryBookmarks() {
   return useQuery({
-    queryKey: libraryKeys.favorites,
+    queryKey: libraryKeys.bookmarks,
     queryFn: async () => {
       await ensureSchemaAndDataMigrated()
-      const slugs = await getAllFavoriteSlugs(getDatabase())
+      const slugs = await getAllBookmarkSlugs(getDatabase())
       return new Set(slugs)
     },
   })
 }
 
-export function useSetArticleFavorite() {
+export function useSetArticleBookmark() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (params: { articleSlug: string; isFavorite: boolean }) => {
+    mutationFn: async (params: { articleSlug: string; isBookmarked: boolean }) => {
       await ensureSchemaAndDataMigrated()
-      await setArticleFavorite(getDatabase(), params.articleSlug, params.isFavorite)
+      await setArticleBookmark(getDatabase(), params.articleSlug, params.isBookmarked)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: libraryKeys.favorites })
+      queryClient.invalidateQueries({ queryKey: libraryKeys.bookmarks })
     },
   })
 }
