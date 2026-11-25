@@ -5,6 +5,7 @@ import { Tags as TagsIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { DesignCard } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { useLibraryCatalogClick } from '@/components/library/useLibraryCatalogClick'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
 import { useLibraryBookmarks } from '@/db'
@@ -127,6 +128,7 @@ export function TagsPage() {
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
   const { data: bookmarkSlugs, isLoading } = useLibraryBookmarks()
   const bookmarksAreLoading = criteria.scope === 'bookmarks' && isLoading
+  const onCatalogClick = useLibraryCatalogClick(bookmarkSlugs)
   const sections = useMemo(() => {
     const shown: VisibleTagSection[] = []
     for (const tagId of tagIds) {
@@ -139,7 +141,7 @@ export function TagsPage() {
   }, [articlesByTagId, criteria, bookmarkSlugs, focusedTag, tagIds])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onClick={onCatalogClick}>
       <PageHeader title="Tags" icon={TagsIcon} />
 
       <p className="design-type-regular text-muted-foreground">

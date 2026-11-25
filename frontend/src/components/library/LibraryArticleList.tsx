@@ -1,8 +1,8 @@
-import { Link } from '@tanstack/react-router'
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
-import { useLibraryBookmarks, usePendingBookmarkSlugs, useSetArticleBookmark } from '@/db'
+import { useLibraryBookmarks, usePendingBookmarkSlugs } from '@/db'
 import type { LibraryArticle } from '@/lib/library/articles'
+import { libraryTagHref } from '@/lib/library/library-catalog-click'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
 interface LibraryArticleListProps {
@@ -24,7 +24,6 @@ export function LibraryArticleList({
   excludeTagId,
 }: LibraryArticleListProps) {
   const { data: bookmarkSlugs } = useLibraryBookmarks()
-  const setBookmark = useSetArticleBookmark()
   const pendingBookmarkSlugs = usePendingBookmarkSlugs()
   const bookmarksHaveLoaded = bookmarkSlugs != null
 
@@ -53,19 +52,13 @@ export function LibraryArticleList({
               isBookmarked={isBookmarked}
               showBookmark={bookmarksHaveLoaded}
               bookmarkPending={pendingBookmarkSlugs.has(article.slug)}
-              onToggleBookmark={() =>
-                void setBookmark.mutateAsync({
-                  articleSlug: article.slug,
-                  isBookmarked: !isBookmarked,
-                })
-              }
               tags={
                 tagIdsToShow.length > 0
                   ? tagIdsToShow.map((tagId) => (
                       <DesignTag key={tagId} asChild>
-                        <Link to="/library/tags" search={{ tag: tagId }}>
+                        <a href={libraryTagHref(tagId)} data-library-tag={tagId}>
                           {getTagLabel(tagId)}
-                        </Link>
+                        </a>
                       </DesignTag>
                     ))
                   : undefined

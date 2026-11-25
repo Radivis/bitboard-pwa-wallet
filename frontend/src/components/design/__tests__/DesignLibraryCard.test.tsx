@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Link } from '@tanstack/react-router'
 
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
@@ -21,12 +20,11 @@ describe('DesignLibraryCard', () => {
         articleSlug="what-is-a-wallet"
         level={1}
         isBookmarked={false}
-        onToggleBookmark={() => {}}
         tags={
           <DesignTag asChild>
-            <Link to="/library/tags" search={{ tag: 'bitcoin' }}>
+            <a href="/library/tags?tag=bitcoin" data-library-tag="bitcoin">
               Bitcoin
-            </Link>
+            </a>
           </DesignTag>
         }
       />,
@@ -34,6 +32,7 @@ describe('DesignLibraryCard', () => {
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
     expect(title).toHaveAttribute('href', '/library/articles/what-is-a-wallet')
+    expect(title).toHaveAttribute('data-library-article', 'what-is-a-wallet')
     expect(title).toHaveAttribute('data-library-card-title')
     expect(title.className).toContain('design-type-emphasis')
     expect(title.className).toContain('text-[var(--design-text-regular)]')
@@ -41,6 +40,7 @@ describe('DesignLibraryCard', () => {
 
     const tag = screen.getByRole('link', { name: 'Bitcoin' })
     expect(tag).toHaveAttribute('href', '/library/tags?tag=bitcoin')
+    expect(tag).toHaveAttribute('data-library-tag', 'bitcoin')
     expect(tag).toHaveAttribute('data-slot', 'design-tag')
     expect(tag.className).toContain('hover:bg-[var(--design-nav-background-hover)]')
     expect(tag.className).toContain('active:bg-[var(--design-nav-background-active)]')
@@ -54,7 +54,6 @@ describe('DesignLibraryCard', () => {
         articleSlug="security-models-for-cryptocurrencies-and-conventional-currencies"
         level={2}
         isBookmarked={false}
-        onToggleBookmark={() => {}}
       />,
     )
 
@@ -71,7 +70,6 @@ describe('DesignLibraryCard', () => {
         articleSlug="what-is-a-wallet"
         level={1}
         isBookmarked={false}
-        onToggleBookmark={() => {}}
       />,
     )
 
@@ -102,29 +100,30 @@ describe('DesignLibraryCard', () => {
     expect(cardRules).not.toContain('0 5px 12px 0 rgb(0 0 0 / 0.25)')
   })
 
-  it('toggles the bookmark from the corner icon without opening the article', async () => {
+  it('keeps the bookmark control off the article link', async () => {
     const user = userEvent.setup()
-    const onToggleBookmark = vi.fn()
     renderWithLibraryRouter(
       <DesignLibraryCard
         title="What is a wallet"
         articleSlug="what-is-a-wallet"
         level={1}
         isBookmarked={false}
-        onToggleBookmark={onToggleBookmark}
       />,
     )
 
     const bookmark = await screen.findByRole('button', { name: 'Add What is a wallet to bookmarks' })
     expect(bookmark).toHaveAttribute('aria-pressed', 'false')
+    expect(bookmark).toHaveAttribute('data-library-bookmark', 'what-is-a-wallet')
     expect(bookmark.className).toContain('absolute')
     expect(bookmark.className).toContain('bottom-3')
     expect(bookmark.className).toContain('right-4')
     expect(bookmark.className).toContain('z-10')
     expect(bookmark.className).toContain('size-6')
     await user.click(bookmark)
-    expect(onToggleBookmark).toHaveBeenCalledOnce()
-    expect(screen.getByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'What is a wallet' })).toHaveAttribute(
+      'href',
+      '/library/articles/what-is-a-wallet',
+    )
   })
 
   it('fills the bookmark when the article is already bookmarked', async () => {
@@ -134,7 +133,6 @@ describe('DesignLibraryCard', () => {
         articleSlug="what-is-a-wallet"
         level={1}
         isBookmarked
-        onToggleBookmark={() => {}}
       />,
     )
 
@@ -152,7 +150,6 @@ describe('DesignLibraryCard', () => {
         level={1}
         isBookmarked={false}
         showBookmark={false}
-        onToggleBookmark={() => {}}
       />,
     )
 
@@ -161,7 +158,6 @@ describe('DesignLibraryCard', () => {
   })
 
   it('disables the bookmark while that bookmark is still saving', async () => {
-    const onToggleBookmark = vi.fn()
     renderWithLibraryRouter(
       <DesignLibraryCard
         title="What is a wallet"
@@ -169,13 +165,11 @@ describe('DesignLibraryCard', () => {
         level={1}
         isBookmarked
         bookmarkPending
-        onToggleBookmark={onToggleBookmark}
       />,
     )
 
     const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
     expect(bookmark).toBeDisabled()
     expect(bookmark.className).toContain('disabled:text-[var(--design-text-button-tertiary-disabled)]')
-    expect(onToggleBookmark).not.toHaveBeenCalled()
   })
 })

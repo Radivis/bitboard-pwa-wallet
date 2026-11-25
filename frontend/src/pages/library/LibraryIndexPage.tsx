@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { List } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { useLibraryCatalogClick } from '@/components/library/useLibraryCatalogClick'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
 import { useLibraryBookmarks } from '@/db'
@@ -16,13 +17,14 @@ export function LibraryIndexPage() {
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
   const { data: bookmarkSlugs, isLoading } = useLibraryBookmarks()
   const bookmarksAreLoading = criteria.scope === 'bookmarks' && isLoading
+  const onCatalogClick = useLibraryCatalogClick(bookmarkSlugs)
   const articles = useMemo(
     () => applyLibraryFilterSort(listArticles(), criteria, bookmarkSlugs),
     [criteria, bookmarkSlugs],
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onClick={onCatalogClick}>
       <PageHeader title="Library" icon={List} variant="area" />
 
       <p className="design-type-regular text-muted-foreground">
