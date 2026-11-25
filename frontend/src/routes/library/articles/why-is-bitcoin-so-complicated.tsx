@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'why-is-bitcoin-so-complicated',
   title: 'Why is Bitcoin so complicated?',
   tagIds: ['bitcoin', 'blockchain', 'decentralized-networks', 'cryptography'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

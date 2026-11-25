@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'utxo-model-vs-account-model',
   title: 'UTXO Model vs. Account Model',
   tagIds: ['bitcoin', 'blockchain', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

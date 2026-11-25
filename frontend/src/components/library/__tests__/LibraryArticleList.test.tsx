@@ -14,6 +14,7 @@ const designTokens = readFileSync(designTokensPath, 'utf8')
 const walletArticle: LibraryArticle = {
   slug: 'what-is-a-wallet',
   title: 'What is a wallet',
+  level: 1,
   tagIds: ['bitcoin', 'wallets'],
   body: null,
 }
@@ -27,12 +28,14 @@ describe('LibraryArticleList', () => {
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
     const list = title.closest('ul')
     expect(list).toHaveAttribute('data-slot', 'design-library-list')
+    expect(list).toHaveAttribute('data-library-list-surface', 'raised')
     expect(list?.className).toContain('grid')
     expect(list?.className).toContain('gap-4')
     const listRulesStart = designTokens.indexOf('[data-slot="design-library-list"]')
     const listRules = designTokens.slice(listRulesStart, designTokens.indexOf('[data-slot="design-library-card"]'))
     expect(listRules).toContain('repeat(auto-fill, minmax(min(100%, 240px), 1fr))')
     expect(title.closest('[data-slot="design-library-card"]')).not.toBeNull()
+    expect(screen.getByRole('img', { name: 'Beginner' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Bitcoin' })).toHaveAttribute(
       'href',
       '/library/tags?tag=bitcoin',

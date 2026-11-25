@@ -18,6 +18,7 @@ describe('DesignLibraryCard', () => {
       <DesignLibraryCard
         title="What is a wallet"
         articleSlug="what-is-a-wallet"
+        level={1}
         tags={
           <DesignTag asChild>
             <Link to="/library/tags" search={{ tag: 'bitcoin' }}>
@@ -43,9 +44,24 @@ describe('DesignLibraryCard', () => {
     expect(tag.parentElement?.className).toContain('z-10')
   })
 
+  it('shows one graduation cap for each step of the specialization level', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="Security models for cryptocurrencies and conventional currencies"
+        articleSlug="security-models-for-cryptocurrencies-and-conventional-currencies"
+        level={2}
+      />,
+    )
+
+    const level = await screen.findByRole('img', { name: 'Intermediate' })
+    expect(level.className).toContain('justify-center')
+    expect(level.className).toContain('gap-2')
+    expect(level.querySelectorAll('svg')).toHaveLength(2)
+  })
+
   it('fills its grid cell, with a 20px radius and a 16px stack gap', async () => {
     renderWithLibraryRouter(
-      <DesignLibraryCard title="What is a wallet" articleSlug="what-is-a-wallet" />,
+      <DesignLibraryCard title="What is a wallet" articleSlug="what-is-a-wallet" level={1} />,
     )
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
@@ -64,6 +80,8 @@ describe('DesignLibraryCard', () => {
     const cardRules = designTokens.slice(cardRulesStart, designTokens.indexOf('[data-slot="design-modal"]'))
     expect(cardRules).toContain('--design-elevation-2')
     expect(cardRules).toContain('--design-elevation-3')
+    expect(cardRules).toContain('[data-library-list-surface="page"] [data-slot="design-library-card"]')
+    expect(cardRules).toContain('--design-elevation-1')
     expect(cardRules).toContain('0 1px 3px 1px rgb(0 0 0 / 0.15)')
     expect(cardRules).toContain('0 3px 8px 0 rgb(0 0 0 / 0.25)')
     expect(cardRules).toContain('inset 0 4px 7px 0 rgb(245 244 246 / 0.08)')

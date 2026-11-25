@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'arkade-vtxo-expiry',
   title: 'VTXO expiry and renewal',
   tagIds: ['bitcoin', 'wallets'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="Why VTXOs expire">

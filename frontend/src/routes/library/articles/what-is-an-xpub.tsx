@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-an-xpub',
   title: 'What is an xpub?',
   tagIds: ['wallets', 'standards', 'bitcoin', 'cryptography', 'privacy'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

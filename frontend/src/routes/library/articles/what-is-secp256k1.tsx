@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-secp256k1',
   title: 'What is secp256k1?',
   tagIds: ['elliptic-curves', 'cryptography', 'bitcoin'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

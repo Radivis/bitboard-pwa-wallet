@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'lightning-invoices',
   title: 'Lightning Invoices',
   tagIds: ['lightning', 'standards'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

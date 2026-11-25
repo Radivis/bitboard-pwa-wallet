@@ -170,11 +170,13 @@ A transfer keeps the sender on the left. The arrow and the recipient stay on the
 
 ### Library card
 
-The article card on the Library index, Favorites, and each tag section. Corner radius is 20. Padding is 24 by 12. The title and the tag row are 16px apart. The list is a grid of equal columns: `repeat(auto-fill, minmax(min(100%, 240px), 1fr))`, with 16px between cards. The 240px floor is what decides how many columns fit, so a wide page adds a column whenever another 240px fits, and those columns then share the row. A fixed 480px track size would count columns at that maximum instead and leave the rest of the row empty. The card itself is still at most 480px wide, which caps a single column. Every card, including the last row, uses the same column width. A parent narrower than 240px shrinks the single column to the parent. The card fills its cell up to its cap.
+The article card on the Library index and each tag section, including when Favorites is selected. On the index the cards sit directly on the page. A tag section keeps its own card, and the article cards sit inside it. Corner radius is 20. Padding is 24 by 12. The title and the tag row are 16px apart. The list is a grid of equal columns: `repeat(auto-fill, minmax(min(100%, 240px), 1fr))`, with 16px between cards. The 240px floor is what decides how many columns fit, so a wide page adds a column whenever another 240px fits, and those columns then share the row. A fixed 480px track size would count columns at that maximum instead and leave the rest of the row empty. The card itself is still at most 480px wide, which caps a single column. Every card, including the last row, uses the same column width. A parent narrower than 240px shrinks the single column to the parent. The card fills its cell up to its cap.
 
-Resting fill is elevation 2. Hover raises the fill to elevation 3. The card sits on an elevation 1 surface, and the component's elevation 2 and 3 shadows are measured from the base surface, so the painted shadows are one step lower: the elevation 1 stack at rest and the elevation 2 stack on hover.
+On the index, resting fill is elevation 1 and hover raises it to elevation 2. Inside a tag section the card sits on an elevation 1 surface, so resting fill is elevation 2 and hover raises it to elevation 3. In both places the painted shadows are the elevation 1 stack at rest and the elevation 2 stack on hover. Inside a tag section those shadows are one step lower than the fill, because the component's elevation 2 and 3 shadows are measured from the base surface.
 
 The title is the article link, and that link stretches across the card. Tags stay their own links to the tag page, with the tag hover and active fills. They sit above the stretched title so a tag click does not open the article. The enclosing tag on a tag section is omitted from that card.
+
+Under the tags, a centered row shows the article's specialization: one 24px graduation cap for Beginner, then one more for each step through Specialist. The caps are 8px apart. The row's accessible name is that level's name.
 
 ### Modal
 

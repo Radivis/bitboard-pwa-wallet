@@ -10,6 +10,7 @@ export const article: LibraryArticle = {
   slug: 'differences-between-vtxos-in-arkade-and-bark',
   title: 'Differences between VTXOs in Arkade and Bark',
   tagIds: ['bitcoin', 'wallets', 'l2'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

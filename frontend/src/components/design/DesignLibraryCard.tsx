@@ -1,17 +1,21 @@
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
+import { GraduationCap } from 'lucide-react'
 
 import { designTypeClassName } from '@/components/design/design-type'
+import { LIBRARY_LEVEL_LABEL, type LibraryLevel } from '@/lib/library/library-level'
 import { cn } from '@/lib/shared/utils'
 
 export function DesignLibraryCard({
   title,
   articleSlug,
+  level,
   tags,
   className,
 }: {
   title: string
   articleSlug: string
+  level: LibraryLevel
   /** Tag links. They sit above the stretched title so each tag keeps its own target. */
   tags?: ReactNode
   className?: string
@@ -36,6 +40,15 @@ export function DesignLibraryCard({
         {title}
       </Link>
       {tags != null ? <div className="relative z-10 flex flex-wrap gap-4">{tags}</div> : null}
+      <div role="img" aria-label={LIBRARY_LEVEL_LABEL[level]} className="flex items-center justify-center gap-2">
+        {Array.from({ length: level }, (_, index) => (
+          <GraduationCap
+            key={index}
+            className="size-6 shrink-0 text-[var(--design-text-regular)]"
+            aria-hidden
+          />
+        ))}
+      </div>
     </article>
   )
 }

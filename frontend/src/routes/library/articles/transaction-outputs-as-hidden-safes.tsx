@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'transaction-outputs-as-hidden-safes',
   title: 'Transaction outputs as hidden safes',
   tagIds: ['bitcoin', 'blockchain', 'cryptography', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

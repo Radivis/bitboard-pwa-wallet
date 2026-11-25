@@ -34,7 +34,6 @@ import { Route as SettingsFeaturesRouteImport } from './routes/settings/features
 import { Route as SettingsAboutRouteImport } from './routes/settings/about'
 import { Route as LibraryTagsRouteImport } from './routes/library/tags'
 import { Route as LibraryHistoryRouteImport } from './routes/library/history'
-import { Route as LibraryFavoritesRouteImport } from './routes/library/favorites'
 import { Route as LabTransactionsRouteImport } from './routes/lab/transactions'
 import { Route as LabLayer2RouteImport } from './routes/lab/layer-2'
 import { Route as LabControlRouteImport } from './routes/lab/control'
@@ -188,11 +187,6 @@ const LibraryTagsRoute = LibraryTagsRouteImport.update({
 const LibraryHistoryRoute = LibraryHistoryRouteImport.update({
   id: '/history',
   path: '/history',
-  getParentRoute: () => LibraryRoute,
-} as any)
-const LibraryFavoritesRoute = LibraryFavoritesRouteImport.update({
-  id: '/favorites',
-  path: '/favorites',
   getParentRoute: () => LibraryRoute,
 } as any)
 const LabTransactionsRoute = LabTransactionsRouteImport.update({
@@ -367,7 +361,6 @@ export interface FileRoutesByFullPath {
   '/lab/control': typeof LabControlRoute
   '/lab/layer-2': typeof LabLayer2Route
   '/lab/transactions': typeof LabTransactionsRoute
-  '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
   '/settings/about': typeof SettingsAboutRoute
@@ -416,7 +409,6 @@ export interface FileRoutesByTo {
   '/lab/control': typeof LabControlRoute
   '/lab/layer-2': typeof LabLayer2Route
   '/lab/transactions': typeof LabTransactionsRoute
-  '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
   '/settings/about': typeof SettingsAboutRoute
@@ -473,7 +465,6 @@ export interface FileRoutesById {
   '/lab/control': typeof LabControlRoute
   '/lab/layer-2': typeof LabLayer2Route
   '/lab/transactions': typeof LabTransactionsRoute
-  '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
   '/settings/about': typeof SettingsAboutRoute
@@ -532,7 +523,6 @@ export interface FileRouteTypes {
     | '/lab/control'
     | '/lab/layer-2'
     | '/lab/transactions'
-    | '/library/favorites'
     | '/library/history'
     | '/library/tags'
     | '/settings/about'
@@ -581,7 +571,6 @@ export interface FileRouteTypes {
     | '/lab/control'
     | '/lab/layer-2'
     | '/lab/transactions'
-    | '/library/favorites'
     | '/library/history'
     | '/library/tags'
     | '/settings/about'
@@ -637,7 +626,6 @@ export interface FileRouteTypes {
     | '/lab/control'
     | '/lab/layer-2'
     | '/lab/transactions'
-    | '/library/favorites'
     | '/library/history'
     | '/library/tags'
     | '/settings/about'
@@ -866,13 +854,6 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/library/history'
       preLoaderRoute: typeof LibraryHistoryRouteImport
-      parentRoute: typeof LibraryRoute
-    }
-    '/library/favorites': {
-      id: '/library/favorites'
-      path: '/favorites'
-      fullPath: '/library/favorites'
-      preLoaderRoute: typeof LibraryFavoritesRouteImport
       parentRoute: typeof LibraryRoute
     }
     '/lab/transactions': {
@@ -1176,7 +1157,6 @@ const LabRouteChildren: LabRouteChildren = {
 const LabRouteWithChildren = LabRoute._addFileChildren(LabRouteChildren)
 
 interface LibraryRouteChildren {
-  LibraryFavoritesRoute: typeof LibraryFavoritesRoute
   LibraryHistoryRoute: typeof LibraryHistoryRoute
   LibraryTagsRoute: typeof LibraryTagsRoute
   LibraryIndexRoute: typeof LibraryIndexRoute
@@ -1184,7 +1164,6 @@ interface LibraryRouteChildren {
 }
 
 const LibraryRouteChildren: LibraryRouteChildren = {
-  LibraryFavoritesRoute: LibraryFavoritesRoute,
   LibraryHistoryRoute: LibraryHistoryRoute,
   LibraryTagsRoute: LibraryTagsRoute,
   LibraryIndexRoute: LibraryIndexRoute,

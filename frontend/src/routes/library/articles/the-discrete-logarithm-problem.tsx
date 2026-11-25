@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'the-discrete-logarithm-problem',
   title: 'The discrete logarithm problem',
   tagIds: ['cryptography', 'elliptic-curves', 'bitcoin'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

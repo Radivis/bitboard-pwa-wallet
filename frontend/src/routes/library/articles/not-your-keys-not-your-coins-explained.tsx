@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'not-your-keys-not-your-coins-explained',
   title: '"Not your keys, not your coins" explained',
   tagIds: ['security', 'wallets', 'bitcoin', 'privacy'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

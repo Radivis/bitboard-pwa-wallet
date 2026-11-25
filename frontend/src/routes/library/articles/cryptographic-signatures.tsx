@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'cryptographic-signatures',
   title: 'Cryptographic signatures',
   tagIds: ['cryptography', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

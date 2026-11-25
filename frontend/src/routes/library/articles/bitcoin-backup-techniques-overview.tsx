@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'bitcoin-backup-techniques-overview',
   title: 'An overview of different backup techniques for Bitcoin',
   tagIds: ['backups', 'bitcoin', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

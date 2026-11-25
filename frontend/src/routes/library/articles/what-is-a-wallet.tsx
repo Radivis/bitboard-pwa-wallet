@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-wallet',
   title: 'What is a wallet',
   tagIds: ['wallets', 'privacy'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

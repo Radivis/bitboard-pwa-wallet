@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'sybil-attacks-and-countermeasures',
   title: 'Sybil attacks and countermeasures',
   tagIds: ['decentralized-networks', 'security', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

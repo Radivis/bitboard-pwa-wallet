@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'bitcoin-block-headers',
   title: 'Bitcoin block headers',
   tagIds: ['bitcoin', 'blockchain', 'mining'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

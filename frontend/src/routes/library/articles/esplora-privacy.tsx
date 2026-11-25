@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'esplora-privacy',
   title: 'Esplora privacy',
   tagIds: ['privacy', 'security', 'bitcoin', 'wallets'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

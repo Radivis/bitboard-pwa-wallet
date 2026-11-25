@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-vtxo',
   title: 'What is a VTXO?',
   tagIds: ['bitcoin', 'wallets', 'l2'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

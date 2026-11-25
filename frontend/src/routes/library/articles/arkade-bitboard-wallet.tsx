@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'arkade-bitboard-wallet',
   title: 'Arkade in Bitcoin Codex',
   tagIds: ['bitcoin', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'why-different-bitcoin-test-networks',
   title: 'Why are there different test networks for Bitcoin?',
   tagIds: ['test-networks', 'bitcoin'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

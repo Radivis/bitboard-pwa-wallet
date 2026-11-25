@@ -665,6 +665,20 @@ a:focus-visible [data-slot="design-lab-transaction-card"] {
   box-shadow: var(--design-library-card-shadow), 0 0 0 2px var(--design-focus-ring);
 }
 
+/*
+ * Index cards sit on the page, so their fill is one step lower than cards
+ * nested in a tag section: elevation 1 at rest and elevation 2 on hover.
+ * The shadow stacks stay the elevation 1 and 2 stacks above.
+ */
+[data-library-list-surface="page"] [data-slot="design-library-card"] {
+  background: var(--design-elevation-1);
+}
+
+[data-library-list-surface="page"] [data-slot="design-library-card"]:hover,
+[data-library-list-surface="page"] [data-slot="design-library-card"]:has([data-library-card-title]:hover) {
+  background: var(--design-elevation-2);
+}
+
 /* Set on the element, not through a Tailwind shadow utility. DialogContent also
    applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
 [data-slot="design-modal"] {

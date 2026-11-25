@@ -1,62 +1,46 @@
-import { useMemo, useState } from 'react'
-import { List, Search } from 'lucide-react'
-import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
-import { DesignInput } from '@/components/design/DesignInput'
+import { useMemo } from 'react'
+import { List } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
-import { listArticlesSortedByTitle } from '@/lib/library/articles'
-import { getTagLabel } from '@/lib/library/tags'
-
-function normalizeSearch(value: string): string {
-  return value.trim().toLowerCase()
-}
+import { useLibraryFavorites } from '@/db'
+import { listArticles } from '@/lib/library/articles'
+import { applyLibraryFilterSort, libraryFilterEmptyMessage } from '@/lib/library/library-filter-sort'
+import {
+  selectLibraryFilterSortCriteria,
+  useLibraryFilterSortStore,
+} from '@/stores/libraryFilterSortStore'
 
 export function LibraryIndexPage() {
-  const [query, setQuery] = useState('')
-  const articles = useMemo(() => {
-    const sorted = listArticlesSortedByTitle()
-    const normalizedQuery = normalizeSearch(query)
-    if (!normalizedQuery) return sorted
-    return sorted.filter((article) => {
-      if (article.title.toLowerCase().includes(normalizedQuery)) return true
-      return article.tagIds.some((tagId) =>
-        getTagLabel(tagId).toLowerCase().includes(normalizedQuery),
-      )
-    })
-  }, [query])
+  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
+  const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
+  const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
+  const articles = useMemo(
+    () => applyLibraryFilterSort(listArticles(), criteria, favoriteSlugs),
+    [criteria, favoriteSlugs],
+  )
 
   return (
     <div className="space-y-6">
       <PageHeader title="Library" icon={List} variant="area" />
 
       <p className="design-type-regular text-muted-foreground">
-        In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
-        browse by tag, favorites, or history.
+        In-app guides and reference material. Articles are fixed for accuracy. Choose Favorites on
+        this page to see articles you starred. Use the bottom bar to browse by tag or history.
       </p>
 
-      <div className="space-y-2">
-        <label htmlFor="library-search" className="design-type-emphasis text-foreground">
-          Search
-        </label>
-        <DesignInput
-          id="library-search"
-          type="search"
-          leadingIcon={Search}
-          placeholder="Filter by title or tag…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
+      <LibraryFilterSort />
 
-      <DesignCard>
-        <DesignCardContent>
-          <LibraryArticleList
-            articles={articles}
-            emptyMessage="No articles match your search. Try a different term."
-          />
-        </DesignCardContent>
-      </DesignCard>
+      {favoritesAreLoading ? (
+        <p className="design-type-regular text-muted-foreground">Loading…</p>
+      ) : (
+        <LibraryArticleList
+          articles={articles}
+          surface="page"
+          emptyMessage={libraryFilterEmptyMessage(criteria, favoriteSlugs?.size ?? 0)}
+        />
+      )}
     </div>
   )
 }

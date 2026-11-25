@@ -2,20 +2,33 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSearch } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { DesignCard } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
-import { listArticlesSortedByTitle, type LibraryArticle } from '@/lib/library/articles'
+import { useLibraryFavorites } from '@/db'
+import { listArticles, type LibraryArticle } from '@/lib/library/articles'
+import {
+  applyLibraryFilterSort,
+  LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE,
+  libraryFilterEmptyMessage,
+  type LibraryFilterSortCriteria,
+} from '@/lib/library/library-filter-sort'
 import {
   getTagLabel,
   isLibraryTagId,
   listLibraryTagIdsSortedByLabel,
   type LibraryTagId,
 } from '@/lib/library/tags'
+import {
+  selectLibraryFilterSortCriteria,
+  useLibraryFilterSortStore,
+} from '@/stores/libraryFilterSortStore'
 
 function buildArticlesByTagId(): Map<LibraryTagId, LibraryArticle[]> {
   const map = new Map<LibraryTagId, LibraryArticle[]>()
-  for (const article of listArticlesSortedByTitle()) {
+  for (const article of listArticles()) {
     for (const tagId of article.tagIds) {
       if (!isLibraryTagId(tagId)) continue
       const existing = map.get(tagId)
@@ -26,16 +39,39 @@ function buildArticlesByTagId(): Map<LibraryTagId, LibraryArticle[]> {
   return map
 }
 
+function shouldShowTagSection(
+  articleCount: number,
+  visibleArticleCount: number,
+  isFocused: boolean,
+): boolean {
+  if (isFocused) return true
+  if (articleCount === 0) return true
+  return visibleArticleCount > 0
+}
+
+function tagSectionEmptyMessage(
+  articleCount: number,
+  criteria: Pick<LibraryFilterSortCriteria, 'minimumLevel' | 'maximumLevel'>,
+): string {
+  if (articleCount === 0) return 'No articles use this tag yet.'
+  if (criteria.minimumLevel > criteria.maximumLevel) return LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE
+  return 'No articles in this tag match the current filters.'
+}
+
 function TagSection({
   tagId,
   articles,
+  visibleArticles,
+  isFocused,
+  criteria,
 }: {
   tagId: LibraryTagId
   articles: LibraryArticle[]
+  visibleArticles: LibraryArticle[]
+  isFocused: boolean
+  criteria: Pick<LibraryFilterSortCriteria, 'minimumLevel' | 'maximumLevel'>
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
-  const { tag: focusedTag } = useSearch({ from: '/library/tags' })
-  const isFocused = focusedTag === tagId
 
   useEffect(() => {
     if (!isFocused || !detailsRef.current) return
@@ -56,14 +92,14 @@ function TagSection({
           <span className="inline-flex w-full items-center justify-between gap-2">
             <span>{getTagLabel(tagId)}</span>
             <span className="design-type-regular text-[var(--design-text-card-description)]">
-              {articles.length} article{articles.length === 1 ? '' : 's'}
+              {visibleArticles.length} article{visibleArticles.length === 1 ? '' : 's'}
             </span>
           </span>
         </summary>
         <CardContentPadding>
           <LibraryArticleList
-            articles={articles}
-            emptyMessage="No articles use this tag yet."
+            articles={visibleArticles}
+            emptyMessage={tagSectionEmptyMessage(articles.length, criteria)}
             excludeTagId={tagId}
           />
         </CardContentPadding>
@@ -78,9 +114,29 @@ function CardContentPadding({ children }: { children: ReactNode }) {
   )
 }
 
+interface VisibleTagSection {
+  tagId: LibraryTagId
+  articles: LibraryArticle[]
+  visibleArticles: LibraryArticle[]
+}
+
 export function TagsPage() {
-  const tagIds = listLibraryTagIdsSortedByLabel()
+  const { tag: focusedTag } = useSearch({ from: '/library/tags' })
+  const tagIds = useMemo(() => listLibraryTagIdsSortedByLabel(), [])
   const articlesByTagId = useMemo(() => buildArticlesByTagId(), [])
+  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
+  const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
+  const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
+  const sections = useMemo(() => {
+    const shown: VisibleTagSection[] = []
+    for (const tagId of tagIds) {
+      const articles = articlesByTagId.get(tagId) ?? []
+      const visibleArticles = applyLibraryFilterSort(articles, criteria, favoriteSlugs)
+      if (!shouldShowTagSection(articles.length, visibleArticles.length, focusedTag === tagId)) continue
+      shown.push({ tagId, articles, visibleArticles })
+    }
+    return shown
+  }, [articlesByTagId, criteria, favoriteSlugs, focusedTag, tagIds])
 
   return (
     <div className="space-y-6">
@@ -91,15 +147,28 @@ export function TagsPage() {
         tags.
       </p>
 
-      <div className="space-y-3">
-        {tagIds.map((tagId) => (
-          <TagSection
-            key={tagId}
-            tagId={tagId}
-            articles={articlesByTagId.get(tagId) ?? []}
-          />
-        ))}
-      </div>
+      <LibraryFilterSort />
+
+      {favoritesAreLoading ? (
+        <p className="design-type-regular text-muted-foreground">Loading…</p>
+      ) : sections.length === 0 ? (
+        <p className="design-type-regular text-muted-foreground">
+          {libraryFilterEmptyMessage(criteria, favoriteSlugs?.size ?? 0)}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {sections.map((section) => (
+            <TagSection
+              key={section.tagId}
+              tagId={section.tagId}
+              articles={section.articles}
+              visibleArticles={section.visibleArticles}
+              isFocused={focusedTag === section.tagId}
+              criteria={criteria}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

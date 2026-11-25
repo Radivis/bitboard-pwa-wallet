@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'ml-dsa',
   title: 'ML-DSA (Module Lattice Digital Signature Algorithm)',
   tagIds: ['cryptography', 'quantum-computing', 'standards'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

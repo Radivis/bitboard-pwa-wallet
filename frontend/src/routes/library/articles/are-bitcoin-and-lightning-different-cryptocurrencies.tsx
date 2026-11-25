@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'are-bitcoin-and-lightning-different-cryptocurrencies',
   title: 'Are Bitcoin and Lightning different cryptocurrencies?',
   tagIds: ['lightning', 'l2', 'bitcoin', 'cryptocurrencies'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

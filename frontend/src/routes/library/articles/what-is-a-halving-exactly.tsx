@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-halving-exactly',
   title: 'What is a halving exactly?',
   tagIds: ['mining', 'bitcoin'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

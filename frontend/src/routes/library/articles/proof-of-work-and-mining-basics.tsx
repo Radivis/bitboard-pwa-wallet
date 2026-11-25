@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'proof-of-work-and-mining-basics',
   title: 'Proof-of-work and mining (basics)',
   tagIds: ['mining', 'bitcoin', 'blockchain'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
