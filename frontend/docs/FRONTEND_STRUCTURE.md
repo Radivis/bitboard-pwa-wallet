@@ -58,7 +58,7 @@ Wallet, settings, setup, privacy, library route shells, and part of lab live und
 | `settings/` | Migrated | `pages/settings/` |
 | `setup/` | Migrated | `pages/setup/` |
 | `privacy/` | Migrated | `pages/privacy/` |
-| `library/` | **Shells migrated** | `pages/library/` — index, history, favorites, article, tags; article content stays in `routes/library/articles/` until registry glob is updated |
+| `library/` | **Shells migrated** | `pages/library/` — index, history, article, tags; article content stays in `routes/library/articles/` until registry glob is updated |
 | `lab/` | **Partial** | `pages/lab/` — `BlocksPage`, `ControlPage`, `Layer2Page` done; `transactions`, block detail, and tx detail routes still inline in `routes/lab/` |
 
 **Migrated route pattern** (wallet send):

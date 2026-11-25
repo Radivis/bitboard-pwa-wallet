@@ -11,13 +11,17 @@
  * - GET /api/tx/:txid — when bitcoind has the tx, status is overwritten from that view
  *   so a stale Fulcrum confirmation cannot survive a reorg, and Bark sees block_height
  * - GET /api/blocks/tip/height — bitcoind getblockcount
+ * - GET /api/address/:address/utxo — bitcoind UTXO set + mempool (Fulcrum's
+ *   address index lags a mined block past arkd's boarding window)
  *
  * POST /api/txs/package — bitcoind `submitpackage` (mempool electrum returns a generic RPC error)
  * POST /api/tx — bitcoind `sendrawtransaction`
  * All other paths are proxied to mempool_web unchanged.
  */
 import http from 'node:http';
-import { URL } from 'node:url';
+import { URL, pathToFileURL } from 'node:url';
+
+import { esploraUtxosForAddress } from './address-utxos.mjs';
 
 const PORT = Number(process.env.PORT || 8080);
 const BITCOIN_RPC_HOST = process.env.BITCOIN_RPC_HOST || 'bitcoin';
@@ -32,6 +36,7 @@ const TXID_OUTSPEND_PATH = /^\/api\/tx\/([0-9a-f]{64})\/outspend\/(\d+)$/i;
 const TXID_STATUS_PATH = /^\/api\/tx\/([0-9a-f]{64})\/status$/i;
 const TXID_MERKLE_PROOF_PATH = /^\/api\/tx\/([0-9a-f]{64})\/merkle-proof$/i;
 const TIP_HEIGHT_PATH = '/api/blocks/tip/height';
+const ADDRESS_UTXO_PATH = /^\/api\/address\/([A-Za-z0-9]{14,120})\/utxo$/;
 const TXS_PACKAGE_PATH = '/api/txs/package';
 const TX_BROADCAST_PATH = '/api/tx';
 
@@ -735,6 +740,127 @@ async function handleTipHeight(req, res) {
   }
 }
 
+const ADDRESS_UTXO_CACHE_MS = 500;
+const MEMPOOL_DECODE_LIMIT = 40;
+const addressUtxoCache = new Map();
+const blockTimeByHash = new Map();
+let addressUtxoScanChain = Promise.resolve();
+
+function enqueueAddressUtxoScan(task) {
+  const run = addressUtxoScanChain.then(task, task);
+  addressUtxoScanChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function blockTimeForHash(blockHash) {
+  const cached = blockTimeByHash.get(blockHash);
+  if (cached != null) return cached;
+  const header = await bitcoinRpc('getblockheader', [blockHash]);
+  blockTimeByHash.set(blockHash, header.time);
+  return header.time;
+}
+
+async function scantxoutsetForDescriptor(descriptor) {
+  try {
+    return await bitcoinRpc('scantxoutset', ['start', [descriptor]]);
+  } catch (error) {
+    const message = String(error?.message || '').toLowerCase();
+    if (!message.includes('already in progress')) throw error;
+    await bitcoinRpc('scantxoutset', ['abort']);
+    return await bitcoinRpc('scantxoutset', ['start', [descriptor]]);
+  }
+}
+
+async function decodedMempoolTransactions() {
+  const txids = await bitcoinRpc('getrawmempool', [false]);
+  if (!Array.isArray(txids) || txids.length === 0) return [];
+  if (txids.length > MEMPOOL_DECODE_LIMIT) {
+    console.warn(
+      `address utxo lookup skipped ${txids.length} mempool txs (limit ${MEMPOOL_DECODE_LIMIT})`,
+    );
+    return [];
+  }
+  const transactions = [];
+  for (const txid of txids) {
+    const verbose = await bitcoinGetRawTransactionVerbose(txid);
+    if (verbose != null) transactions.push(verbose);
+  }
+  return transactions;
+}
+
+async function loadAddressUtxosFromBitcoind(address) {
+  const descriptorInfo = await bitcoinRpc('getdescriptorinfo', [`addr(${address})`]);
+  const scan = await scantxoutsetForDescriptor(descriptorInfo.descriptor);
+  if (!scan?.success) {
+    throw new Error('scantxoutset did not finish');
+  }
+  const unspents = scan.unspents ?? [];
+  const times = new Map();
+  for (const unspent of unspents) {
+    if (unspent.blockhash == null || times.has(unspent.blockhash)) continue;
+    times.set(unspent.blockhash, await blockTimeForHash(unspent.blockhash));
+  }
+  const mempoolTransactions = await decodedMempoolTransactions();
+  return esploraUtxosForAddress({
+    address,
+    unspents,
+    mempoolTransactions,
+    blockTimeByHash: times,
+  });
+}
+
+async function addressUtxosFromBitcoind(address) {
+  const cached = addressUtxoCache.get(address);
+  if (cached && Date.now() - cached.at < ADDRESS_UTXO_CACHE_MS) {
+    return cached.utxos;
+  }
+  return enqueueAddressUtxoScan(async () => {
+    const again = addressUtxoCache.get(address);
+    if (again && Date.now() - again.at < ADDRESS_UTXO_CACHE_MS) {
+      return again.utxos;
+    }
+    const utxos = await loadAddressUtxosFromBitcoind(address);
+    addressUtxoCache.set(address, { at: Date.now(), utxos });
+    return utxos;
+  });
+}
+
+async function handleAddressUtxo(req, res, address) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const utxos = await addressUtxosFromBitcoind(address);
+    if (req.method === 'HEAD') {
+      const body = JSON.stringify(utxos);
+      res.writeHead(
+        200,
+        withCorsHeaders({
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(body)),
+        }),
+      );
+      res.end();
+      return;
+    }
+    sendJson(res, 200, utxos);
+  } catch (error) {
+    console.error(`GET /api/address/${address}/utxo bitcoind error:`, error.message);
+    sendJson(res, 502, { error: 'bitcoind address utxo lookup failed' });
+  }
+}
+
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
   if (pathname === TIP_HEIGHT_PATH) {
@@ -782,11 +908,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const addressUtxoMatch = ADDRESS_UTXO_PATH.exec(pathname);
+  if (addressUtxoMatch) {
+    void handleAddressUtxo(req, res, addressUtxoMatch[1]);
+    return;
+  }
+
   proxyToUpstream(req, res);
 });
 
-server.listen(PORT, () => {
-  console.log(
-    `esplora-gateway listening on :${PORT} (upstream=${UPSTREAM_ESPLORA}, bitcoind=${BITCOIN_RPC_HOST}:${BITCOIN_RPC_PORT})`,
-  );
-});
+const isDirectRun =
+  process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  server.listen(PORT, () => {
+    console.log(
+      `esplora-gateway listening on :${PORT} (upstream=${UPSTREAM_ESPLORA}, bitcoind=${BITCOIN_RPC_HOST}:${BITCOIN_RPC_PORT})`,
+    );
+  });
+}

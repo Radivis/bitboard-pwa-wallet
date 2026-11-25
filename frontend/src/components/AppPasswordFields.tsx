@@ -75,7 +75,7 @@ export function AppPasswordFields({
           {newPassword ? (
             <PasswordStrengthIndicator password={newPassword} />
           ) : (
-            <p className="text-xs text-muted-foreground">Strength feedback appears as you type.</p>
+            <p className="design-type-regular text-muted-foreground">Strength feedback appears as you type.</p>
           )}
         </InfomodeWrapper>
       </div>
@@ -91,7 +91,7 @@ export function AppPasswordFields({
           placeholder="Confirm your password"
         />
         {confirmPassword && !passwordsMatch && (
-          <p className="text-xs text-destructive">Passwords do not match</p>
+          <p className="design-type-regular text-destructive">Passwords do not match</p>
         )}
       </div>
     </>

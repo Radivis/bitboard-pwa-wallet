@@ -15,6 +15,7 @@ import {
   setupRegtestArkadeWallet,
 } from './arkade-management'
 import {
+  clickArkadeGenerateNewAddress,
   goToReceiveArkadeMode,
   readDashboardArkadeOffchainSpendableSats,
   readReceiveArkadeAddress,
@@ -118,7 +119,11 @@ async function confirmSettledVtxoAndSync(page: Page): Promise<void> {
 export async function prepareCollaborativeExitScenario(page: Page): Promise<void> {
   await prepareFundedArkadeBalance(page)
   await confirmSettledVtxoAndSync(page)
-  await goToArkadeManagementPanel(page)
+  await expect(
+    page
+      .getByTestId('dashboard-arkade-balance-card')
+      .getByRole('link', { name: 'Collaborative exit' }),
+  ).toBeVisible()
 }
 
 export async function prepareUnilateralUnrollScenario(page: Page): Promise<void> {
@@ -161,9 +166,7 @@ export async function selfSendToNewArkadeReceiveAddress(
 ): Promise<void> {
   await goToReceiveArkadeMode(page)
   const previousAddress = await readReceiveArkadeAddress(page)
-  const generateButton = page.getByTestId('arkade-generate-new-address')
-  await expect(generateButton).toBeEnabled({ timeout: 15_000 })
-  await generateButton.click()
+  await clickArkadeGenerateNewAddress(page)
   await expect(page.getByText('New Arkade address generated')).toBeVisible({ timeout: 60_000 })
 
   let newAddress = previousAddress

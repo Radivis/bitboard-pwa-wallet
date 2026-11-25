@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
 
 const WALLET_TAB_PATHS: Record<WalletSubNavTab, string> = {
   Dashboard: '/wallet',
@@ -26,10 +27,10 @@ async function waitForWalletTabUrl(page: Page, tab: WalletSubNavTab): Promise<vo
 
 /**
  * Opens a wallet sub-nav tab (Dashboard, Send, Receive, Management). That bar is
- * only rendered on wallet routes; after Settings, Lab, or Library, use the primary
- * "Wallet" link first.
+ * only rendered on wallet routes; after Settings, Lab, or Library, open Wallet
+ * from the header menu first.
  *
- * After lock, the app sends users to Library; opening Wallet can show the unlock
+ * After lock, the app sends users to Start; opening Wallet can show the unlock
  * dialog whose overlay sits above the sub-nav (z-50 vs z-40), so the sub-nav is
  * not Playwright-visible even on `/wallet`. In that case we navigate by URL.
  */
@@ -46,7 +47,7 @@ export async function goToWalletTab(page: Page, tab: WalletSubNavTab): Promise<v
     return
   }
 
-  await page.getByRole('link', { name: /^Wallet$/i }).click()
+  await clickDrawerNavLink(page, 'Wallet')
   await page.waitForURL(/\/wallet(\/|$)/)
 
   try {

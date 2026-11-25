@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { BarkBoardPage } from '@/pages/wallet/BarkBoardPage'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 const walletStoreState = vi.hoisted(() => ({
@@ -114,6 +115,7 @@ vi.mock('@/lib/bark/bark-board-live-deps', () => ({
 
 describe('BarkBoardPage', () => {
   beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'sat' })
     useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true
@@ -382,7 +384,7 @@ describe('BarkBoardPage', () => {
       grossAmountSats: 10_000,
     })
     renderWithProviders(<BarkBoardPage />)
-    expect(screen.getByRole('switch', { name: /Denomination/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Denomination' })).toBeInTheDocument()
     expect(screen.getByText('Amount (USD)')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10' } })
     fireEvent.click(screen.getByTestId('bark-board-review'))
@@ -439,8 +441,8 @@ describe('BarkBoardPage', () => {
       grossAmountSats: 10_000,
     })
     renderWithProviders(<BarkBoardPage />)
-    expect(screen.queryByRole('switch', { name: /Denomination/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Satoshis')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Denomination' })).not.toBeInTheDocument()
+    expect(screen.getByText('Amount (sat)')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
     fireEvent.click(screen.getByTestId('bark-board-review'))
 

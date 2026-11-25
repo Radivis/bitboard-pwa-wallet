@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nostr-wallet-connect',
   title: 'Nostr Wallet Connect (NWC)',
   tagIds: ['nostr', 'lightning', 'wallets', 'standards', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -40,7 +41,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Really Works">
         <p>
           A typical NWC URI looks like{' '}
-          <code className="text-sm">
+          <code className="design-type-addresses">
             nostr+walletconnect://&lt;wallet_pubkey&gt;?relay=wss://…&amp;secret=&lt;shared_secret&gt;
           </code>
           . The <strong>wallet service</strong> publishes its public key; the <strong>relay</strong>{' '}
@@ -64,7 +65,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           Bitboard uses NWC to integrate with external Lightning wallets. You paste your connection
           URI in the Lightning settings, and Bitboard can then show balances, send payments, and

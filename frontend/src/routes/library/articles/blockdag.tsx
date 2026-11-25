@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'blockdag',
   title: 'BlockDAG',
   tagIds: ['blockchain', 'bitcoin'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

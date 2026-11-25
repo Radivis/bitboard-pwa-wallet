@@ -9,11 +9,12 @@ feature:
     - As a user with Arkade enabled, I want the dashboard to show my Arkade balance without false empty-session messages after unlock
     - As a user, I want Arkade payments to appear in the dashboard activity feed when the operator reports them
     - As a user, I want navigating to Receive and back not to break the Arkade balance on the dashboard
+    - As a user, I want to board into Arkade and start a collaborative exit from the dashboard balance card
   requirements:
     - Contracts are enforced by Vitest component/integration tests in CI
     - E2E contracts use VITE_E2E_ARKADE_MOCK with a mocked Ark operator (ASP), not live Mutinynet
     - Parallel E2E uses per-test mock partitions (cookie + header) because the WASM worker fetches the operator proxy directly
-    - Management link on the Arkade balance card is not part of this contract (may be removed)
+    - The Advanced actions button on the Arkade balance card is not part of this contract
   contracts:
     visibility:
       - id: DASH-ARK-01
@@ -51,6 +52,26 @@ feature:
         description: When pendingRecoveryDueToExpiredSignerSats is greater than zero, dashboard Arkade card shows pending-recovery-due-to-expired-signer banner with link to Management unilateral exit
       - id: DASH-ARK-19a
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line
+      - id: DASH-ARK-50
+        description: >-
+          Dashboard Arkade card links to Board from on-chain at /wallet/arkade/board.
+          While autonomous mode is active the control is a disabled button.
+        implemented_by: frontend/src/components/wallet/__tests__/ArkadeDashboardBalance.test.tsx
+      - id: DASH-ARK-51
+        description: >-
+          Dashboard Arkade card links to Collaborative exit at /wallet/arkade/collaborative-exit
+          when cooperative exit is available.
+        implemented_by: frontend/src/components/wallet/__tests__/ArkadeDashboardBalance.test.tsx
+      - id: DASH-ARK-52
+        description: >-
+          Collaborative exit is a disabled button with a reason while signer rotation cutoff,
+          autonomous mode, or a pending collaborative intent blocks it.
+        implemented_by: frontend/src/components/wallet/__tests__/ArkadeDashboardBalance.test.tsx
+      - id: DASH-ARK-53
+        description: >-
+          Once the Arkade session is loaded, the dashboard card shows the VTXO expiry line.
+          Renew VTXOs now is the first action and is primary when expiringSoonCount is greater than zero.
+        implemented_by: frontend/src/components/wallet/__tests__/ArkadeDashboardBalance.test.tsx
     activity_feed:
       - id: DASH-ARK-20
         description: When Arkade history returns rows, merged dashboard activity includes ArkadePaymentItem rows
@@ -112,6 +133,10 @@ feature:
         - Recoverable VTXO banner when recoverableSettleableVtxoCount is greater than zero
         - Expired waiting for operator sweep line when recoverablePendingOperatorSweepVtxoCount is greater than zero
         - Arkade operator sync error banner when post-load sync fails (including when balance data is absent)
+        - VTXO expiry line once the Arkade session is loaded, including the renewal-soon count
+        - Renew VTXOs now as the first action; primary when expiringSoonCount is greater than zero, otherwise secondary
+        - Board from on-chain link to /wallet/arkade/board; disabled button while autonomous mode is active
+        - Collaborative exit link to /wallet/arkade/collaborative-exit; disabled with a reason while signer rotation cutoff, autonomous mode, or a pending collaborative intent blocks it
       test_ids:
         - dashboard-arkade-balance-card
         - dashboard-arkade-balance-amount
@@ -120,6 +145,9 @@ feature:
         - arkade-balance-recoverable-pending-operator-sweep
         - arkade-recoverable-vtxo-banner
         - arkade-session-loading
+        - dashboard-arkade-board-link
+        - dashboard-arkade-collaborative-exit-link
+        - arkade-exit-collab-unavailable
     - DashboardActivity:
       path: /wallet
       file: frontend/src/pages/wallet/DashboardPage.tsx

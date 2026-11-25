@@ -31,6 +31,7 @@ const saveSnapshot = {
 }
 
 vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
+  abandonInFlightOnchainSync: vi.fn().mockResolvedValue(undefined),
   awaitOnchainSyncQuiescence: (...args: unknown[]) => awaitOnchainSyncQuiescence(...args),
   getOnchainSyncLifecycleSnapshot: () => syncSnapshot,
 }))

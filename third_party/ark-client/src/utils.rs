@@ -85,7 +85,7 @@ pub(crate) fn unix_now() -> Result<i64, Error> {
 pub(crate) async fn sleep(duration: Duration) {
     #[cfg(target_arch = "wasm32")]
     {
-        gloo_timers::future::sleep(duration).await
+        bitboard_wasm_sleep::sleep_for(duration).await
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -101,10 +101,8 @@ where
 {
     use futures_util::future::select;
     use futures_util::future::Either;
-    use gloo_timers::future::TimeoutFuture;
 
-    let ms = timeout.as_millis().min(u128::from(u32::MAX)) as u32;
-    let timeout_future = TimeoutFuture::new(ms);
+    let timeout_future = bitboard_wasm_sleep::sleep_for(timeout);
 
     match select(Box::pin(operation), timeout_future).await {
         Either::Left((result, _)) => Ok(result),

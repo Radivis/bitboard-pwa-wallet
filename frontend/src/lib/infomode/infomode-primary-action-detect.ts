@@ -170,7 +170,7 @@ function elementsOnPathBeforeZoneRoot(
 
 /**
  * `true` when the click is on a surface we consider a "real" app action, so
- * infomode should show suppression feedback (toast + lightbulb).
+ * infomode should show suppression feedback (toast + question mark).
  */
 export function clickTargetWouldActivatePrimaryAction(
   event: Event,

@@ -47,7 +47,9 @@ const POST_UNLOCK_ARKADE_TIMEOUT_MS = ARKADE_MOCK_TEST_TIMEOUT_MS * 2
 async function lockWalletFromManagementAndUnlock(page: Page) {
   await goToWalletTab(page, 'Management')
   await page.getByRole('button', { name: 'Lock Wallet' }).click()
-  await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Wallet lock privacy notice' })).toBeVisible({
+    timeout: 30_000,
+  })
   await page.getByRole('button', { name: 'Unlock wallet and go to previous page' }).click()
   await expect(page.getByRole('heading', { name: 'Unlock Wallet' })).toBeVisible({
     timeout: 15_000,

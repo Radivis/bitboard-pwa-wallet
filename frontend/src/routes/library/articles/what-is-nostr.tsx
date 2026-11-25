@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-nostr',
   title: 'What is Nostr?',
   tagIds: ['nostr', 'decentralized-networks', 'cryptography'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -51,7 +52,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           Bitboard uses <strong>Nostr Wallet Connect</strong> so you can link a Lightning wallet
           that speaks NIP-47 without Bitboard holding your Lightning keys. Understanding Nostr helps

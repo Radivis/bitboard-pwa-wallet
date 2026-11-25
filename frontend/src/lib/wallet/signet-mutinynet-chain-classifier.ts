@@ -60,6 +60,18 @@ function signetFamilyNetworkForHeight(height: number): SignetFamilyNetwork {
   return height >= SIGNET_MUTINYNET_HEIGHT_BOUNDARY ? 'mutinynet' : 'signet'
 }
 
+/**
+ * Highest kept block in `local_chain.blocks`. A genesis-only tip and an
+ * unreadable changeset are unknown, so confirmation counts are not invented.
+ */
+export function readChangesetLocalTipHeight(changeSetJson: string): number | null {
+  const changeset = parseJsonObject(changeSetJson)
+  if (changeset == null) return null
+  const localTipHeight = readLocalTipHeight(asRecord(changeset.local_chain)?.blocks)
+  if (localTipHeight == null || localTipHeight <= 0) return null
+  return localTipHeight
+}
+
 function readChangesetChainHeights(changeSetJson: string): ChangesetChainHeights | null {
   const changeset = parseJsonObject(changeSetJson)
   if (changeset == null) return null

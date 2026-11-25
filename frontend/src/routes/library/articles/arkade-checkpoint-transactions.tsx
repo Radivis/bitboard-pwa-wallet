@@ -10,6 +10,7 @@ export const article: LibraryArticle = {
   slug: 'arkade-checkpoint-transactions',
   title: 'Checkpoint transactions',
   tagIds: ['bitcoin', 'wallets', 'security'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

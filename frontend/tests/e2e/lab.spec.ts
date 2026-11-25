@@ -16,6 +16,10 @@ import {
   getUtxoSumByOwner,
   findAddressForOwner,
 } from './helpers/lab'
+import {
+  SOFT_GAP_CONFIRM_TITLE,
+  SOFT_GAP_GENERATE_LABEL,
+} from '@/lib/wallet/receive-gap-surface'
 import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 import { goToWalletTab } from './helpers/wallet-nav'
 import { isCoinbase } from '@/lib/lab/lab-operations'
@@ -314,7 +318,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     ).toBeVisible({
       timeout: 15000,
     })
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     await expect(addressEl).toBeVisible({ timeout: 10000 })
     const walletAddress = (await addressEl.textContent())?.trim()
     expect(walletAddress).toMatch(/^bcrt1/)
@@ -370,12 +374,15 @@ test.describe('Lab', { tag: '@lab' }, () => {
     ).toBeVisible({
       timeout: 15000,
     })
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     await expect(addressEl).toBeVisible({ timeout: 10000 })
     const firstAddress = (await addressEl.textContent())?.trim()
     await page.getByRole('button', { name: 'Generate New Address' }).click()
+    const gapConfirm = page.getByRole('dialog', { name: SOFT_GAP_CONFIRM_TITLE })
+    await expect(gapConfirm).toBeVisible({ timeout: 5000 })
+    await gapConfirm.getByRole('button', { name: SOFT_GAP_GENERATE_LABEL, exact: true }).click()
     await expect(page.getByText('New address generated')).toBeVisible({ timeout: 5000 })
-    const secondAddressEl = page.getByRole('main').locator('.font-mono').first()
+    const secondAddressEl = page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
     const secondAddress = (await secondAddressEl.textContent())?.trim()
     expect(firstAddress).not.toBe(secondAddress)
 

@@ -1,0 +1,713 @@
+{
+  "background": {
+    "$type": "color",
+    "$value": {
+      "colorSpace": "srgb",
+      "components": [
+        0.9686274509803922,
+        0.9725490196078431,
+        0.9764705882352941
+      ],
+      "alpha": 1,
+      "hex": "#F7F8F9"
+    }
+  },
+  "text": {
+    "button": {
+      "hover": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.10196078431372549,
+            0.10196078431372549,
+            0.10196078431372549
+          ],
+          "alpha": 1,
+          "hex": "#1A1A1A"
+        }
+      },
+      "active": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "alpha": 1,
+          "hex": "#333333"
+        }
+      },
+      "primary": {
+        "disabled": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.14901960784313725,
+              0.14901960784313725,
+              0.14901960784313725
+            ],
+            "alpha": 1,
+            "hex": "#262626"
+          }
+        }
+      },
+      "default": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.43529411764705883,
+            0.43529411764705883,
+            0.43529411764705883
+          ],
+          "alpha": 1,
+          "hex": "#6F6F6F"
+        }
+      },
+      "tertiary": {
+        "disabled": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.43529411764705883,
+              0.43529411764705883,
+              0.43529411764705883
+            ],
+            "alpha": 1,
+            "hex": "#6F6F6F"
+          }
+        }
+      }
+    },
+    "regular": {
+      "default": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      }
+    },
+    "card": {
+      "title": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.09803921568627451,
+            0.13333333333333333,
+            0.13333333333333333
+          ],
+          "alpha": 1,
+          "hex": "#192222"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.2,
+            0.25882352941176473,
+            0.25882352941176473
+          ],
+          "alpha": 1,
+          "hex": "#334242"
+        }
+      }
+    }
+  },
+  "accent": {
+    "primary": {
+      "default": {
+        "$type": "color",
+        "$value": "{onLight.primary.default}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/primary/default"
+          }
+        }
+      },
+      "hover": {
+        "$type": "color",
+        "$value": "{onLight.primary.hover}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/primary/hover"
+          }
+        }
+      },
+      "active": {
+        "$type": "color",
+        "$value": "{onLight.primary.active}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/primary/active"
+          }
+        }
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "{onLight.primary.disabled}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/primary/disabled"
+          }
+        }
+      }
+    },
+    "secondary": {
+      "default": {
+        "$type": "color",
+        "$value": "{onLight.secondary.default}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondary/default"
+          }
+        }
+      },
+      "hover": {
+        "$type": "color",
+        "$value": "{onLight.secondary.hover}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondary/hover"
+          }
+        }
+      },
+      "active": {
+        "$type": "color",
+        "$value": "{onLight.secondary.active}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondary/active"
+          }
+        }
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "{onLight.secondary.disabled}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondary/disabled"
+          }
+        }
+      }
+    },
+    "secondaryStroke": {
+      "default": {
+        "$type": "color",
+        "$value": "{onLight.secondaryStroke.default}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondaryStroke/default"
+          }
+        }
+      },
+      "hover": {
+        "$type": "color",
+        "$value": "{onLight.secondaryStroke.hover}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondaryStroke/hover"
+          }
+        }
+      },
+      "active": {
+        "$type": "color",
+        "$value": "{onLight.secondaryStroke.active}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondaryStroke/active"
+          }
+        }
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "{onLight.secondaryStroke.disabled}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "network",
+            "targetVariableName": "onLight/secondaryStroke/disabled"
+          }
+        }
+      }
+    },
+    "tertiary": {
+      "default": {
+        "$type": "color",
+        "$value": "{accent.primary.default}",
+        "$extensions": {
+          "com.figma.aliasData": {
+            "targetVariableSetName": "theme",
+            "targetVariableName": "accent/primary/default"
+          }
+        }
+      }
+    }
+  },
+  "surface": {
+    "card": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.9372549019607843,
+          0.9450980392156862,
+          0.9607843137254902
+        ],
+        "alpha": 1,
+        "hex": "#EFF1F5"
+      }
+    }
+  },
+  "stroke": {
+    "card": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.8745098039215686,
+          0.9098039215686274,
+          0.9098039215686274
+        ],
+        "alpha": 0.9,
+        "hex": "#DFE8E8"
+      }
+    }
+  },
+  "status": {
+    "success": {
+      "surface": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9411764705882353,
+            0.9921568627450981,
+            0.9686274509803922
+          ],
+          "alpha": 1,
+          "hex": "#F0FDF7"
+        }
+      },
+      "foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0392156862745098,
+            0.4980392156862745,
+            0.2901960784313726
+          ],
+          "alpha": 1,
+          "hex": "#0A7F4A"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.023529411764705882,
+            0.37254901960784315,
+            0.21568627450980393
+          ],
+          "alpha": 1,
+          "hex": "#065F37"
+        }
+      },
+      "stroke": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0392156862745098,
+            0.4980392156862745,
+            0.2901960784313726
+          ],
+          "alpha": 0.25,
+          "hex": "#0A7F4A"
+        }
+      }
+    },
+    "error": {
+      "surface": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.996078431372549,
+            0.9490196078431372,
+            0.9490196078431372
+          ],
+          "alpha": 1,
+          "hex": "#FEF2F2"
+        }
+      },
+      "foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.788235294117647,
+            0.11372549019607843,
+            0.11372549019607843
+          ],
+          "alpha": 1,
+          "hex": "#C91D1D"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.6,
+            0.10588235294117647,
+            0.10588235294117647
+          ],
+          "alpha": 1,
+          "hex": "#991B1B"
+        }
+      },
+      "stroke": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.788235294117647,
+            0.11372549019607843,
+            0.11372549019607843
+          ],
+          "alpha": 0.25,
+          "hex": "#C91D1D"
+        }
+      }
+    },
+    "warning": {
+      "surface": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9764705882352941,
+            0.9294117647058824,
+            0.8235294117647058
+          ],
+          "alpha": 1,
+          "hex": "#F9EDD2"
+        }
+      },
+      "foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.5254901960784314,
+            0.38823529411764707,
+            0.07450980392156863
+          ],
+          "alpha": 1,
+          "hex": "#866313"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.34901960784313724,
+            0.25882352941176473,
+            0.050980392156862744
+          ],
+          "alpha": 1,
+          "hex": "#59420D"
+        }
+      },
+      "stroke": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.5254901960784314,
+            0.38823529411764707,
+            0.07450980392156863
+          ],
+          "alpha": 0.25,
+          "hex": "#866313"
+        }
+      }
+    },
+    "info": {
+      "surface": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8235294117647058,
+            0.9686274509803922,
+            0.9764705882352941
+          ],
+          "alpha": 1,
+          "hex": "#D2F7F9"
+        }
+      },
+      "foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.06666666666666667,
+            0.47058823529411764,
+            0.49019607843137253
+          ],
+          "alpha": 1,
+          "hex": "#11787D"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.043137254901960784,
+            0.30196078431372547,
+            0.3137254901960784
+          ],
+          "alpha": 1,
+          "hex": "#0B4D50"
+        }
+      },
+      "stroke": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.06666666666666667,
+            0.47058823529411764,
+            0.49019607843137253
+          ],
+          "alpha": 0.25,
+          "hex": "#11787D"
+        }
+      }
+    },
+    "risk": {
+      "surface": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9882352941176471,
+            0.9098039215686274,
+            0.9450980392156862
+          ],
+          "alpha": 1,
+          "hex": "#FCE8F1"
+        }
+      },
+      "foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.788235294117647,
+            0.10980392156862745,
+            0.41568627450980394
+          ],
+          "alpha": 1,
+          "hex": "#C91C6A"
+        }
+      },
+      "description": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.611764705882353,
+            0.09019607843137255,
+            0.3254901960784314
+          ],
+          "alpha": 1,
+          "hex": "#9C1753"
+        }
+      },
+      "stroke": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.788235294117647,
+            0.10980392156862745,
+            0.41568627450980394
+          ],
+          "alpha": 0.25,
+          "hex": "#C91C6A"
+        }
+      }
+    }
+  },
+  "input": {
+    "enabled": {
+      "background": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.12,
+          "hex": "#000000"
+        }
+      }
+    },
+    "disabled": {
+      "background": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.04,
+          "hex": "#000000"
+        }
+      }
+    },
+    "placeholder": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.3411764705882353,
+          0.3411764705882353,
+          0.3411764705882353
+        ],
+        "alpha": 1,
+        "hex": "#575757"
+      }
+    },
+    "content": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0,
+          0,
+          0
+        ],
+        "alpha": 1,
+        "hex": "#000000"
+      }
+    }
+  },
+  "nav-button": {
+    "background": {
+      "default": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.04,
+          "hex": "#000000"
+        }
+      },
+      "hover": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.08,
+          "hex": "#000000"
+        }
+      },
+      "active": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.12,
+          "hex": "#000000"
+        }
+      },
+      "selected": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.2,
+          "hex": "#000000"
+        }
+      }
+    },
+    "stroke": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0,
+          0,
+          0
+        ],
+        "alpha": 0.1,
+        "hex": "#000000"
+      }
+    }
+  }
+}

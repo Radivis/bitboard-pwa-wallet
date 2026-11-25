@@ -18,8 +18,8 @@ const arkadeAccountId = 'conn-boarding-test'
 describe('arkade-boarding-settle-optimistic', () => {
   it('zeros boarding status and moves spendable sats into balance on mutate', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId })
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
 
     queryClient.setQueryData(boardingStatusKey, {
       boardingAddress: 'tb1boarding',
@@ -51,8 +51,8 @@ describe('arkade-boarding-settle-optimistic', () => {
 
   it('reverts optimistic cache updates when settle fails', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId })
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousStatus = {
       boardingAddress: 'tb1boarding',
       trackedAddresses: ['tb1boarding'],
@@ -84,8 +84,8 @@ describe('arkade-boarding-settle-optimistic', () => {
 
   it('waiting_does_not_zero_boarding_in_optimistic_cache', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId })
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousStatus = {
       boardingAddress: 'tb1boarding',
       trackedAddresses: ['tb1boarding'],
@@ -123,8 +123,8 @@ describe('arkade-boarding-settle-optimistic', () => {
 
   it('revert_waiting_preserves_registered_pending_intents', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey({ walletId, networkMode, arkadeAccountId })
+    const balanceKey = arkadeBalanceQueryKey({ walletId, networkMode, arkadeAccountId })
     const previousStatus = {
       boardingAddress: 'tb1boarding',
       trackedAddresses: ['tb1boarding'],

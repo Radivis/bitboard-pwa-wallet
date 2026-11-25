@@ -269,7 +269,7 @@ export async function refreshOnchainBumperInfoForE2e(): Promise<number> {
 
   const info = await getArkadeWorker().getOnchainBumperInfo()
   appQueryClient.setQueryData(
-    arkadeBumperInfoQueryKey(walletId, networkMode, arkadeAccountId),
+    arkadeBumperInfoQueryKey({ walletId, networkMode, arkadeAccountId }),
     info,
   )
   await appQueryClient.invalidateQueries({

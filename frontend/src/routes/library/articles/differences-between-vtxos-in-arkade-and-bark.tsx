@@ -10,6 +10,7 @@ export const article: LibraryArticle = {
   slug: 'differences-between-vtxos-in-arkade-and-bark',
   title: 'Differences between VTXOs in Arkade and Bark',
   tagIds: ['bitcoin', 'wallets', 'l2'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -90,6 +91,8 @@ export const article: LibraryArticle = {
           <ArticleLink slug={ARKADE_LIBRARY_SLUGS.vtxo}>What is a VTXO?</ArticleLink>. For leaving
           Arkade, read{' '}
           <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>.
+          What the operator sees, and what a later exit prints on the chain, is covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>.
         </p>
       </ArticleSection>
 

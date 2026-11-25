@@ -10,6 +10,7 @@ export const article: LibraryArticle = {
   slug: 'arkade-unilateral-exit-shared-leaf-vtxos',
   title: 'Shared leaf VTXOs in unilateral exit',
   tagIds: ['bitcoin', 'wallets', 'security'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

@@ -1,22 +1,22 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
+import { designOnOffButton, designOnOffGroup, designOnOffIsOn } from './design-on-off-switch'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './settings-waits'
 
 export async function enableArkadeFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
-  const arkadeSwitch = page.getByRole('switch', {
-    name: 'Enable Arkade offchain layer',
-  })
+  const arkadeSwitch = designOnOffGroup(page, 'Enable Arkade offchain layer')
   await arkadeSwitch.scrollIntoViewIfNeeded()
-  const checked = await arkadeSwitch.getAttribute('aria-checked')
-  if (checked !== 'true') {
-    await arkadeSwitch.click()
+  if (!(await designOnOffIsOn(arkadeSwitch))) {
+    await designOnOffButton(arkadeSwitch, 'On').click()
     await expect(page.getByRole('heading', { name: 'Enable Arkade', level: 2 })).toBeVisible()
     await page.getByRole('checkbox', {
       name: /I understand Arkade is new/i,
@@ -31,9 +31,9 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
 const ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function switchToMutinynet(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Mutinynet' }).click()
+  await settingsNetworkButton(page, 'Mutinynet').click()
   await waitForSettingsNetworkModeButtonSelected(
     page,
     'Mutinynet',

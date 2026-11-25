@@ -1,8 +1,16 @@
+import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export type ArkadeWalletScope = {
   walletId: number
   networkMode: NetworkMode
+  arkadeAccountId: string
+}
+
+/** One Arkade wallet on a network that has an operator. */
+export interface ArkadeWalletKey {
+  walletId: number
+  networkMode: ArkadeSupportedNetworkMode
   arkadeAccountId: string
 }
 

@@ -2,6 +2,7 @@ import {
   arkadeAddressQueryKey,
   arkadeBalanceQueryKey,
   arkadeHistoryQueryKey,
+  arkadeReceiveGapQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -28,19 +29,28 @@ function syncArkadeDashboardQueryCaches(params: {
     return
   }
   appQueryClient.setQueryData(
-    arkadeBalanceQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+    arkadeBalanceQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
     params.balance,
   )
   appQueryClient.setQueryData(
-    arkadeHistoryQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+    arkadeHistoryQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
     params.payments,
   )
   if (params.receiveAddress.length > 0) {
     appQueryClient.setQueryData(
-      arkadeAddressQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
+      arkadeAddressQueryKey({ walletId: params.walletId, networkMode: params.networkMode, arkadeAccountId: params.arkadeAccountId }),
       params.receiveAddress,
     )
   }
+  // The gap card reads the VTXO snapshot. Refresh it when that snapshot is published,
+  // including while Receive stays open.
+  void appQueryClient.invalidateQueries({
+    queryKey: arkadeReceiveGapQueryKey({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+      arkadeAccountId: params.arkadeAccountId,
+    }),
+  })
 }
 
 function writeArkadeDashboardState(params: {

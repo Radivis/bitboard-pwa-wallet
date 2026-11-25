@@ -115,16 +115,60 @@ function satsToMsatsForNwcInvoice(sats: number): number {
 }
 
 /**
- * NWC amountless `make_invoice`: `@getalby/sdk`'s public `makeInvoice` throws when `amount` is
- * omitted or zero. The client still sends arbitrary params via private `executeNip47Request`.
- * Revisit if the SDK exposes a supported amountless API.
+ * NIP-47 `make_invoice.amount` in millisatoshis. Zero asks for an any-amount BOLT11
+ * (the payer chooses the amount). `@getalby/sdk`'s public `makeInvoice` throws when
+ * `amount` is omitted or zero, so amountless invoices go through `executeNip47Request`.
  */
+const NIP47_AMOUNTLESS_INVOICE_MSATS = 0
+
+const WALLET_REJECTED_AMOUNTLESS_INVOICE_SNIPPET = 'the amount must be at least 1 satoshi'
+
+export const AMOUNTLESS_INVOICE_UNSUPPORTED_BY_WALLET_MESSAGE =
+  'This Lightning wallet cannot create an amountless invoice. Enter an amount of at least 1 satoshi.'
+
 type NwcClientWithExecute = {
   executeNip47Request: <TResult>(
     method: 'make_invoice',
     requestParams: Record<string, unknown>,
     resultValidator: (result: TResult) => boolean,
   ) => Promise<TResult>
+}
+
+function walletRejectedAmountlessInvoice(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.toLowerCase().includes(WALLET_REJECTED_AMOUNTLESS_INVOICE_SNIPPET)
+  )
+}
+
+function amountlessMakeInvoiceParams(
+  params: { memo?: string; expiry?: number },
+  amountMsats?: number,
+): Record<string, unknown> {
+  const nip47Params: Record<string, unknown> = {}
+  if (amountMsats != null) {
+    nip47Params.amount = amountMsats
+  }
+  if (params.memo != null && params.memo !== '') {
+    nip47Params.description = params.memo
+  }
+  if (params.expiry != null) {
+    nip47Params.expiry = params.expiry
+  }
+  return nip47Params
+}
+
+async function requestAmountlessNwcInvoice(
+  client: NwcClientWithExecute,
+  params: { memo?: string; expiry?: number },
+  amountMsats?: number,
+): Promise<{ bolt11: string; paymentHash: string }> {
+  const nip47InvoiceResult = await client.executeNip47Request<WireNwcMakeInvoiceResult>(
+    'make_invoice',
+    amountlessMakeInvoiceParams(params, amountMsats),
+    (makeInvoiceResult) => !!makeInvoiceResult.invoice,
+  )
+  return mapWireNwcMakeInvoiceToDomain(nip47InvoiceResult)
 }
 
 async function nwcCreateInvoice(
@@ -141,23 +185,27 @@ async function nwcCreateInvoice(
     return mapWireNwcMakeInvoiceToDomain(makeInvoiceResponse)
   }
 
-  const nip47Params: Record<string, unknown> = {}
-  if (params.memo != null && params.memo !== '') {
-    nip47Params.description = params.memo
-  }
-  if (params.expiry != null) {
-    nip47Params.expiry = params.expiry
-  }
-
   const nip47Client = client as unknown as NwcClientWithExecute
-  const nip47InvoiceResult =
-    await nip47Client.executeNip47Request<WireNwcMakeInvoiceResult>(
-      'make_invoice',
-      nip47Params,
-      (makeInvoiceResult) => !!makeInvoiceResult.invoice,
-    )
+  try {
+    return await requestAmountlessNwcInvoice(nip47Client, params)
+  } catch (error) {
+    if (!walletRejectedAmountlessInvoice(error)) {
+      throw error
+    }
+  }
 
-  return mapWireNwcMakeInvoiceToDomain(nip47InvoiceResult)
+  try {
+    return await requestAmountlessNwcInvoice(
+      nip47Client,
+      params,
+      NIP47_AMOUNTLESS_INVOICE_MSATS,
+    )
+  } catch (error) {
+    if (walletRejectedAmountlessInvoice(error)) {
+      throw new Error(AMOUNTLESS_INVOICE_UNSUPPORTED_BY_WALLET_MESSAGE)
+    }
+    throw error
+  }
 }
 
 type E2eNwcMockState = {

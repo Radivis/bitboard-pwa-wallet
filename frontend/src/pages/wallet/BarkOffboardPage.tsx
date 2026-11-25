@@ -7,11 +7,16 @@ import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocki
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
-import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
@@ -23,10 +28,11 @@ import {
   type BarkOffboardReview,
 } from '@/lib/bark/review-bark-offboard'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import { satsOrFiatAmountReviewDecision } from '@/lib/fiat/sats-or-fiat-amount'
 import {
-  amountSatsFromSatsOrFiatField,
-  satsOrFiatAmountReviewDecision,
-} from '@/lib/fiat/sats-or-fiat-amount'
+  universalAmountEntryLabel,
+  useUniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 import { errorMessage } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -41,6 +47,7 @@ export function BarkOffboardPage() {
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const spendableSats = useBarkSyncLifecycleSnapshot().spendableSats
   const fiatAmount = useMainnetFiatAmountProps()
+  const amountEntry = useUniversalAmountEntry()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [amountRaw, setAmountRaw] = useState('')
@@ -71,10 +78,7 @@ export function BarkOffboardPage() {
   const destinationAddress = currentAddress?.trim() ?? ''
   const canExitAll = spendableSats != null && spendableSats > 0
   const fiatPriceBlocksReview = fiatAmount.mainnetFiatEntry && !fiatAmount.hasUsableFiatSpot
-  const parsedAmountSats = amountSatsFromSatsOrFiatField(amountRaw, {
-    useFiatAmountEntry: fiatAmount.mainnetFiatEntry,
-    btcPriceInFiat: fiatAmount.btcPriceInFiat,
-  })
+  const bitcoinUnit = amountEntry.mode === 'bitcoin' ? amountEntry.bitcoinUnit : undefined
 
   function clearAmountEntry() {
     setAmountRaw('')
@@ -83,7 +87,10 @@ export function BarkOffboardPage() {
   }
 
   async function onReviewAmount() {
-    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, fiatAmount)
+    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, {
+      ...fiatAmount,
+      bitcoinUnit,
+    })
     if (amountDecision.kind === 'blocked') {
       setReview(null)
       setReviewError(null)
@@ -160,7 +167,7 @@ export function BarkOffboardPage() {
         />
       ) : null}
       <BarkPendingActionBanner />
-      <p className="text-sm text-muted-foreground" data-testid="bark-offboard-confirmation-note">
+      <p className="design-type-regular text-muted-foreground" data-testid="bark-offboard-confirmation-note">
         This sends Bark funds to your on-chain address. Bark broadcasts the exit.{' '}
         {CONFIRMATION_NOTE}
       </p>
@@ -168,50 +175,50 @@ export function BarkOffboardPage() {
         <p data-testid="bark-offboard-address-missing">Your on-chain receive address is not ready.</p>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Destination</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="break-all text-sm" data-testid="bark-offboard-destination">
+          <DesignCard>
+            <DesignCardHeader>
+              <DesignCardTitle>Destination</DesignCardTitle>
+            </DesignCardHeader>
+            <DesignCardContent>
+              <p className="design-type-regular break-all" data-testid="bark-offboard-destination">
                 {destinationAddress}
               </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Amount</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <SatsOrFiatAmountField
-                satsLabel="Satoshis that should arrive on-chain"
-                fiatLabel={`${fiatAmount.currency} that should arrive on-chain`}
-                amountRaw={amountRaw}
-                onAmountChange={(nextAmountRaw) => {
-                  setAmountRaw(nextAmountRaw)
-                  setReview(null)
-                }}
-                inputTestId="bark-offboard-amount"
-                priceUnavailableTestId="bark-offboard-fiat-price-unavailable"
-                btcPreviewTestId="bark-offboard-amount-btc-preview"
-                fiat={fiatAmount}
-                parsedAmountSats={parsedAmountSats}
-              />
+            </DesignCardContent>
+          </DesignCard>
+          <DesignCard>
+            <DesignCardHeader>
+              <DesignCardTitle>Amount</DesignCardTitle>
+            </DesignCardHeader>
+            <DesignCardContent className="space-y-3">
+              <label className="design-type-regular block space-y-1" htmlFor="bark-offboard-amount">
+                <span>{universalAmountEntryLabel(amountEntry)} that should arrive on-chain</span>
+                <UniversalAmountInput
+                  id="bark-offboard-amount"
+                  value={amountRaw}
+                  onChange={(nextAmountRaw) => {
+                    setAmountRaw(nextAmountRaw)
+                    setReview(null)
+                  }}
+                  inputTestId="bark-offboard-amount"
+                  priceUnavailableTestId="bark-offboard-fiat-price-unavailable"
+                  previewTestId="bark-offboard-amount-btc-preview"
+                />
+              </label>
               <div className="flex flex-wrap gap-2">
-                <Button
+                <DesignButton
                   type="button"
                   onClick={() => {
                     void onReviewAmount()
                   }}
                   disabled={isReviewing || isConfirming || fiatPriceBlocksReview}
                   data-testid="bark-offboard-review-amount"
+                  icon={isReviewing ? <Loader2 className="animate-spin" aria-hidden /> : undefined}
                 >
-                  {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Review amount
-                </Button>
-                <Button
+                </DesignButton>
+                <DesignButton
                   type="button"
-                  variant="outline"
+                  appearance="secondary"
                   onClick={() => {
                     void onReviewAll()
                   }}
@@ -219,21 +226,21 @@ export function BarkOffboardPage() {
                   data-testid="bark-offboard-review-all"
                 >
                   Exit entire balance
-                </Button>
+                </DesignButton>
               </div>
               {reviewError != null ? (
-                <p className="text-sm text-destructive" data-testid="bark-offboard-review-error">
+                <p className="design-type-regular text-destructive" data-testid="bark-offboard-review-error">
                   {reviewError}
                 </p>
               ) : null}
-            </CardContent>
-          </Card>
+            </DesignCardContent>
+          </DesignCard>
           {review != null ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Review</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
+            <DesignCard>
+              <DesignCardHeader>
+                <DesignCardTitle>Review</DesignCardTitle>
+              </DesignCardHeader>
+              <DesignCardContent className="design-type-regular space-y-2">
                 <LabeledFiatBtcAmount
                   label="Server fee:"
                   amountSats={review.feeSats}
@@ -246,19 +253,19 @@ export function BarkOffboardPage() {
                   testId="bark-offboard-onchain-amount"
                   fiat={fiatAmount}
                 />
-                <Button
+                <DesignButton
                   type="button"
                   onClick={() => {
                     void onConfirm()
                   }}
                   disabled={isConfirming}
                   data-testid="bark-offboard-confirm"
+                  icon={isConfirming ? <Loader2 className="animate-spin" aria-hidden /> : undefined}
                 >
-                  {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Confirm exit
-                </Button>
-              </CardContent>
-            </Card>
+                </DesignButton>
+              </DesignCardContent>
+            </DesignCard>
           ) : null}
         </>
       )}

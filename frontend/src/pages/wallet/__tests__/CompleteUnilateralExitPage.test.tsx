@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CompleteUnilateralExitContent } from '@/pages/wallet/CompleteUnilateralExitPage'
@@ -6,6 +6,7 @@ import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
 import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { useWalletStore } from '@/stores/walletStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 
@@ -63,6 +64,10 @@ function outpoint(txid: string, vout = 0): ArkadeVtxoOutpoint {
 }
 
 describe('CompleteUnilateralExitPage', () => {
+  beforeEach(() => {
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
+  })
+
   it('complete_page_sanitizes_reqwest_error', () => {
     renderWithProviders(
       <CompleteUnilateralExitContent

@@ -185,8 +185,11 @@ impl Builder {
         BlockingClient::from_builder(self)
     }
 
-    /// Build an asynchronous client from builder
-    #[cfg(all(feature = "async", feature = "tokio"))]
+    /// Build an asynchronous client from builder.
+    ///
+    /// On `wasm32-unknown-unknown` the default sleeper waits with `setTimeout`
+    /// via `bitboard-wasm-sleep`, so this is available without the `tokio` feature.
+    #[cfg(all(feature = "async", any(feature = "tokio", target_arch = "wasm32")))]
     pub fn build_async(self) -> Result<AsyncClient, Error> {
         AsyncClient::from_builder(self)
     }

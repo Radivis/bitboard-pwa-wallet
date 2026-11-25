@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-are-descriptors-and-descriptor-wallets',
   title: 'Descriptors and descriptor wallets',
   tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

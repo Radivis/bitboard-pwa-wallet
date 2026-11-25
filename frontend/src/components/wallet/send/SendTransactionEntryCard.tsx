@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { ArrowUpRight, ScanQrCode, Wallet } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -10,9 +10,15 @@ import {
 } from '@/lib/arkade/arkade-infomode'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignBanner } from '@/components/design/DesignBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
@@ -23,19 +29,17 @@ import {
   sendRecipientFormatErrorMessage,
   sendRecipientPlaceholder,
 } from '@/lib/bark/send-flow-validation'
-import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { UniversalAmountInput } from '@/components/UniversalAmountInput'
 import {
   bolt11SignetFamilyConfirmationText,
   isValidBolt11Invoice,
 } from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
-import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
@@ -108,7 +112,6 @@ export function SendTransactionEntryCard({
   defaultFiatCurrency,
   btcPriceInFiat,
   fiatRatesLoading,
-  parsedAmountSats,
   onFiatModeUserToggle,
 }: {
   pageTitle: string
@@ -176,8 +179,6 @@ export function SendTransactionEntryCard({
   defaultFiatCurrency: FiatCurrencyCode
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
-  /** Parsed sats from the amount field (fiat or BTC) for readonly BTC / validation display. */
-  parsedAmountSats: number
   onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
@@ -214,12 +215,6 @@ export function SendTransactionEntryCard({
     isLightningSendMode &&
     !needsUserLightningAmount
 
-  const useFiatAmountField =
-    mainnetFiatMode &&
-    hasUsableFiatSpot &&
-    !hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
-
   const showFiatLayout = mainnetFiatMode && hasUsableFiatSpot
 
   function spendableAmountRows(balanceSats: number) {
@@ -247,9 +242,9 @@ export function SendTransactionEntryCard({
         />
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <ArrowUpRight className="h-5 w-5" />
             {isArkadeSendMode ? (
               <InfomodeWrapper
@@ -263,9 +258,9 @@ export function SendTransactionEntryCard({
             ) : (
               cardTitle
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -286,21 +281,20 @@ export function SendTransactionEntryCard({
                     isArkadeSendMode,
                   })}
                 </Label>
-                <Button
+                <DesignButton
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  appearance="secondary"
                   className="shrink-0"
                   disabled={isPending}
                   onClick={() => setRecipientScanOpen(true)}
+                  icon={<ScanQrCode aria-hidden />}
                 >
-                  <ScanQrCode className="mr-2 h-4 w-4" aria-hidden />
                   Scan QR code
-                </Button>
+                </DesignButton>
               </div>
-              <Input
+              <DesignInput
                 id="recipient-address"
-                className="[unicode-bidi:isolate]"
+                leadingIcon={Wallet}
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={sendRecipientPlaceholder({
@@ -314,7 +308,7 @@ export function SendTransactionEntryCard({
                 disabled={isPending}
               />
               {recipient && !recipientFormatValid && !onchainAddressCheckPending && (
-                <p className="text-xs text-destructive">
+                <p className="design-type-regular text-destructive">
                   {sendRecipientFormatErrorMessage({
                     isLightningSendMode,
                     isArkadeSendMode,
@@ -326,7 +320,7 @@ export function SendTransactionEntryCard({
                 </p>
               )}
               {recipient && isLightningSendMode && !lightningRecipientOk && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="design-type-regular text-amber-600 dark:text-amber-400">
                   {hasAnyLightningConnection ? (
                     <>
                       No Lightning wallet for {NETWORK_LABELS[networkMode]}. Connect
@@ -362,7 +356,7 @@ export function SendTransactionEntryCard({
                     />
                     <Label
                       htmlFor="bolt11-signet-family-confirm"
-                      className="cursor-pointer text-xs font-normal"
+                      className="design-type-regular cursor-pointer"
                     >
                       {bolt11SignetFamilyConfirmationText(networkMode)}
                     </Label>
@@ -371,10 +365,10 @@ export function SendTransactionEntryCard({
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 bolt11NetworkMismatch && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <p className="design-type-regular text-amber-700 dark:text-amber-400">
                     This invoice is for a different Bitcoin network than your
                     current mode. Switch network in{' '}
-                    <Link to="/settings" className="font-medium underline">
+                    <Link to="/settings" className="design-type-emphasis underline">
                       Settings
                     </Link>
                     .
@@ -383,14 +377,14 @@ export function SendTransactionEntryCard({
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 !bolt11DecodeOk && (
-                  <p className="text-xs text-destructive">
+                  <p className="design-type-regular text-destructive">
                     Could not read this BOLT11 invoice. Check the payment request
                     and try again.
                   </p>
                 )}
               {isLightningSendMode &&
                 !isLightningPayloadLengthOk(normalizedRecipient) && (
-                <p className="text-xs text-destructive">
+                <p className="design-type-regular text-destructive">
                   Payment request is too long (
                   {MAX_BOLT11_PAYMENT_REQUEST_LENGTH} characters max).
                 </p>
@@ -416,8 +410,8 @@ export function SendTransactionEntryCard({
             {isLightningSendMode &&
               decodedBolt11?.description != null &&
               decodedBolt11.description.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Memo: </span>
+                <p className="design-type-regular text-muted-foreground">
+                  <span className="design-type-emphasis text-foreground">Memo: </span>
                   {decodedBolt11.description}
                 </p>
               )}
@@ -434,7 +428,7 @@ export function SendTransactionEntryCard({
                 {(needsUserLightningAmount ||
                   (!isLightningSendMode && !isBarkSendMode && !isArkadeSendMode) ||
                   isBarkSendMode) &&
-                  !useFiatAmountField && (
+                  !mainnetFiatMode && (
                     <BitcoinUnitSelect
                       value={amountUnit}
                       onChange={onAmountUnitChange}
@@ -445,24 +439,14 @@ export function SendTransactionEntryCard({
               </div>
 
               {showMainnetZeroBalanceWarning ? (
-                <div
+                <DesignBanner
                   role="alert"
-                  className="flex gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:text-amber-100"
-                >
-                  <AlertTriangle
-                    className="mt-0.5 h-5 w-5 shrink-0"
-                    aria-hidden
-                  />
-                  <div>
-                    <p className="font-medium">No spendable balance</p>
-                    <p className="mt-1 text-muted-foreground">
-                      You cannot send on this network until you have funds. Receive
-                      Bitcoin first, then enter an amount here.
-                    </p>
-                  </div>
-                </div>
+                  status="warning"
+                  title="No spendable balance"
+                  description="You cannot send on this network until you have funds. Receive Bitcoin first, then enter an amount here."
+                />
               ) : isLightningSendMode && !needsUserLightningAmount ? (
-                <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
+                <div className="design-type-regular space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 tabular-nums">
                   <FiatBtcAmountDisplay
                     amountSats={lightningPayAmountSats}
                     showFiatLayout={showFiatLayout}
@@ -473,60 +457,26 @@ export function SendTransactionEntryCard({
                     rateLoading={fiatRatesLoading}
                   />
                   {showBip11WithZeroBalance ? (
-                    <div
+                    <DesignBanner
                       role="alert"
-                      className="mt-2 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs text-amber-900 dark:text-amber-100"
-                    >
-                      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-                      <span>
-                        Not enough balance to pay this invoice. Fund your wallet
-                        first.
-                      </span>
-                    </div>
+                      status="warning"
+                      className="mt-2"
+                      title="Not enough balance to pay this invoice. Fund your wallet first."
+                    />
                   ) : null}
                 </div>
               ) : (
-                <>
-                  <Input
-                    id="send-amount"
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={amount}
-                    onChange={(e) =>
-                      onAmountChange(e.target.value, { fromUser: true })
-                    }
-                    placeholder={
-                      useFiatAmountField
-                        ? fiatAmountInputPlaceholder(defaultFiatCurrency)
-                        : amountInputPlaceholderForUnit(amountUnit)
-                    }
-                    disabled={isPending}
-                  />
-                  {mainnetFiatMode && useFiatAmountField && hasUsableFiatSpot && (
-                      <p className="text-sm text-muted-foreground">
-                        <span className="mr-1">≈</span>
-                        <BitcoinAmountDisplay
-                          amountSats={parsedAmountSats}
-                          size="sm"
-                          className="inline"
-                          allowUnitToggle={false}
-                        />
-                      </p>
-                    )}
-                  {mainnetFiatMode && useFiatAmountField && !fiatRatesLoading && (
-                    <>
-                      {!hasUsableFiatSpot ? (
-                        <p className="text-xs text-destructive">
-                          Exchange rate unavailable. Check your connection or rate
-                          service in Settings.
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                </>
+                <UniversalAmountInput
+                  id="send-amount"
+                  bitcoinUnit={amountUnit}
+                  value={amount}
+                  onChange={(nextAmount) =>
+                    onAmountChange(nextAmount, { fromUser: true })
+                  }
+                  disabled={isPending}
+                />
               )}
-              <div className="text-xs text-muted-foreground">
+              <div className="design-type-regular text-muted-foreground">
                 {isLightningSendMode ? (
                   <>
                     Lightning wallet:{' '}
@@ -570,7 +520,7 @@ export function SendTransactionEntryCard({
                 !isLightningSendMode &&
                 !isBarkSendMode &&
                 !isArkadeSendMode && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="design-type-regular text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
                 </p>
@@ -606,13 +556,13 @@ export function SendTransactionEntryCard({
                 }
               />
             ) : (
-              <Button type="submit" className="w-full" disabled={!canBuild || isPending}>
+              <DesignButton type="submit" className="w-full" disabled={!canBuild || isPending}>
                 {submitLabel}
-              </Button>
+              </DesignButton>
             )}
           </form>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

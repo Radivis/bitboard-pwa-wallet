@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useBarkReceiveAddressQuery,
+  useBarkReceivePaymentCountQuery,
   useBarkRevealReceiveAddressMutation,
 } from '@/hooks/useBarkReceiveQueries'
 import { createTestQueryClient } from '@/test-utils/test-providers'
@@ -17,6 +18,7 @@ import {
 
 const workerMocks = vi.hoisted(() => ({
   peekReceiveAddress: vi.fn(),
+  receivePaymentCount: vi.fn(),
   revealNextReceiveAddress: vi.fn(),
 }))
 
@@ -37,8 +39,10 @@ describe('useBarkReceiveAddressQuery', () => {
     useFeatureStore.setState({ isBarkEnabled: true })
     useWalletStore.setState({ activeWalletId: 1, networkMode: 'signet' })
     workerMocks.peekReceiveAddress.mockReset()
+    workerMocks.receivePaymentCount.mockReset()
     workerMocks.revealNextReceiveAddress.mockReset()
     workerMocks.peekReceiveAddress.mockResolvedValue('tark1qqpeek')
+    workerMocks.receivePaymentCount.mockResolvedValue(2)
     workerMocks.revealNextReceiveAddress.mockResolvedValue({
       address: 'tark1qqnext',
       index: 1,
@@ -75,6 +79,47 @@ describe('useBarkReceiveAddressQuery', () => {
     renderHook(() => useBarkReceiveAddressQuery(), { wrapper: createWrapper() })
     expect(workerMocks.peekReceiveAddress).not.toHaveBeenCalled()
     expect(workerMocks.revealNextReceiveAddress).not.toHaveBeenCalled()
+  })
+})
+
+describe('useBarkReceivePaymentCountQuery', () => {
+  beforeEach(() => {
+    resetBarkLoadLifecycleStateForTests()
+    useFeatureStore.setState({ isBarkEnabled: true })
+    useWalletStore.setState({ activeWalletId: 1, networkMode: 'signet' })
+    workerMocks.peekReceiveAddress.mockReset()
+    workerMocks.receivePaymentCount.mockReset()
+    workerMocks.peekReceiveAddress.mockResolvedValue('tark1qqpeek')
+    workerMocks.receivePaymentCount.mockResolvedValue(2)
+    replaceBarkLoadLifecycleSnapshotForTests({
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: 2,
+    })
+  })
+
+  it('counts the address once that address is on screen', async () => {
+    const { result } = renderHook(() => useBarkReceivePaymentCountQuery(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toBe(2)
+    })
+    expect(workerMocks.peekReceiveAddress).toHaveBeenCalledWith(2)
+    expect(workerMocks.receivePaymentCount).toHaveBeenCalledWith(2)
+  })
+
+  it('does not count when the receive index is missing', () => {
+    replaceBarkLoadLifecycleSnapshotForTests({
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: null,
+    })
+    renderHook(() => useBarkReceivePaymentCountQuery(), { wrapper: createWrapper() })
+    expect(workerMocks.receivePaymentCount).not.toHaveBeenCalled()
   })
 })
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
@@ -69,7 +69,11 @@ describe('UnilateralExitAutomationSection', () => {
       />,
     )
 
-    await user.click(screen.getByTestId('unilateral-exit-proceed-automatically'))
+    await user.click(
+      within(screen.getByTestId('unilateral-exit-proceed-automatically')).getByRole('button', {
+        name: 'On',
+      }),
+    )
     expect(onProceedAutomaticallyChange).toHaveBeenCalledWith(true)
   })
 

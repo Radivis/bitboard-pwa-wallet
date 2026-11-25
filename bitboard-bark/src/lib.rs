@@ -9,6 +9,8 @@ pub const BARK_SIGNET_ESPLORA_URL: &str = "https://esplora.signet.2nd.dev";
 pub const BARK_MAINNET_SERVER_URL: &str = "https://ark.second.tech";
 pub const BARK_MAINNET_ESPLORA_URL: &str = "https://mempool.second.tech/api";
 
+mod receive_count;
+
 #[cfg(any(test, target_arch = "wasm32"))]
 mod emergency_exit;
 #[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]

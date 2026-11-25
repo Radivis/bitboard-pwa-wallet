@@ -1,6 +1,7 @@
 use crate::server::VirtualTxOutPoint;
 use crate::Error;
 use bitcoin::Amount;
+use bitcoin::ScriptBuf;
 use bitcoin::SignedAmount;
 use bitcoin::Txid;
 use std::collections::hash_map::Entry;
@@ -105,14 +106,91 @@ pub fn generate_incoming_vtxo_transaction_history(
     // Commitment transactions which take a boarding output of ours as an input.
     boarding_commitment_txs: &[Txid],
 ) -> Result<Vec<Transaction>, Error> {
-    let mut txs = Vec::new();
+    let hits =
+        collect_incoming_payment_vtxos(spent_vtxos, spendable_vtxos, boarding_commitment_txs)?;
+    let mut txs = Vec::with_capacity(hits.len());
+    for hit in hits {
+        if hit.vtxo.is_preconfirmed {
+            txs.push(Transaction::Ark {
+                txid: hit.vtxo.outpoint.txid,
+                amount: hit.net_amount,
+                is_settled: hit.vtxo.spent_by.is_some() ||
+                    // To include settled dust outputs too!
+                    hit.vtxo.settled_by.is_some(),
+                created_at: hit.vtxo.created_at,
+            });
+        } else {
+            let receive_amount = hit.vtxo.amount.to_signed().map_err(Error::ad_hoc)?;
+            txs.push(Transaction::Commitment {
+                txid: hit.vtxo.outpoint.txid,
+                amount: receive_amount,
+                created_at: hit.vtxo.created_at,
+            });
+        }
+    }
+    Ok(txs)
+}
 
-    let all_vtxos = spent_vtxos.iter().chain(spendable_vtxos.iter());
+/// Payments and change whose VTXO script is `script`.
+///
+/// Uses the same net rule as [`generate_incoming_vtxo_transaction_history`]. A same-value
+/// renewal does not count. A spent incoming payment still counts. Change counts too: Arkade
+/// pays it to the current receive script, so a later unilateral exit would publish that reuse.
+pub fn count_incoming_payments_on_script(
+    spent_vtxos: &[VirtualTxOutPoint],
+    spendable_vtxos: &[VirtualTxOutPoint],
+    boarding_commitment_txs: &[Txid],
+    script: &ScriptBuf,
+) -> Result<u32, Error> {
+    let hits = collect_net_vtxos(
+        spent_vtxos,
+        spendable_vtxos,
+        boarding_commitment_txs,
+        NetVtxoSelection::PaymentAndChange,
+    )?;
+    let count = hits.iter().filter(|hit| &hit.vtxo.script == script).count();
+    u32::try_from(count).map_err(|_| Error::ad_hoc("incoming payment count overflow"))
+}
 
+struct IncomingPaymentVtxo<'a> {
+    vtxo: &'a VirtualTxOutPoint,
+    net_amount: SignedAmount,
+}
+
+/// Activity history lists payments only. The receive count also lists change.
+#[derive(Clone, Copy)]
+enum NetVtxoSelection {
+    PaymentOnly,
+    PaymentAndChange,
+}
+
+/// VTXOs that were incoming payments. Change and zero-net renewals are left out.
+fn collect_incoming_payment_vtxos<'a>(
+    spent_vtxos: &'a [VirtualTxOutPoint],
+    spendable_vtxos: &'a [VirtualTxOutPoint],
+    boarding_commitment_txs: &[Txid],
+) -> Result<Vec<IncomingPaymentVtxo<'a>>, Error> {
+    collect_net_vtxos(
+        spent_vtxos,
+        spendable_vtxos,
+        boarding_commitment_txs,
+        NetVtxoSelection::PaymentOnly,
+    )
+}
+
+/// VTXOs with a non-zero net. Zero is a renewal and is left out.
+fn collect_net_vtxos<'a>(
+    spent_vtxos: &'a [VirtualTxOutPoint],
+    spendable_vtxos: &'a [VirtualTxOutPoint],
+    boarding_commitment_txs: &[Txid],
+    selection: NetVtxoSelection,
+) -> Result<Vec<IncomingPaymentVtxo<'a>>, Error> {
+    let mut hits = Vec::new();
     let mut spent_vtxos_left_to_check = spent_vtxos.to_vec();
 
-    // We iterate through every VTXO because all VTXOs were incoming at some point.
-    for vtxo in all_vtxos {
+    // Every VTXO was incoming at some point. The net against coins we spent in the same
+    // transaction decides whether it was a payment, change, or a renewal.
+    for vtxo in spent_vtxos.iter().chain(spendable_vtxos.iter()) {
         // Confirmed settlement of boarding output into VTXO => IGNORED.
         if !vtxo.is_preconfirmed
             && boarding_commitment_txs.contains(
@@ -123,86 +201,50 @@ pub fn generate_incoming_vtxo_transaction_history(
             continue;
         }
 
-        // An incoming VTXO that deserves an entry in the transaction history is the result of an
-        // incoming payment. We may receive a VTXO as part of a commitment transaction or through an
-        // Ark transaction.
-
-        if vtxo.is_preconfirmed {
-            // We compute how much we spent in that Ark transaction.
-            let spent_amount = {
-                let mut spent_amount = Amount::ZERO;
-                let mut remaining_spent_vtxos = Vec::new();
-                for spent_vtxo in spent_vtxos_left_to_check.iter() {
-                    if spent_vtxo.ark_txid == Some(vtxo.outpoint.txid) {
-                        spent_amount += spent_vtxo.amount;
-                    } else {
-                        remaining_spent_vtxos.push(spent_vtxo.clone());
-                    }
-                }
-
-                spent_vtxos_left_to_check = remaining_spent_vtxos;
-
-                spent_amount
-            };
-
-            let receive_amount = vtxo.amount.to_signed().map_err(Error::ad_hoc)?;
-            let spent_amount = spent_amount.to_signed().map_err(Error::ad_hoc)?;
-
-            let net_amount = receive_amount - spent_amount;
-
-            // If net amount is zero, it's a self-payment => IGNORED.
-            //
-            // If net amount is negative, it's a change VTXO => IGNORED.
-            if net_amount.is_positive() {
-                txs.push(Transaction::Ark {
-                    txid: vtxo.outpoint.txid,
-                    amount: net_amount,
-                    is_settled: vtxo.spent_by.is_some() ||
-                        // To include settled dust outputs too!
-                        vtxo.settled_by.is_some(),
-                    created_at: vtxo.created_at,
-                })
-            }
+        let spent_amount = if vtxo.is_preconfirmed {
+            take_matching_spent_amount(&mut spent_vtxos_left_to_check, |spent_vtxo| {
+                spent_vtxo.ark_txid == Some(vtxo.outpoint.txid)
+            })
         } else {
-            // We compute how much we spent in that batch.
-            let spent_amount = {
-                let mut spent_amount = Amount::ZERO;
-                let mut remaining_spent_vtxos = Vec::new();
-                for spent_vtxo in spent_vtxos_left_to_check.iter() {
-                    // There should only be one commitment TXID for confirmed VTXOs.
-                    let commitment_txid = vtxo.commitment_txids[0];
+            // There should only be one commitment TXID for confirmed VTXOs.
+            let commitment_txid = vtxo.commitment_txids[0];
+            take_matching_spent_amount(&mut spent_vtxos_left_to_check, |spent_vtxo| {
+                spent_vtxo.settled_by == Some(commitment_txid)
+            })
+        };
 
-                    if spent_vtxo.settled_by == Some(commitment_txid) {
-                        spent_amount += spent_vtxo.amount;
-                    } else {
-                        remaining_spent_vtxos.push(spent_vtxo.clone());
-                    }
-                }
+        let receive_amount = vtxo.amount.to_signed().map_err(Error::ad_hoc)?;
+        let spent_amount = spent_amount.to_signed().map_err(Error::ad_hoc)?;
+        let net_amount = receive_amount - spent_amount;
 
-                spent_vtxos_left_to_check = remaining_spent_vtxos;
-
-                spent_amount
-            };
-
-            let receive_amount = vtxo.amount.to_signed().map_err(Error::ad_hoc)?;
-            let spent_amount = spent_amount.to_signed().map_err(Error::ad_hoc)?;
-
-            let net_amount = receive_amount - spent_amount;
-
-            // If net amount received is zero, it's a VTXO being settled => IGNORED.
-            //
-            // If net amount received is negative, it's a change VTXO => IGNORED.
-            if net_amount.is_positive() {
-                txs.push(Transaction::Commitment {
-                    txid: vtxo.outpoint.txid,
-                    amount: receive_amount,
-                    created_at: vtxo.created_at,
-                })
-            }
+        // Zero is a self-payment or a renewal. Negative is change.
+        let selected = match selection {
+            NetVtxoSelection::PaymentOnly => net_amount.is_positive(),
+            NetVtxoSelection::PaymentAndChange => net_amount != SignedAmount::ZERO,
+        };
+        if selected {
+            hits.push(IncomingPaymentVtxo { vtxo, net_amount });
         }
     }
 
-    Ok(txs)
+    Ok(hits)
+}
+
+fn take_matching_spent_amount(
+    remaining: &mut Vec<VirtualTxOutPoint>,
+    matches: impl Fn(&VirtualTxOutPoint) -> bool,
+) -> Amount {
+    let mut spent_amount = Amount::ZERO;
+    let mut kept = Vec::new();
+    for spent_vtxo in remaining.drain(..) {
+        if matches(&spent_vtxo) {
+            spent_amount += spent_vtxo.amount;
+        } else {
+            kept.push(spent_vtxo);
+        }
+    }
+    *remaining = kept;
+    spent_amount
 }
 
 /// Generate a list of outgoing transactions.
@@ -1131,6 +1173,78 @@ mod tests {
                     created_at: 1730330256,
                 }
             ]
+        );
+    }
+
+    fn vtxo(
+        txid: &str,
+        amount: u64,
+        script: ScriptBuf,
+        is_preconfirmed: bool,
+    ) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint {
+                txid: txid.parse().unwrap(),
+                vout: 0,
+            },
+            created_at: 1_700_000_000,
+            expires_at: 1_800_000_000,
+            amount: Amount::from_sat(amount),
+            script,
+            is_preconfirmed,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    .parse()
+                    .unwrap(),
+            ],
+            settled_by: None,
+            ark_txid: None,
+            assets: Vec::new(),
+            depth: 0,
+        }
+    }
+
+    #[test]
+    fn incoming_count_keeps_a_spent_payment_and_change_and_drops_renewal() {
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let other_script = ScriptBuf::from_bytes(vec![0x52]);
+        let payment_txid = "1111111111111111111111111111111111111111111111111111111111111111";
+        let change_txid = "2222222222222222222222222222222222222222222222222222222222222222";
+        let renewal_txid = "3333333333333333333333333333333333333333333333333333333333333333";
+        let renewal_commitment = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        let mut spent_payment = vtxo(payment_txid, 1_000, script.clone(), true);
+        spent_payment.is_spent = true;
+        spent_payment.ark_txid = Some(change_txid.parse().unwrap());
+
+        let change = vtxo(change_txid, 400, script.clone(), true);
+
+        let mut settled_payment = vtxo(
+            "4444444444444444444444444444444444444444444444444444444444444444",
+            2_000,
+            other_script.clone(),
+            false,
+        );
+        settled_payment.is_spent = true;
+        settled_payment.settled_by = Some(renewal_commitment.parse().unwrap());
+
+        let mut renewal = vtxo(renewal_txid, 2_000, other_script.clone(), false);
+        renewal.commitment_txids = vec![renewal_commitment.parse().unwrap()];
+
+        let spent = [spent_payment, settled_payment];
+        let spendable = [change, renewal];
+
+        assert_eq!(
+            count_incoming_payments_on_script(&spent, &spendable, &[], &script).unwrap(),
+            2
+        );
+        assert_eq!(
+            count_incoming_payments_on_script(&spent, &spendable, &[], &other_script).unwrap(),
+            1
         );
     }
 }

@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { ArticleLink } from '@/lib/library/article-shared'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 
@@ -30,44 +30,44 @@ export function DustChangeChoiceModal({
   isPending = false,
 }: DustChangeChoiceModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Change and fees"
       onCancel={() => onOpenChange(false)}
       footer={(requestClose) => (
         <>
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             onClick={requestClose}
             disabled={isPending}
           >
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
-            variant="secondary"
+            appearance="tertiary"
             onClick={onKeepExact}
             disabled={isPending}
           >
             Keep exact amount
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             onClick={onIncreaseToChangeFree}
             disabled={isPending}
           >
             Increase to change-free max
-          </Button>
+          </DesignButton>
         </>
       )}
     >
       <DialogDescription asChild>
-        <div className="space-y-3 text-left text-sm text-muted-foreground">
+        <div className="design-type-regular space-y-3 text-left text-muted-foreground">
           <p>
             With your inputs and fee rate, sending exactly{' '}
-            <span className="font-medium text-foreground">
+            <span className="design-type-emphasis text-foreground">
               <BitcoinAmountDisplay amountSats={exactAmountSats} size="sm" />
             </span>{' '}
             would leave no viable change output due to the dust limit. The value that cannot be a valid change output
@@ -75,7 +75,7 @@ export function DustChangeChoiceModal({
           </p>
           <p>
             You can keep that exact payment to the recipient, or increase the payment to{' '}
-            <span className="font-medium text-foreground">
+            <span className="design-type-emphasis text-foreground">
               <BitcoinAmountDisplay amountSats={changeFreeMaxSats} size="sm" />
             </span>{' '}
             so more value goes to the recipient rather than to the fee.
@@ -86,6 +86,6 @@ export function DustChangeChoiceModal({
           </p>
         </div>
       </DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

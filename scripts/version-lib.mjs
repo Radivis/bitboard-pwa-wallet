@@ -54,3 +54,40 @@ export function updateCargoWorkspacePackageVersion(repositoryRoot, newVersion) {
 export function escapeRegExpLiteral(literal) {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+/**
+ * Crates that set `version` explicitly. `version.workspace = true` fails when a
+ * separate workspace (Bark) path-depends on the crate.
+ */
+export const EXPLICIT_CARGO_PACKAGE_VERSION_PATHS = ['bitboard-wasm-sleep/Cargo.toml']
+
+/** First `version = "…"` line in a crate `Cargo.toml` (the `[package]` version). */
+const CARGO_PACKAGE_VERSION_PATTERN = /^version\s*=\s*"([^"]+)"/m
+
+export function getCargoPackageVersion(cargoTomlPath) {
+  const cargoTomlContents = fs.readFileSync(cargoTomlPath, 'utf8')
+  const packageVersionMatch = cargoTomlContents.match(CARGO_PACKAGE_VERSION_PATTERN)
+  if (!packageVersionMatch) {
+    throw new Error(`No package version in ${cargoTomlPath}`)
+  }
+  return packageVersionMatch[1]
+}
+
+export function updateCargoPackageVersion(cargoTomlPath, newVersion) {
+  const cargoTomlContents = fs.readFileSync(cargoTomlPath, 'utf8')
+  const packageVersionMatch = cargoTomlContents.match(CARGO_PACKAGE_VERSION_PATTERN)
+  if (!packageVersionMatch) {
+    throw new Error(`No package version in ${cargoTomlPath}`)
+  }
+  if (packageVersionMatch[1] === newVersion) {
+    return
+  }
+  const updatedCargoTomlContents = cargoTomlContents.replace(
+    /^(version\s*=\s*")([^"]+)(")/m,
+    `$1${newVersion}$3`,
+  )
+  if (updatedCargoTomlContents === cargoTomlContents) {
+    throw new Error(`Could not patch package version in ${cargoTomlPath}`)
+  }
+  fs.writeFileSync(cargoTomlPath, updatedCargoTomlContents)
+}

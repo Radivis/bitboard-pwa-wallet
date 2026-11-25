@@ -1,8 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- banner exports supporting props type with the component */
 import { useState, useEffect, useLayoutEffect } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useLocation } from '@tanstack/react-router'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { useWalletNoMnemonicBackupFlag } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
@@ -66,48 +65,20 @@ export function NoMnemonicBackupBanner() {
   }
 
   return (
-    <div
+    <DesignBanner
       role="alert"
-      className="border-b border-red-900/80 bg-red-600 px-4 py-4 text-red-50 shadow-md dark:bg-red-950 dark:text-red-50"
-    >
-      <div className="mx-auto flex max-w-screen-xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex min-w-0 gap-3">
-          <AlertTriangle
-            className="mt-0.5 h-7 w-7 shrink-0 text-red-100"
-            aria-hidden
-          />
-          <div className="min-w-0 space-y-1">
-            <p className="text-base font-semibold leading-snug">
-              Seed phrase not backed up for this wallet
-            </p>
-            <p className="text-sm leading-relaxed text-red-100">
-              Open Wallet → Management and reveal your seed phrase in a private
-              place, then write it down and store it safely. Until you do,
-              permanent loss of funds is a serious risk if you lose this device
-              or your app password.
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          <Button
-            type="button"
-            variant="secondary"
-            className="bg-white text-red-900 hover:bg-red-50 dark:bg-red-100 dark:hover:bg-white"
-            asChild
-          >
-            <Link to="/wallet/management">Back up seed phrase now</Link>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-auto py-1 text-xs text-red-100 hover:bg-red-700/50 hover:text-white"
-            onClick={handleDismissLater}
-          >
-            Remind me later
-          </Button>
-        </div>
-      </div>
-    </div>
+      status="risk"
+      className="mx-4 mt-4"
+      title="Seed phrase not backed up for this wallet"
+      description="Open Wallet → Management and reveal your seed phrase in a private place, then write it down and store it safely. Until you do, permanent loss of funds is a serious risk if you lose this device or your app password."
+      primaryAction={{
+        label: 'Back up seed phrase now',
+        to: '/wallet/management',
+      }}
+      secondaryAction={{
+        label: 'Remind me later',
+        onClick: handleDismissLater,
+      }}
+    />
   )
 }

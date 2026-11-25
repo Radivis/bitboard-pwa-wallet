@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-are-hd-wallets-and-how-do-they-work',
   title: 'What are HD wallets and how do they work?',
   tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -38,7 +39,7 @@ export const article: LibraryArticle = {
         <p>
           From the seed, wallets follow <strong>BIP-32</strong> to build a tree of keys along{' '}
           <strong>derivation paths</strong> like{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">m/84&apos;/0&apos;/0&apos;/0/0</code>
+          <code className="design-type-addresses rounded bg-muted px-1 py-0.5">m/84&apos;/0&apos;/0&apos;/0/0</code>
           . Prefixes describe purpose and account; trailing indices pick receive vs change addresses.
         </p>
         <p>

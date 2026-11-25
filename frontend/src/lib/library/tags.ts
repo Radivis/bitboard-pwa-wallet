@@ -4,7 +4,7 @@
  */
 export const LIBRARY_TAGS = {
   cryptocurrencies: { label: 'Cryptocurrencies' },
-  'decentralized-networks': { label: 'Decentralized networks / peer to peer' },
+  'decentralized-networks': { label: 'Decentralized networks' },
   blockchain: { label: 'Blockchain' },
   bitcoin: { label: 'Bitcoin' },
   lightning: { label: 'Lightning' },

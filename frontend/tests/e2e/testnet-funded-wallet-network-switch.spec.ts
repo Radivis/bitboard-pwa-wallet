@@ -28,6 +28,8 @@ import {
 import { waitForDashboardSyncButtonEnabled } from './helpers/dashboard-sync'
 import { waitForFullScanLoadingToastGone } from './helpers/full-scan-toast'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
+import { designOnOffButton, designOnOffGroup } from './helpers/design-on-off-switch'
 
 const seed = process.env.E2E_TESTNET_SEED?.trim()
 const appPassword = process.env.E2E_TESTNET_APP_PASSWORD
@@ -175,11 +177,11 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
       'Fund the E2E testnet wallet with test coins so on-chain balance is non-zero.',
     ).toBeGreaterThan(0)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await openSettingsFeaturesTab(page)
-    await page.getByRole('switch', { name: 'Enable Mainnet access' }).click()
+    await designOnOffButton(designOnOffGroup(page, 'Enable Mainnet access'), 'On').click()
     await expect(
       page.getByRole('heading', { name: 'Mainnet access', level: 2 }),
     ).toBeVisible({ timeout: 10_000 })
@@ -204,7 +206,7 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     const mainnetSats = await readDashboardOnchainSats(page)
     expect(mainnetSats).toBe(0)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await page.getByRole('button', { name: 'Testnet', exact: true }).click()
     await waitForSettingsNetworkSwitchComplete(page)

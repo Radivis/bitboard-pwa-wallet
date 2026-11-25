@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { WalletBackupExportPasswordModal } from '@/components/settings/WalletBackupExportPasswordModal'
 
-vi.mock('@/components/infomode/InfomodeToggle', () => ({
-  InfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
+vi.mock('@/components/design/DesignInfomodeToggle', () => ({
+  DesignInfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
 }))
 
 describe('WalletBackupExportPasswordModal', () => {

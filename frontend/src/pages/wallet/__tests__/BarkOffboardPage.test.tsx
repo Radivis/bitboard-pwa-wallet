@@ -6,6 +6,7 @@ import { BarkOffboardPage } from '@/pages/wallet/BarkOffboardPage'
 import { BarkOffboardParkedError } from '@/lib/bark/perform-bark-offboard'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
@@ -139,6 +140,7 @@ const amountReview = {
 describe('BarkOffboardPage', () => {
   beforeEach(() => {
     pendingActions.current = []
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'sat' })
     useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true
@@ -285,7 +287,7 @@ describe('BarkOffboardPage', () => {
       destinationAddress: 'bc1qcurrent',
     })
     renderWithProviders(<BarkOffboardPage />)
-    expect(screen.getByRole('switch', { name: /Denomination/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Denomination' })).toBeInTheDocument()
     expect(screen.getByText('USD that should arrive on-chain')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10' } })
     fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
@@ -335,8 +337,8 @@ describe('BarkOffboardPage', () => {
     })
     reviewBarkOffboardAmount.mockResolvedValue(amountReview)
     renderWithProviders(<BarkOffboardPage />)
-    expect(screen.queryByRole('switch', { name: /Denomination/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Satoshis that should arrive on-chain')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Denomination' })).not.toBeInTheDocument()
+    expect(screen.getByText('sat that should arrive on-chain')).toBeInTheDocument()
     fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
     fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
 

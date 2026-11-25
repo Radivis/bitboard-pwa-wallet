@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'hashes-and-merkle-trees-in-bitcoin',
   title: 'Hashes and Merkle trees in Bitcoin',
   tagIds: ['cryptography', 'bitcoin', 'blockchain'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

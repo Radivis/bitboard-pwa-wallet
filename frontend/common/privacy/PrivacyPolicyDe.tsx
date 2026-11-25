@@ -121,7 +121,7 @@ export function PrivacyPolicyDe() {
         Simulationsdaten.
       </p>
       <p>
-        Innerhalb der Wallet-Datenbank werden optional Favoriten und die Historie zuletzt
+        Innerhalb der Wallet-Datenbank werden optional Lesezeichen und die Historie zuletzt
         angesehener Artikel der Library gespeichert, um die Navigation in der Knowledge-Base zu
         erleichtern. Diese Komfort-Funktion dient einer besseren Lern-Erfahrung.
       </p>
@@ -504,7 +504,7 @@ export function PrivacyPolicyDe() {
           Profiling-Zweck).
         </li>
         <li>
-          <strong>Lokale Speicherung von Wallet-Daten, Lab-Daten, Library-Daten (Favoriten/Historie)
+          <strong>Lokale Speicherung von Wallet-Daten, Lab-Daten, Library-Daten (Lesezeichen/Historie)
           und Anwendungseinstellungen (in der <code>settings</code>-Tabelle innerhalb der
           Wallet-SQLite-Datenbank) im OPFS</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
           Interesse an der Bereitstellung einer funktionsfähigen Bitcoin-Lernplattform) in Verbindung
@@ -599,7 +599,7 @@ export function PrivacyPolicyDe() {
         <strong>Kategorien:</strong> können insbesondere umfassen: technische Verbindungs- und
         Zugriffsdaten beim Hosting (Vercel); Sprachpräferenz (lokal im Browser); Wallet-Daten lokal
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
-        von Ihnen angelegt oder abgerufen); optional Favoriten und Lese-Historie der Library-Artikel
+        von Ihnen angelegt oder abgerufen); optional Lesezeichen und Lese-Historie der Library-Artikel
         (lokal in der Wallet-Datenbank); NWC-Verbindungsdaten und zwischengespeicherte
         Lightning-Informationen lokal; Arkade-SDK-Persistenz und zwischengespeicherte Arkade-Salden/-Transaktionen
         lokal; Bark-Protokollzustand (VTXOs, Bewegungshistorie, ausstehende Aktionen und Exits) lokal;

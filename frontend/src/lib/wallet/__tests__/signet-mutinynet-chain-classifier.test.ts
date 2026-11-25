@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyChangesetChains,
   descriptorChangesetContradictsNetwork,
+  readChangesetLocalTipHeight,
   SIGNET_MUTINYNET_HEIGHT_BOUNDARY,
 } from '@/lib/wallet/signet-mutinynet-chain-classifier'
 import {
@@ -123,5 +124,21 @@ describe('descriptorChangesetContradictsNetwork', () => {
   it('does not contradict when the changeset cannot be read', () => {
     expect(descriptorChangesetContradictsNetwork('{}', 'signet')).toBe(false)
     expect(descriptorChangesetContradictsNetwork('{not json', 'mutinynet')).toBe(false)
+  })
+})
+
+describe('readChangesetLocalTipHeight', () => {
+  it('returns the highest kept block', () => {
+    const changeSetJson = bdkChangesetJson({
+      blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, PUBLIC_SIGNET_TIP_HEIGHT],
+      anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT],
+    })
+    expect(readChangesetLocalTipHeight(changeSetJson)).toBe(PUBLIC_SIGNET_TIP_HEIGHT)
+  })
+
+  it('returns null for a genesis-only tip and for unreadable JSON', () => {
+    expect(readChangesetLocalTipHeight(bdkChangesetJson({ blockHeights: [0] }))).toBeNull()
+    expect(readChangesetLocalTipHeight('{not json')).toBeNull()
+    expect(readChangesetLocalTipHeight('{}')).toBeNull()
   })
 })

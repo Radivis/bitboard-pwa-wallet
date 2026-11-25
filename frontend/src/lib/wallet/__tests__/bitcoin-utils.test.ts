@@ -7,6 +7,7 @@ import {
   getEsploraUrl,
   getTxGrossWalletDebitSats,
   getTxListDisplayAmountSats,
+  onchainConfirmationCount,
   msatsAmountNumberFromSatsExact,
   MAX_SATS_MSAT_AMOUNT_NUMBER,
   MSATS_PER_SAT,
@@ -79,6 +80,18 @@ describe('getTxListDisplayAmountSats', () => {
       feeSats: null,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(10_150)
+  })
+})
+
+describe('onchainConfirmationCount', () => {
+  it('counts pending as zero and waits for a tip on a confirmed row', () => {
+    const pending = txFixture({ isConfirmed: false, confirmationBlockHeight: null })
+    expect(onchainConfirmationCount(pending, 200)).toBe(0)
+
+    const confirmed = txFixture({ isConfirmed: true, confirmationBlockHeight: 100 })
+    expect(onchainConfirmationCount(confirmed, null)).toBeNull()
+    expect(onchainConfirmationCount(confirmed, 99)).toBeNull()
+    expect(onchainConfirmationCount(confirmed, 150)).toBe(51)
   })
 })
 

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+
+const ENTER_APP_PASSWORD_FORM_ID = 'enter-app-password-form'
 
 interface ConfirmAppPasswordModalProps {
   open: boolean
@@ -47,7 +49,7 @@ export function EnterAppPasswordModal({
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       isModal
       onOpenChange={(nextOpen) => {
@@ -61,15 +63,22 @@ export function EnterAppPasswordModal({
           <span className="min-w-0">{title}</span>
         </>
       }
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => {
         if (isBusy) e.preventDefault()
       }}
+      footer={
+        isBusy ? undefined : (
+          <DesignButton type="submit" form={ENTER_APP_PASSWORD_FORM_ID} disabled={!password}>
+            {submitLabel}
+          </DesignButton>
+        )
+      }
     >
       <>
         <DialogDescription>{description}</DialogDescription>
 
         <form
+          id={ENTER_APP_PASSWORD_FORM_ID}
           onSubmit={(e) => {
             e.preventDefault()
             if (!password || isBusy) return
@@ -89,19 +98,13 @@ export function EnterAppPasswordModal({
               autoFocus
             />
             {error ? (
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="design-type-regular text-destructive">{error}</p>
             ) : null}
           </div>
 
-          {isBusy ? (
-            <LoadingSpinner text={loadingText} />
-          ) : (
-            <Button type="submit" className="w-full" disabled={!password}>
-              {submitLabel}
-            </Button>
-          )}
+          {isBusy ? <LoadingSpinner text={loadingText} /> : null}
         </form>
       </>
-    </AppModal>
+    </DesignModal>
   )
 }

@@ -11,7 +11,6 @@ import {
   mockLoadWalletSecretsPayload,
   mockResolveDescriptorWallet,
   mockSetNetworkMode,
-  mockSetThemeMode,
   mockUpdateDescriptorWalletChangeset,
   mockWalletsState,
   nearZeroSecurityState,
@@ -39,7 +38,7 @@ describe('Settings routes', () => {
       renderWithProviders(<SettingsMainPage />)
       expect(screen.getByText('Network')).toBeInTheDocument()
       expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
-      expect(screen.getByText('Appearance')).toBeInTheDocument()
+      expect(screen.queryByText('Appearance')).not.toBeInTheDocument()
       expect(screen.getByText('Currency / unit defaults')).toBeInTheDocument()
       expect(
         screen.getByText(/Available options depend on the selected rate service/i),
@@ -142,14 +141,6 @@ describe('Settings routes', () => {
         expect(screen.getByTestId('confirmation-dialog')).toBeInTheDocument()
       })
       expect(screen.getByText('Change Address Type?')).toBeInTheDocument()
-    })
-
-    it('theme selector calls setThemeMode', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<SettingsMainPage />)
-
-      await user.click(screen.getByRole('button', { name: /Dark/ }))
-      expect(mockSetThemeMode).toHaveBeenCalledWith('dark')
     })
 
     it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {
@@ -319,11 +310,15 @@ describe('Settings routes', () => {
   })
 
   describe('SettingsFeaturesPage', () => {
+    function featureOnButton(name: string) {
+      return within(screen.getByRole('group', { name })).getByRole('button', { name: 'On' })
+    }
+
     it('opens Mainnet access confirmation modal when enabling the toggle', async () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+      await user.click(featureOnButton('Enable Mainnet access'))
 
       expect(
         screen.getByRole('heading', { name: 'Mainnet access', level: 2 }),
@@ -337,7 +332,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+      await user.click(featureOnButton('Enable Mainnet access'))
       await user.click(
         screen.getByRole('checkbox', {
           name: /I understand the risks and have a seed phrase backup ready/,
@@ -355,7 +350,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable Arkade offchain layer' }))
+      await user.click(featureOnButton('Enable Arkade offchain layer'))
 
       expect(
         screen.getByRole('heading', { name: 'Enable Arkade', level: 2 }),
@@ -370,7 +365,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable periodic sync' }))
+      await user.click(featureOnButton('Enable periodic sync'))
 
       expect(featureStoreState.setIsPeriodicSyncEnabled).toHaveBeenCalledWith(true)
     })
@@ -379,10 +374,10 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      const barkSwitch = screen.getByRole('switch', { name: 'Enable Bark rail' })
-      expect(barkSwitch).not.toBeChecked()
+      const barkOn = featureOnButton('Enable Bark rail')
+      expect(barkOn).toHaveAttribute('aria-pressed', 'false')
 
-      await user.click(barkSwitch)
+      await user.click(barkOn)
 
       expect(screen.getByRole('heading', { name: 'Enable Bark', level: 2 })).toBeInTheDocument()
       expect(screen.getByText(/Bark support is brand new/i)).toBeInTheDocument()
@@ -395,7 +390,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable Bark rail' }))
+      await user.click(featureOnButton('Enable Bark rail'))
       await user.click(
         screen.getByRole('checkbox', {
           name: /I understand Bark is new/i,
@@ -413,7 +408,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      await user.click(screen.getByRole('switch', { name: 'Enable Arkade offchain layer' }))
+      await user.click(featureOnButton('Enable Arkade offchain layer'))
       await user.click(
         screen.getByRole('checkbox', {
           name: /I understand Arkade is new/i,
@@ -443,7 +438,7 @@ describe('Settings routes', () => {
       renderWithProviders(<SettingsAboutPage />)
       const devContactHeading = screen.getByText('Developer Contact Info')
       expect(devContactHeading).toBeInTheDocument()
-      const devContactCard = devContactHeading.closest('[data-slot="card"]')
+      const devContactCard = devContactHeading.closest('[data-slot="design-card"]')
       expect(devContactCard).toBeTruthy()
       expect(within(devContactCard as HTMLElement).getByText('Michael Hrenka')).toBeInTheDocument()
       expect(

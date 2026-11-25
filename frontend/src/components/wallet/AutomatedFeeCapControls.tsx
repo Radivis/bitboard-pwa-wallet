@@ -1,7 +1,10 @@
-import { Input } from '@/components/ui/input'
+import { useEffect, useState } from 'react'
+import { Gauge } from 'lucide-react'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
+import { defaultMaxFeeRateSatPerVb } from '@/lib/onchain/automated-step-fee-rate'
 
 const FEE_CAP_WARNING =
   'Fee rates may increase suddenly due to congestion. So, please set a reasonable maximum for the fee rate.'
@@ -32,7 +35,15 @@ export function AutomatedFeeCapControls({
   isPending,
   onSelectPreset,
 }: AutomatedFeeCapControlsProps) {
+  const defaultMaxFee = String(defaultMaxFeeRateSatPerVb(presetSatPerVbByLabel.High))
+  const [maxFeeDraft, setMaxFeeDraft] = useState(String(maxFeeRateSatPerVb))
+
+  useEffect(() => {
+    setMaxFeeDraft(String(maxFeeRateSatPerVb))
+  }, [maxFeeRateSatPerVb])
+
   const handleMaxFeeInputChange = (rawValue: string) => {
+    setMaxFeeDraft(rawValue)
     const parsed = Number.parseFloat(rawValue.trim())
     if (!Number.isFinite(parsed) || parsed <= 0) return
     onMaxFeeRateChange(parsed)
@@ -41,7 +52,7 @@ export function AutomatedFeeCapControls({
   return (
     <>
       <p
-        className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300"
+        className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300"
         role="alert"
         data-testid={warningTestId}
       >
@@ -49,13 +60,15 @@ export function AutomatedFeeCapControls({
       </p>
       <div className="space-y-2">
         <Label htmlFor={maxFeeInputId}>Max fee rate (sat/vB)</Label>
-        <Input
+        <DesignInput
           id={maxFeeInputId}
           type="number"
+          leadingIcon={Gauge}
           inputMode="decimal"
           step="any"
           min="0.01"
-          value={maxFeeRateSatPerVb}
+          value={maxFeeDraft}
+          resetTo={defaultMaxFee}
           onChange={(event) => handleMaxFeeInputChange(event.target.value)}
           disabled={isPending}
           data-testid={maxFeeTestId}

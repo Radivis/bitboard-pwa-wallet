@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'boarding-to-arkade',
   title: 'Boarding Bitcoin into Arkade',
   tagIds: ['bitcoin', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -22,12 +23,12 @@ export const article: LibraryArticle = {
       <ArticleSection title="Step by step">
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Open <strong>Management → Board from on-chain</strong> (or the board page from your
+            Open <strong>Dashboard → Board from on-chain</strong> (or the board page from your
             Arkade balance breakdown).
           </li>
           <li>Copy the <strong>boarding address</strong> shown there.</li>
           <li>
-            Send Bitcoin from your on-chain wallet (Send page, <code className="text-sm">bc1</code>{' '}
+            Send Bitcoin from your on-chain wallet (Send page, <code className="design-type-addresses">bc1</code>{' '}
             recipient) to that boarding address. Wait for at least one confirmation.
           </li>
           <li>
@@ -40,11 +41,11 @@ export const article: LibraryArticle = {
       <ArticleSection title="Three address types—do not mix them up">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <code className="text-sm">bc1</code> — your normal on-chain receive address (Receive →
+            <code className="design-type-addresses">bc1</code> — your normal on-chain receive address (Receive →
             Bitcoin).
           </li>
           <li>
-            <code className="text-sm">ark1</code> / <code className="text-sm">tark1</code> — Arkade
+            <code className="design-type-addresses">ark1</code> / <code className="design-type-addresses">tark1</code> — Arkade
             receive address for offchain Arkade payments (Receive → Arkade).
           </li>
           <li>
@@ -54,16 +55,16 @@ export const article: LibraryArticle = {
         </ul>
         <p>
           Sending to the wrong address is the most common boarding mistake. A payment to your{' '}
-          <code className="text-sm">bc1</code> address does not board into Arkade automatically.
+          <code className="design-type-addresses">bc1</code> address does not board into Arkade automatically.
         </p>
       </ArticleSection>
 
       <ArticleSection title="After boarding">
         <p>
           Once settled, you can send Arkade-to-Arkade instantly and receive on your{' '}
-          <code className="text-sm">ark1</code>/<code className="text-sm">tark1</code> address. See{' '}
+          <code className="design-type-addresses">ark1</code>/<code className="design-type-addresses">tark1</code> address. See{' '}
           <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink> and{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink>.
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink>.
         </p>
       </ArticleSection>
     </div>

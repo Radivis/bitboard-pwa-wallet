@@ -3,9 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Shield, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import {
   AppPasswordFields,
   isNewAppPasswordValid,
@@ -101,7 +101,7 @@ export function UpgradeFromNearZeroPasswordModal({
   const blockDismiss = phase === 'running'
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => {}}
@@ -112,7 +112,6 @@ export function UpgradeFromNearZeroPasswordModal({
         </>
       }
       isBlockDismissed={blockDismiss}
-      contentClassName="sm:max-w-md"
     >
       {(requestClose) => (
         <>
@@ -135,12 +134,12 @@ export function UpgradeFromNearZeroPasswordModal({
                 />
 
                 <div className="flex justify-between gap-4">
-                  <Button type="button" variant="outline" onClick={requestClose}>
+                  <DesignButton type="button" appearance="secondary" onClick={requestClose}>
                     Cancel
-                  </Button>
-                  <Button type="submit" disabled={!canSubmit}>
+                  </DesignButton>
+                  <DesignButton type="submit" disabled={!canSubmit}>
                     Set password
-                  </Button>
+                  </DesignButton>
                 </div>
               </form>
             </div>
@@ -156,18 +155,18 @@ export function UpgradeFromNearZeroPasswordModal({
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-500" aria-hidden />
               <div className="space-y-1">
-                <p className="font-medium text-foreground">Password saved</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="design-type-emphasis text-foreground">Password saved</p>
+                <p className="design-type-regular text-muted-foreground">
                   Near-zero security mode is off. Your wallets use your new password now.
                 </p>
               </div>
-              <Button type="button" className="mt-2" onClick={requestClose}>
+              <DesignButton type="button" className="mt-2" onClick={requestClose}>
                 Done
-              </Button>
+              </DesignButton>
             </div>
           )}
         </>
       )}
-    </AppModal>
+    </DesignModal>
   )
 }

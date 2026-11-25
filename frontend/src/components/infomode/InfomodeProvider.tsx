@@ -16,6 +16,7 @@ import { clickTargetWouldActivatePrimaryAction } from '@/lib/infomode/infomode-p
 import { notifyInfomodePrimaryActionSuppressed } from '@/lib/infomode/infomode-suppression-feedback'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
+import type { InfomodePopupPlacement } from '@/lib/infomode/infomode-popup-position'
 
 const INFOMODE_POPUP_SELECTOR = '[data-infomode-popup]'
 const INFOMODE_TARGET_SELECTOR = '[data-infomode-id]'
@@ -41,6 +42,9 @@ interface InfomodeProviderProps {
 type PopupState = {
   anchorElement: HTMLElement
   infoId: string
+  placement: InfomodePopupPlacement
+  pointerX: number
+  pointerY: number
 } | null
 
 /**
@@ -156,7 +160,14 @@ export function InfomodeProvider({ children }: InfomodeProviderProps) {
           if (clickTargetWouldActivatePrimaryAction(event, infomodeElement)) {
             notifyInfomodePrimaryActionSuppressed()
           }
-          setPopupState({ anchorElement: infomodeElement, infoId })
+          setPopupState({
+            anchorElement: infomodeElement,
+            infoId,
+            // Keyboard activation reports detail 0 and a pointer at the origin.
+            placement: event.detail === 0 ? 'anchor' : 'pointer',
+            pointerX: event.clientX,
+            pointerY: event.clientY,
+          })
           return
         }
       }
@@ -182,6 +193,9 @@ export function InfomodeProvider({ children }: InfomodeProviderProps) {
       <InfomodePopup
         open={popupState !== null && activeEntry !== null}
         anchorElement={popupState?.anchorElement ?? null}
+        placement={popupState?.placement ?? 'pointer'}
+        pointerX={popupState?.pointerX ?? 0}
+        pointerY={popupState?.pointerY ?? 0}
         entry={activeEntry}
         onRequestClose={() => setPopupState(null)}
       />

@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nwc-alby-browser-extension',
   title: 'Alby browser extension and NWC',
   tagIds: ['lightning', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -35,7 +36,7 @@ export const article: LibraryArticle = {
             create a new NWC connection.
           </li>
           <li>
-            Copy the <code className="text-sm">nostr+walletconnect://</code> URI.
+            Copy the <code className="design-type-addresses">nostr+walletconnect://</code> URI.
           </li>
           <li>
             In Bitboard, open <strong>Management → Lightning</strong> and paste the URI into the NWC

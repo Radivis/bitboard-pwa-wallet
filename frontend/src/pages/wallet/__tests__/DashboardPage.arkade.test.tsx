@@ -143,6 +143,11 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
   useArkadeAutonomousModeActive: () => false,
+  useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeVtxoExpiryQuery: () => ({
+    isLoading: false,
+    data: { earliestExpiresAt: null, expiringSoonCount: 0 },
+  }),
   useHasPendingBatchIntent: () => false,
   useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,
@@ -250,6 +255,16 @@ describe('DashboardPage Arkade contracts', () => {
     })
   })
 
+  it('shows Arkade as a sibling card and titles on-chain balance', () => {
+    renderWithProviders(<DashboardPage />)
+    expect(screen.getByText('On-chain balance')).toBeInTheDocument()
+    expect(screen.queryByText('On-chain', { exact: true })).not.toBeInTheDocument()
+    const onchainCard = screen.getByText('On-chain balance').closest('[data-slot="design-card"]')
+    const arkadeCard = screen.getByTestId('dashboard-arkade-balance-card')
+    expect(onchainCard?.contains(arkadeCard)).toBe(false)
+    expect(arkadeCard).toHaveAttribute('data-elevation', '1')
+  })
+
   it('DASH-ARK-20 merges Arkade history into activity feed', () => {
     arkadeHistoryMock.mockReturnValue({
       isLoading: false,
@@ -304,7 +319,8 @@ describe('DashboardPage Arkade contracts', () => {
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByTestId('bark-movement-3')).toBeInTheDocument()
-    expect(screen.getByText('Successful')).toBeInTheDocument()
+    expect(screen.getByLabelText('Confirmed')).toHaveClass('lucide-circle-check')
+    expect(screen.getByTestId('bark-movement-3')).not.toHaveTextContent('Successful')
   })
 
   it('DASH-ARK-30 preserves Arkade balance after remount simulating navigation return', () => {

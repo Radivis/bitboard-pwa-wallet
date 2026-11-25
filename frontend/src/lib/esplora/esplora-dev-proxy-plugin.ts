@@ -7,14 +7,14 @@ import {
 import { request as httpsRequest } from 'node:https'
 import type { Socket } from 'node:net'
 import type { Plugin } from 'vite'
-import { isProxiedUrlPathWithinAllowlistedBase } from '../shared/validate-proxied-upstream-url'
+import { isProxiedUrlPathWithinAllowlistedBase } from '../shared/validate-proxied-upstream-url.ts'
 import {
   ESPLORA_SAME_ORIGIN_PROXY_PREFIX,
   decideEsploraMirrorResponse,
   esploraFallbackUpstreamBase,
   getUpstreamBaseForEsploraProxy,
   isEsploraUpstreamFailoverStatus,
-} from './esplora-service-whitelist'
+} from './esplora-service-whitelist.ts'
 
 /** Hung TCP only. A live Mempool history response often takes longer than this to send its body. */
 const PRIMARY_CONNECT_TIMEOUT_MS = 2_000

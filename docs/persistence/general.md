@@ -15,7 +15,7 @@ Initial migration: `frontend/src/db/migrations/wallet/20260417120000_initial_wal
 | `wallet_secrets` | Encrypted mnemonic + payload; `revision` for CAS |
 | `settings` | Key/value store for Zustand persist and app config |
 | `library_history` | Article visit timestamps |
-| `library_articles` | Article favorites |
+| `library_articles` | Article bookmarks (`is_bookmarked`) |
 | `device_data_migrations` | One row per device-level data migration: `migration_name`, `applied_at`, plaintext `result` |
 | `wallet_data_migrations` | One marker per (`wallet_id`, `migration_name`) with `applied_at`; no result column |
 
@@ -77,7 +77,7 @@ The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Docu
 | Module | Table | Purpose |
 |--------|-------|---------|
 | `frontend/src/db/library-history.ts` | `library_history` | Recent article paths |
-| `frontend/src/db/library-articles.ts` | `library_articles` | Favorites by slug |
+| `frontend/src/db/library-articles.ts` | `library_articles` | Bookmarks by slug |
 
 ## localStorage and sessionStorage
 

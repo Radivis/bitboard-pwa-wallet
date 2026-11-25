@@ -5,13 +5,15 @@ export const article: LibraryArticle = {
   slug: 'how-many-addresses-can-a-bitcoin-wallet-have',
   title: 'How many addresses can a Bitcoin wallet have?',
   tagIds: ['wallets', 'bitcoin', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
         <p>
           Effectively unlimited. A single seed phrase can generate billions of addresses—far more
-          than you will ever need. You can use a fresh address for every payment (good for privacy)
-          and still recover everything from one backup.
+          than you will ever need. You can use a fresh address for every payment (good for{' '}
+          <ArticleLink slug="address-reuse-and-deanonymization">privacy</ArticleLink>) and still
+          recover everything from one backup.
         </p>
       </ArticleSection>
 
@@ -32,8 +34,9 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Really Works">
         <p>
           There are limits in theory—finite index ranges and practical scanning time when recovering
-          a wallet—but for normal use you will never hit them. Wallets typically use a &quot;gap
-          limit&quot; (e.g., 20 unused addresses) to know when to stop scanning during recovery.
+          a wallet—but for normal use you will never hit them. Wallets typically use a{' '}
+          <ArticleLink slug="the-gap-limit">gap limit</ArticleLink> (for example, 20 unused
+          addresses) to know when to stop scanning during recovery.
         </p>
         <p>
           For how keys relate to addresses, see{' '}

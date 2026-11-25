@@ -1,6 +1,8 @@
 [package]
 name = "bitboard-wasm-sleep"
-version.workspace = true
+# Explicit version so the separate `bitboard-bark` workspace can path-depend on this crate.
+# `scripts/sync-version.mjs` writes this from the root VERSION file.
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]

@@ -9,6 +9,7 @@ import {
   mineRegtestBlocks,
 } from './helpers/arkade-regtest'
 import { ensureOnChainBumperFunds, goToArkadeManagementPanel } from './helpers/arkade-management'
+import { designOnOffButton } from './helpers/design-on-off-switch'
 import { prepareUnilateralUnrollScenario } from './helpers/arkade-regtest-scenarios'
 import { runManualUnilateralUnrollUntilBranchComplete } from './helpers/arkade-unilateral-exit-reg04'
 import { attachUnilateralExitDiagnosticsOnTestFailure } from './helpers/esplora-unilateral-exit-diagnostics'
@@ -37,7 +38,7 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
     await page.getByTestId('arkade-unilateral-exit-control').click()
     await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
     await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
-    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
+    await designOnOffButton(page.getByTestId('unilateral-exit-leaf-select-switch'), 'On').click()
     await ensureOnChainBumperFunds(page, 100_000)
     await runManualUnilateralUnrollUntilBranchComplete(page)
 
@@ -71,7 +72,7 @@ async function readOnChainReceiveAddress(page: Page): Promise<string> {
   await goToWalletTab(page, 'Receive')
   const addressEl = page
     .locator('[data-infomode-id="receive-receiving-address-card"]')
-    .locator('.font-mono')
+    .locator('.design-type-addresses:not(input):not(textarea):not(select)')
   await expect(addressEl).toBeVisible({ timeout: 15_000 })
   const address = (await addressEl.textContent())?.trim() ?? ''
   if (!address.startsWith('bcrt1')) {

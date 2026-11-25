@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-vtxo',
   title: 'What is a VTXO?',
   tagIds: ['bitcoin', 'wallets', 'l2'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -27,7 +28,7 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="Offchain vs on-chain">
         <p>
-          Your normal <code className="text-sm">bc1</code> wallet balance lives in{' '}
+          Your normal <code className="design-type-addresses">bc1</code> wallet balance lives in{' '}
           <strong>on-chain UTXOs</strong>—outputs recorded on the Bitcoin blockchain. Arkade
           balances live in <strong>VTXOs</strong> managed with the Arkade operator. You can still
           move value back to on-chain Bitcoin through boarding (in) and exits (out).
@@ -42,8 +43,10 @@ export const article: LibraryArticle = {
         <p>
           An Arkade <strong>operator</strong> (also called an ASP) batches many users&apos; VTXOs
           together for efficient settlement. You trust them only for liveness and batching—not for
-          custody of your seed phrase. If the operator disappears, you can still recover funds via
-          unilateral exit paths built into the protocol.
+          custody of your seed phrase. The operator does see the offchain movements. What the
+          public chain later sees is a separate question, covered in{' '}
+          <ArticleLink slug="privacy-in-ark">Privacy in Ark</ArticleLink>. If the operator
+          disappears, you can still recover funds via unilateral exit paths built into the protocol.
         </p>
       </ArticleSection>
 
@@ -56,10 +59,10 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="In Bitboard Wallet">
+      <ArticleSection title="In Bitcoin Codex">
         <p>
           Enable Arkade under Settings → Features, then use{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> for
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink> for
           addresses, boarding, and payments. To fund Arkade from on-chain, read{' '}
           <ArticleLink slug="boarding-to-arkade">Boarding Bitcoin into Arkade</ArticleLink>.
         </p>

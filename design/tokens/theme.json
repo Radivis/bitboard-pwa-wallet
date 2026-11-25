@@ -1,0 +1,818 @@
+{
+  "collection": "theme",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "model": {
+    "theme": "Light and dark are the modes of this collection.",
+    "accent": "Accent tokens do not store a hex. Each theme mode aliases a token in the network collection, which then resolves mainnet, testnet, neutral, or lab.",
+    "colorValue": "A resolved color is { hex, alpha }. hex is #RRGGBB. alpha is 0 to 1. null means that mode was not defined.",
+    "alias": "An alias names another token. An alpha on the alias replaces the target alpha. The alias follows the target's modes.",
+    "surface": "Card and status colors vary by theme only. They do not alias the network collection. Embedded buttons use accent tokens, which still follow the network mode."
+  },
+  "tokens": {
+    "background": {
+      "light": {
+        "hex": "#F7F8F9",
+        "alpha": 1
+      },
+      "dark": {
+        "hex": "#040404",
+        "alpha": 1
+      }
+    },
+    "elevation": {
+      "drawer": {
+        "light": {
+          "hex": "#E9EDF2",
+          "alpha": 0.6
+        },
+        "dark": {
+          "hex": "#121417",
+          "alpha": 0.6
+        }
+      },
+      "3": {
+        "light": {
+          "hex": "#E2E7EE",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#16191D",
+          "alpha": 1
+        }
+      }
+    },
+    "text": {
+      "regular": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#E4E5E7",
+            "alpha": 1
+          }
+        },
+        "bright": {
+          "light": {
+            "hex": "#F7F8F9",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#F7F8F9",
+            "alpha": 1
+          }
+        }
+      },
+      "subdued": {
+        "light": {
+          "hex": "#333A42",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#B8BEC6",
+          "alpha": 1
+        }
+      },
+      "button": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#000000",
+            "alpha": 1
+          }
+        },
+        "hover": {
+          "light": {
+            "hex": "#1A1A1A",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#D8D8D8",
+            "alpha": 1
+          }
+        },
+        "active": {
+          "light": {
+            "hex": "#333333",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#CCCCCC",
+            "alpha": 1
+          }
+        },
+        "disabled": {
+          "light": {
+            "hex": "#6F6F6F",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#919191",
+            "alpha": 1
+          }
+        },
+        "primary": {
+          "disabled": {
+            "light": {
+              "hex": "#262626",
+              "alpha": 1
+            },
+            "dark": {
+              "hex": "#1E1E1E",
+              "alpha": 1
+            }
+          }
+        },
+        "tertiary": {
+          "disabled": {
+            "light": {
+              "hex": "#6F6F6F",
+              "alpha": 1
+            },
+            "dark": {
+              "hex": "#919191",
+              "alpha": 1
+            }
+          }
+        }
+      },
+      "card": {
+        "title": {
+          "light": {
+            "hex": "#192222",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#E4E5E7",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#334242",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#B8BFC6",
+            "alpha": 1
+          }
+        }
+      }
+    },
+    "accent": {
+      "primary": {
+        "default": {
+          "light": {
+            "alias": "network/onLight/primary/default"
+          },
+          "dark": {
+            "alias": "network/onDark/primary/default"
+          }
+        },
+        "hover": {
+          "light": {
+            "alias": "network/onLight/primary/hover"
+          },
+          "dark": {
+            "alias": "network/onDark/primary/hover"
+          }
+        },
+        "active": {
+          "light": {
+            "alias": "network/onLight/primary/active"
+          },
+          "dark": {
+            "alias": "network/onDark/primary/active"
+          }
+        },
+        "disabled": {
+          "light": {
+            "alias": "network/onLight/primary/disabled"
+          },
+          "dark": {
+            "alias": "network/onDark/primary/disabled"
+          }
+        }
+      },
+      "secondary": {
+        "default": {
+          "light": {
+            "alias": "network/onLight/secondary/default"
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/default"
+          }
+        },
+        "hover": {
+          "light": {
+            "alias": "network/onLight/secondary/hover"
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/hover"
+          }
+        },
+        "active": {
+          "light": {
+            "alias": "network/onLight/secondary/active"
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/active"
+          }
+        },
+        "disabled": {
+          "light": {
+            "alias": "network/onLight/secondary/disabled"
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/disabled"
+          }
+        }
+      },
+      "secondaryStroke": {
+        "default": {
+          "light": {
+            "alias": "network/onLight/secondary/default",
+            "alpha": 0.5
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/default",
+            "alpha": 0.5
+          }
+        },
+        "hover": {
+          "light": {
+            "alias": "network/onLight/secondary/hover",
+            "alpha": 0.5
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/hover",
+            "alpha": 0.5
+          }
+        },
+        "active": {
+          "light": {
+            "alias": "network/onLight/secondary/active",
+            "alpha": 0.5
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/active",
+            "alpha": 0.5
+          }
+        },
+        "disabled": {
+          "light": {
+            "alias": "network/onLight/secondary/disabled",
+            "alpha": 0.5
+          },
+          "dark": {
+            "alias": "network/onDark/secondary/disabled",
+            "alpha": 0.5
+          }
+        }
+      },
+      "tertiary": {
+        "default": {
+          "alias": "theme/accent/primary/default"
+        }
+      }
+    },
+    "surface": {
+      "card": {
+        "light": {
+          "hex": "#EFF1F5",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#090A0B",
+          "alpha": 1
+        }
+      }
+    },
+    "stroke": {
+      "tertiary": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#E4E5E7",
+            "alpha": 0.12
+          }
+        },
+        "hover": {
+          "light": {
+            "hex": "#1A1A1A",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#D8D8D8",
+            "alpha": 0.12
+          }
+        },
+        "active": {
+          "light": {
+            "hex": "#333333",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#CCCCCC",
+            "alpha": 0.12
+          }
+        },
+        "disabled": {
+          "light": {
+            "hex": "#6F6F6F",
+            "alpha": 0.1
+          },
+          "dark": {
+            "hex": "#919191",
+            "alpha": 0.06
+          }
+        }
+      },
+      "card": {
+        "light": {
+          "hex": "#DFE8E8",
+          "alpha": 0.9
+        },
+        "dark": {
+          "hex": "#DFE8E8",
+          "alpha": 0.9
+        }
+      }
+    },
+    "status": {
+      "success": {
+        "surface": {
+          "light": {
+            "hex": "#F0FDF7",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#04150E",
+            "alpha": 1
+          }
+        },
+        "foreground": {
+          "light": {
+            "hex": "#0A7F4A",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#219C64",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#065F37",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#25C17B",
+            "alpha": 1
+          }
+        },
+        "stroke": {
+          "light": {
+            "hex": "#0A7F4A",
+            "alpha": 0.25
+          },
+          "dark": {
+            "hex": "#219C64",
+            "alpha": 0.25
+          }
+        }
+      },
+      "error": {
+        "surface": {
+          "light": {
+            "hex": "#FEF2F2",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#150404",
+            "alpha": 1
+          }
+        },
+        "foreground": {
+          "light": {
+            "hex": "#C91D1D",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#EF3434",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#991B1B",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#F26363",
+            "alpha": 1
+          }
+        },
+        "stroke": {
+          "light": {
+            "hex": "#C91D1D",
+            "alpha": 0.25
+          },
+          "dark": {
+            "hex": "#EF3434",
+            "alpha": 0.25
+          }
+        }
+      },
+      "warning": {
+        "surface": {
+          "light": {
+            "hex": "#F9EDD2",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#241B05",
+            "alpha": 1
+          }
+        },
+        "foreground": {
+          "light": {
+            "hex": "#866313",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#E5A819",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#59420D",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#EBBA47",
+            "alpha": 1
+          }
+        },
+        "stroke": {
+          "light": {
+            "hex": "#866313",
+            "alpha": 0.25
+          },
+          "dark": {
+            "hex": "#E5A819",
+            "alpha": 0.25
+          }
+        }
+      },
+      "info": {
+        "surface": {
+          "light": {
+            "hex": "#D2F7F9",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#072122",
+            "alpha": 1
+          }
+        },
+        "foreground": {
+          "light": {
+            "hex": "#11787D",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#28B6BD",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#0B4D50",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#57D5DB",
+            "alpha": 1
+          }
+        },
+        "stroke": {
+          "light": {
+            "hex": "#11787D",
+            "alpha": 0.25
+          },
+          "dark": {
+            "hex": "#28B6BD",
+            "alpha": 0.25
+          }
+        }
+      },
+      "risk": {
+        "surface": {
+          "light": {
+            "hex": "#FCE8F1",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#1B040E",
+            "alpha": 1
+          }
+        },
+        "foreground": {
+          "light": {
+            "hex": "#C91C6A",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#D74285",
+            "alpha": 1
+          }
+        },
+        "description": {
+          "light": {
+            "hex": "#9C1753",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#E06CA0",
+            "alpha": 1
+          }
+        },
+        "stroke": {
+          "light": {
+            "hex": "#C91C6A",
+            "alpha": 0.25
+          },
+          "dark": {
+            "hex": "#D74285",
+            "alpha": 0.25
+          }
+        }
+      }
+    },
+    "input": {
+      "enabled": {
+        "background": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.12
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.12
+          }
+        }
+      },
+      "disabled": {
+        "background": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.04
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.04
+          }
+        }
+      },
+      "placeholder": {
+        "light": {
+          "hex": "#575757",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#8C8C8C",
+          "alpha": 1
+        }
+      },
+      "content": {
+        "alias": "theme/text/regular/default"
+      }
+    },
+    "nav-button": {
+      "background": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.04
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.04
+          }
+        },
+        "hover": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.08
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.08
+          }
+        },
+        "active": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.12
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.12
+          }
+        },
+        "selected": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.2
+          }
+        }
+      },
+      "stroke": {
+        "light": {
+          "hex": "#000000",
+          "alpha": 0.1
+        },
+        "dark": {
+          "hex": "#FFFFFF",
+          "alpha": 0.1
+        }
+      }
+    },
+    "tag": {
+      "stroke": {
+        "light": {
+          "hex": "#000000",
+          "alpha": 0.2
+        },
+        "dark": {
+          "hex": "#FFFFFF",
+          "alpha": 0.2
+        }
+      }
+    },
+    "special": {
+      "destructive": {
+        "light": {
+          "hex": "#FF1500",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#FF1500",
+          "alpha": 1
+        },
+        "background": {
+          "default": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.5
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.5
+            }
+          },
+          "hover": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.42
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.42
+            }
+          },
+          "active": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.34
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.34
+            }
+          }
+        }
+      },
+      "infomode": {
+        "highlight": {
+          "light": {
+            "hex": "#4079BF",
+            "alpha": 0.6
+          },
+          "dark": {
+            "hex": "#4079BF",
+            "alpha": 0.6
+          }
+        }
+      }
+    }
+  },
+  "unresolvedModes": [],
+  "provenance": {
+    "background": {
+      "light": "Background/Light",
+      "dark": "Background/Dark"
+    },
+    "elevation/drawer": "Figma theme elevation/drawer. #E9EDF2 in Light and #121417 in Dark, both at 60% opacity. Drawer panel fill.",
+    "elevation/3": "Figma theme elevation/3. Info-Popup surface. Light #E2E7EE, dark #16191D.",
+    "text/subdued": "Figma text/subdued. Info-Popup body. Light #333A42, dark #B8BEC6.",
+    "special/infomode/highlight": "Figma special/infomode/highlight. #4079BF at 60% opacity in Light and Dark. Infomode target glow and Info-Popup outer glow, both 8px blur and 8px spread.",
+    "text/regular/default": {
+      "light": "Tertiary default label is #000000.",
+      "dark": "Text/Regular/Dark/Default"
+    },
+    "text/button/default": {
+      "light": "Text/Button/Light/Default",
+      "dark": "Primary button labels are #000000 in the dark variants too."
+    },
+    "text/button/hover": {
+      "light": "Text/Button/Light/Hover",
+      "dark": "Text/Button/Dark/Hover"
+    },
+    "text/button/active": {
+      "light": "Text/Button/Light/Active",
+      "dark": "Text/Button/Dark/Active"
+    },
+    "text/button/disabled": {
+      "light": "Tertiary disabled label, light.",
+      "dark": "Text/Button/Dark/Disabled"
+    },
+    "text/button/primary/disabled": {
+      "light": "Text/Button/Light/Primary/Disabled",
+      "dark": "Text/Button/Dark/Primary/Disabled"
+    },
+    "text/button/tertiary/disabled": {
+      "light": "Text/Button/Light/Tertiary/Disabled",
+      "dark": "Tertiary disabled label is #919191 in the dark variant."
+    },
+    "accent/tertiary/default": "Basics page: tertiary buttons use the primary color. The dark background makes that color read as quieter.",
+    "surface/card": {
+      "light": "Card component fill",
+      "dark": "Card/Dark frame fill"
+    },
+    "stroke/tertiary/default": "Figma stroke/tertiary/default. Label color at 20% in Light (#000000) and 12% in Dark (#E4E5E7).",
+    "stroke/tertiary/hover": "Figma stroke/tertiary/hover. text/button/hover at 20% in Light and 12% in Dark.",
+    "stroke/tertiary/active": "Figma stroke/tertiary/active. text/button/active at 20% in Light and 12% in Dark.",
+    "stroke/tertiary/disabled": "Figma stroke/tertiary/disabled. text/button/tertiary/disabled at 10% in Light and 6% in Dark.",
+    "stroke/card": "Card and Card/Dark stroke, #DFE8E8 at 90% opacity in both themes.",
+    "text/card/title": {
+      "light": "Card title",
+      "dark": "Card/Dark title"
+    },
+    "text/card/description": {
+      "light": "Card description",
+      "dark": "Card/Dark description"
+    },
+    "status/success": {
+      "light": "Toast Type=Success",
+      "dark": "Toast/Success frame"
+    },
+    "status/error": {
+      "light": "Toast Type=Error",
+      "dark": "Toast/Error frame"
+    },
+    "status/warning": {
+      "light": "Toast Type=Warning",
+      "dark": "Toast/Warning frame"
+    },
+    "status/info": {
+      "light": "Toast Type=Info",
+      "dark": "Toast/Info frame"
+    },
+    "status/risk": {
+      "light": "Toast Type=Risk",
+      "dark": "Toast/Risk frame"
+    },
+    "input/enabled/background": "Figma theme input/enabled/background. Black at 12% in Light, white at 12% in Dark.",
+    "input/disabled/background": "Figma theme input/disabled/background. Black at 4% in Light, white at 4% in Dark.",
+    "input/placeholder": {
+      "light": "#575757",
+      "dark": "#8C8C8C"
+    },
+    "input/content": "Aliases text/regular/default.",
+    "nav-button/background": "Black in Light and white in Dark. Default 4%, hover 8%, active 12%, selected 20%.",
+    "nav-button/stroke": "Black at 10% in Light, white at 10% in Dark.",
+    "tag/stroke": "Figma Tag stroke. Black at 20% in Light. Dark is white at 20%, matching the nav-button stroke flip.",
+    "special/destructive": "Figma special/destructive. #FF1500 in Light and Dark. The Destructive-Button stroke uses this color. An icon-only destructive control uses it on the glyph.",
+    "special/destructive/background/default": "Figma special/destructive/background/default. #FF1500 at 50% opacity in Light and Dark.",
+    "special/destructive/background/hover": "Figma special/destructive/background/hover. #FF1500 at 42% opacity in Light and Dark.",
+    "special/destructive/background/active": "Figma special/destructive/background/active. #FF1500 at 34% opacity in Light and Dark.",
+    "text/regular/bright": "Figma text/regular/bright. #F7F8F9 in Light and Dark. Destructive-Button label and icon."
+  }
+}

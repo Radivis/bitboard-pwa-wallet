@@ -22,6 +22,8 @@ export const ARKADE_INFOMODE_IDS = {
   boardStatusReady: 'arkade-board-status-ready',
   boardStatusExpired: 'arkade-board-status-expired',
   receiveAddress: 'arkade-receive-address',
+  receivePaymentCount: 'arkade-receive-payment-count',
+  receiveUnusedGap: 'arkade-receive-unused-gap',
   sendPayment: 'arkade-send-payment',
   exitSection: 'arkade-exit-section',
   collaborativeExit: 'arkade-collaborative-exit',
@@ -46,6 +48,7 @@ export const ARKADE_LIBRARY_SLUGS = {
   unilateralExitRisks: 'risks-of-arkade-unilateral-exits',
   checkpointTransactions: 'arkade-checkpoint-transactions',
   layer2: 'layer-2-networks',
+  privacyInArk: 'privacy-in-ark',
 } as const
 
 export const ARKADE_OPERATOR_STALE_INFOMODE = {
@@ -55,7 +58,7 @@ export const ARKADE_OPERATOR_STALE_INFOMODE = {
 
 export const ARKADE_BALANCE_BOARDING_INFOMODE = {
   title: 'On-chain boarding',
-  text: 'Bitcoin you sent to your boarding address and that is confirmed on-chain, but not yet settled into Arkade. Tap "settle in management" or open Board from on-chain to turn it into spendable virtual balance units (VTXOs).',
+  text: 'Bitcoin you sent to your boarding address and that is confirmed on-chain, but not yet settled into Arkade. Tap "settle" or open Board from on-chain on the dashboard to turn it into spendable virtual balance units (VTXOs).',
 } as const
 
 export const ARKADE_BALANCE_BOARDING_PENDING_INFOMODE = {

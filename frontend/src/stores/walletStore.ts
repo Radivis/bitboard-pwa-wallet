@@ -18,7 +18,7 @@ export type WalletStatus = 'none' | 'locked' | 'unlocked'
 export { AddressType }
 
 export const NETWORK_LABELS: Record<NetworkMode, string> = {
-  lab: 'Lab',
+  lab: 'Labnet',
   regtest: 'Regtest',
   signet: 'Signet',
   mutinynet: 'Mutinynet',

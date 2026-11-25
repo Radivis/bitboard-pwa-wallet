@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-does-multisig-mean',
   title: 'What does multisig mean?',
   tagIds: ['multisig', 'bitcoin'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

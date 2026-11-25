@@ -84,9 +84,9 @@ After unlock, the crypto worker loads the changeset into BDK; `walletStore` and 
 
 Zustand `wallet-storage` persists only navigation context: `networkMode`, `addressType`, `accountId`, `activeWalletId`.
 
-## Lab interaction
+## Labnet interaction
 
-When switching to lab network mode, the app exports the current descriptor changeset before loading the lab wallet in WASM (`switch-to-lab-network.ts`). Lab entity wallets use a separate persistence path; see [lab.md](lab.md).
+When switching to Labnet, the app exports the current descriptor changeset before loading the lab wallet in WASM (`switch-to-lab-network.ts`). Lab entity wallets use a separate persistence path; see [lab.md](lab.md).
 
 ## Chain mismatch handling
 

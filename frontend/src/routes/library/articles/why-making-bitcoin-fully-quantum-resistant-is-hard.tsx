@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'why-making-bitcoin-fully-quantum-resistant-is-hard',
   title: 'Why making Bitcoin fully quantum resistant is hard',
   tagIds: ['quantum-computing', 'bitcoin', 'cryptography'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

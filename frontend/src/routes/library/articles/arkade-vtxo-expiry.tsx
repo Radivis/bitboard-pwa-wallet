@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'arkade-vtxo-expiry',
   title: 'VTXO expiry and renewal',
   tagIds: ['bitcoin', 'wallets'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="Why VTXOs expire">
@@ -25,7 +26,7 @@ export const article: LibraryArticle = {
           Bitboard can register presigned renewals with a Fulmine delegator, if you have set up a delegator so VTXOs stay spendable
           while you are offline. The delegator cannot redirect funds; it only submits intents you
           already signed. See{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink>.
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink>.
         </p>
       </ArticleSection>
 
@@ -46,10 +47,11 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="Exiting to on-chain">
         <p>
-          If you prefer to leave Arkade instead of renewing, use exit paths in Management.{' '}
-          <strong>Collaborative exit</strong> withdraws VTXOs with the operator—fastest when the
-          network is reachable. <strong>Unilateral exit</strong> reclaims one VTXO without the
-          operator; you fund a small bumper wallet for on-chain fees.
+          If you prefer to leave Arkade instead of renewing, use the exit paths.{' '}
+          <strong>Collaborative exit</strong> is on the dashboard and withdraws VTXOs with the
+          operator—fastest when the network is reachable. <strong>Unilateral exit</strong> stays in
+          Management and reclaims one VTXO without the operator; you fund a small bumper wallet for
+          on-chain fees.
         </p>
         <p>
           Full comparison:{' '}

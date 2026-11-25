@@ -116,7 +116,8 @@ describe('Operator config trust UI', () => {
 
   it('disables autonomous switch off while operator trust is pending', () => {
     renderWithProviders(<ArkadeAutonomousModeSwitch />)
-    expect(screen.getByRole('switch', { name: 'Autonomous mode' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Off' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'On' })).toBeDisabled()
     expect(screen.getByText(/accept operator changes before leaving autonomous mode/i)).toBeInTheDocument()
   })
 })

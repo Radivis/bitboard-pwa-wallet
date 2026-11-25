@@ -2,6 +2,7 @@
 /**
  * Reads the repository root `VERSION` file and writes it to:
  * - `Cargo.toml` `[workspace.package].version`
+ * - crate manifests in `EXPLICIT_CARGO_PACKAGE_VERSION_PATHS` (cannot use `version.workspace`)
  * - `frontend/package.json` and `landing-page/package.json`
  * - root entries in `frontend/package-lock.json` and `landing-page/package-lock.json`
  *
@@ -12,8 +13,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   escapeRegExpLiteral,
+  EXPLICIT_CARGO_PACKAGE_VERSION_PATHS,
   getRepositoryRoot,
   readTrimmedVersionFile,
+  updateCargoPackageVersion,
   updateCargoWorkspacePackageVersion,
 } from './version-lib.mjs'
 
@@ -66,6 +69,9 @@ const syncedVersion = readTrimmedVersionFile(repositoryRoot)
 if (!syncedVersion) throw new Error('VERSION is empty')
 console.log(`Syncing version "${syncedVersion}" from VERSION`)
 updateCargoWorkspacePackageVersion(repositoryRoot, syncedVersion)
+for (const cargoTomlRelativePath of EXPLICIT_CARGO_PACKAGE_VERSION_PATHS) {
+  updateCargoPackageVersion(path.join(repositoryRoot, cargoTomlRelativePath), syncedVersion)
+}
 updatePackageJsonVersionField(path.join(repositoryRoot, 'frontend', 'package.json'), syncedVersion)
 updatePackageJsonVersionField(
   path.join(repositoryRoot, 'landing-page', 'package.json'),

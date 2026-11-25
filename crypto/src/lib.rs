@@ -38,15 +38,13 @@ pub mod lab_psbt;
 pub mod mnemonic;
 pub mod p2a_cpfp;
 pub mod sync;
+#[cfg(test)]
+mod tests;
 pub mod transaction;
 pub mod types;
 pub mod validation;
 pub mod wallet;
 pub mod wallet_session;
-pub mod wasm_sleep;
-
-#[cfg(test)]
-mod tests;
 
 #[wasm_bindgen(start)]
 pub fn init() {
@@ -299,6 +297,13 @@ pub fn get_current_address() -> Result<String, JsValue> {
 pub fn get_balance() -> Result<JsValue, JsValue> {
     let balance = with_wallet(wallet::get_balance)?;
     Ok(serde_wasm_bindgen::to_value(&balance)?)
+}
+
+/// External receive count and trailing unused gap for the loaded wallet.
+#[wasm_bindgen]
+pub fn get_external_receive_gap() -> Result<JsValue, JsValue> {
+    let gap = with_wallet(wallet::external_receive_gap)?;
+    Ok(serde_wasm_bindgen::to_value(&gap)?)
 }
 
 /// Height of the newest block the active wallet has synced.

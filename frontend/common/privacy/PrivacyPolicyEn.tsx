@@ -112,7 +112,7 @@ export function PrivacyPolicyEn() {
         <strong>separate</strong> SQLite file in OPFS for local simulation data.
       </p>
       <p>
-        The wallet database may optionally store Library favorites and a history of recently viewed
+        The wallet database may optionally store Library bookmarks and a history of recently viewed
         articles to make navigation in the knowledge base easier. This convenience feature supports a
         better learning experience.
       </p>
@@ -462,7 +462,7 @@ export function PrivacyPolicyEn() {
           in a convenient user experience; convenience feature without tracking or profiling).
         </li>
         <li>
-          <strong>Local storage of wallet data, lab data, library data (favorites/history), and
+          <strong>Local storage of wallet data, lab data, library data (bookmarks/history), and
           application settings (in the <code>settings</code> table inside the wallet SQLite
           database) in OPFS</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in
           providing a functional Bitcoin learning platform) in connection with{' '}
@@ -475,7 +475,7 @@ export function PrivacyPolicyEn() {
           use Arkade), optional VTXO delegators (when configured in your build), Second&apos;s Bark Ark
           server and Bark chain source (when you enable and use Bark), and Nostr Wallet
           Connect</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the
-          functionality of the wallet, Lab test networks, optional Arkade and Bark features, and
+          functionality of the wallet, Labnet, optional Arkade and Bark features, and
           Lightning features you use).
         </li>
         <li>
@@ -553,7 +553,7 @@ export function PrivacyPolicyEn() {
         <strong>Categories</strong> may include in particular: technical connection/access data from
         hosting (Vercel); language preference (locally in the browser); on-device wallet data (e.g. key
         material, descriptors, transaction and balance information you create or fetch); optional
-        Library article favorites and reading history (locally in the wallet database); NWC
+        Library article bookmarks and reading history (locally in the wallet database); NWC
         connection data and cached Lightning information locally; Arkade SDK persistence and cached
         Arkade balances/transactions locally; Bark protocol state (VTXOs, movement history, pending
         actions and exits) locally; short-lived UI preferences (e.g. dismissed banners) in

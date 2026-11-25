@@ -25,7 +25,7 @@ vi.mock('@/stores/walletStore', () => ({
     getState: vi.fn(),
   },
   NETWORK_LABELS: {
-    lab: 'Lab',
+    lab: 'Labnet',
     regtest: 'Regtest',
     signet: 'Signet',
     mutinynet: 'Mutinynet',

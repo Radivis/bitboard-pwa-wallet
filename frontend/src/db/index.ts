@@ -16,8 +16,9 @@ export {
   useAddWallet,
   useUpdateWallet,
   useDeleteWallet,
-  useLibraryFavorites,
-  useSetArticleFavorite,
+  useLibraryBookmarks,
+  useSetArticleBookmark,
+  usePendingBookmarkSlugs,
   useLibraryHistory,
   useWalletNoMnemonicBackupFlag,
 } from './hooks'
@@ -35,9 +36,9 @@ export type {
   LibraryArticleUpdate,
 } from './schema'
 export {
-  getFavoriteBySlug,
-  getAllFavoriteSlugs,
-  setArticleFavorite,
+  getBookmarkBySlug,
+  getAllBookmarkSlugs,
+  setArticleBookmark,
 } from './library-articles'
 export {
   recordLibraryHistoryAccess,

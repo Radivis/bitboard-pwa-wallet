@@ -8,6 +8,7 @@ const orchestrateOnchainPostUnlockSync = vi.fn()
 const syncOnchainLoadLifecycleWithLockPhase = vi.fn()
 const syncOnchainSyncLifecycleWithLockPhase = vi.fn()
 const syncOnchainSaveLifecycleWithLockPhase = vi.fn()
+const abandonInFlightOnchainSync = vi.fn()
 const awaitOnchainSyncQuiescence = vi.fn()
 const awaitOnchainSaveQuiescence = vi.fn()
 const isOnchainSaveBlockingLock = vi.fn()
@@ -86,6 +87,7 @@ vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', () => ({
 vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
   orchestrateOnchainPostUnlockSync: (...args: unknown[]) =>
     orchestrateOnchainPostUnlockSync(...args),
+  abandonInFlightOnchainSync: (...args: unknown[]) => abandonInFlightOnchainSync(...args),
   awaitOnchainSyncQuiescence: (...args: unknown[]) => awaitOnchainSyncQuiescence(...args),
   syncOnchainSyncLifecycleWithLockPhase: (...args: unknown[]) =>
     syncOnchainSyncLifecycleWithLockPhase(...args),
@@ -219,6 +221,7 @@ describe('lock-lifecycle-orchestrator', () => {
     awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
     awaitBarkLoadQuiescence.mockResolvedValue(undefined)
     awaitLightningLoadQuiescence.mockResolvedValue(undefined)
+    abandonInFlightOnchainSync.mockResolvedValue(undefined)
     awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
     isOnchainSaveBlockingLock.mockReturnValue(false)

@@ -2,6 +2,7 @@ import { type Page, expect } from '@playwright/test'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './settings-waits'
@@ -13,6 +14,8 @@ import {
   fundRegtestWalletReceiveAddress,
   waitForConfirmedBalance,
 } from './regtest'
+import { clickDrawerNavLink } from './drawer-nav'
+import { designOnOffGroup, turnDesignOnOffOn } from './design-on-off-switch'
 import {
   waitForArkadeLoadReady,
   readDashboardArkadeOffchainSpendableSats,
@@ -22,24 +25,17 @@ import {
 const REGTEST_NETWORK_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function enableRegtestDeveloperMode(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
-  const regtestModeSwitch = page.getByRole('switch', {
-    name: 'Enable Regtest mode for developers',
-  })
-  await regtestModeSwitch.scrollIntoViewIfNeeded()
-  const checked = await regtestModeSwitch.getAttribute('aria-checked')
-  if (checked !== 'true') {
-    await regtestModeSwitch.click()
-  }
+  await turnDesignOnOffOn(designOnOffGroup(page, 'Enable Regtest mode for developers'))
   await openSettingsMainTab(page)
 }
 
 export async function switchToRegtestNetwork(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Regtest' }).click()
+  await settingsNetworkButton(page, 'Regtest').click()
   await waitForSettingsNetworkModeButtonSelected(
     page,
     'Regtest',
@@ -51,7 +47,10 @@ export async function switchToRegtestNetwork(page: Page): Promise<void> {
 export async function goToArkadeManagementPanel(page: Page): Promise<void> {
   await goToWalletTab(page, 'Management')
   await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
-  await expect(page.getByText('Arkade (offchain layer)')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-infomode-id="arkade-management-panel"]')).toHaveText(
+    'Arkade',
+    { timeout: 60_000 },
+  )
 }
 
 /**
@@ -74,14 +73,18 @@ export async function setupRegtestArkadeWallet(
 }
 
 export async function goToArkadeBoardPage(page: Page): Promise<void> {
-  await goToArkadeManagementPanel(page)
-  await page.getByRole('link', { name: 'Board from on-chain' }).click()
+  await goToWalletTab(page, 'Dashboard')
+  await waitForArkadeLoadReady(page)
+  await page
+    .getByTestId('dashboard-arkade-balance-card')
+    .getByRole('link', { name: 'Board from on-chain' })
+    .click()
   await expect(page.getByRole('heading', { name: 'Board to Arkade' })).toBeVisible()
 }
 
 export async function readBoardingAddress(page: Page): Promise<string> {
   await goToArkadeBoardPage(page)
-  const addressLocator = page.locator('.font-mono.text-xs').first()
+  const addressLocator = page.locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
   await expect
     .poll(
       async () => {

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
 
 type BarkRailBackLink = '/wallet' | '/wallet/management'
 
@@ -23,9 +23,9 @@ export function BarkRailUnavailable({
       <p className="text-muted-foreground" data-testid={testId}>
         {message}
       </p>
-      <Button type="button" variant="outline" asChild>
+      <DesignButton type="button" appearance="secondary" asChild>
         <Link to={backTo}>{backLabel}</Link>
-      </Button>
+      </DesignButton>
     </div>
   )
 }

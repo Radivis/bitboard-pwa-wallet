@@ -2,7 +2,7 @@
 
 ## Tech Stack
 
-Bitboard Wallet is a PWA using the following technologies
+Bitcoin Codex is a PWA using the following technologies
 
 ### Frontend / UI
 Language: TypeScript
@@ -107,7 +107,7 @@ flowchart TB
 
 **Lock/unlock** and **per-rail load, sync, and save** (on-chain, Lightning, Arkade) live in `frontend/src/lib/wallet/lifecycle/`. Orchestrators own phase transitions and expose `get*Snapshot` + `subscribe*`; they drive TanStack Query `enabled` / `queryFn` for async work but **do not** store phase in Query cache or Zustand.
 
-**Routing:** Rail lifecycles are route-independent. Wallet hydration (near-zero session restore + bootstrap load) may **start** only for operations that need a secrets session: the `/wallet/*` secrets gate, or action-gated unlock (`ensureWalletUnlockedForAction` / `useRequireUnlockedWallet`) on Settings, Lab, and similar. Opening Library, Lab, or Settings does **not** restore the session by itself. Post-lock redirect to Library is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
+**Routing:** Rail lifecycles are route-independent. Wallet hydration (near-zero session restore + bootstrap load) may **start** only for operations that need a secrets session: the `/wallet/*` secrets gate, or action-gated unlock (`ensureWalletUnlockedForAction` / `useRequireUnlockedWallet`) on Settings, Lab, and similar. Opening Start, Guides, Library, Lab, or Settings does **not** restore the session by itself. Post-lock redirect to Start is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
 
 **React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
 
@@ -122,7 +122,7 @@ Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.y
 The `crypto` crate is structured in three conceptual layers:
 
 - **Pure / no I/O:** `mnemonic`, `descriptors`, `types`, `transaction`, `wallet`, and largely `lab_psbt`. Used only from `lib.rs` or internal tests. No network or host calls.
-- **I/O:** `esplora` (network via `EsploraClient` and `WasmSleeper`), `wasm_sleep` (JS `setTimeout` for async). These modules perform or facilitate out-of-process communication.
+- **I/O:** `esplora` (network via `EsploraClient`). Browser retry waits use `bitboard-wasm-sleep` through Esplora's default sleeper. These modules perform or facilitate out-of-process communication.
 - **WASM boundary / glue:** All public JS-facing API lives in `crypto/src/lib.rs` (mnemonic, descriptors, wallet create/load, sync, transaction build/sign, lab build/sign). `crypto/src/lab.rs` also exposes many `#[wasm_bindgen]` functions used by the lab worker (mining, tx build/sign, block effects, keypair, address validation). Key derivation (Argon2) is in the separate **bitboard-encryption** crate and used only by the encryption worker.
 
 Wallet state lives in **thread-local** `ACTIVE_WALLET` and related `RefCell`s in WASM; a single crypto worker holds one logical wallet. Lab-related descriptors are copied into `EXTERNAL_DESCRIPTOR_FOR_LAB` / `INTERNAL_DESCRIPTOR_FOR_LAB` when the wallet is created or loaded.

@@ -1,139 +1,65 @@
-import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { Zap } from 'lucide-react'
+
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { ActivityTimeButton } from '@/components/ActivityTimeButton'
+import { DesignTag } from '@/components/design/DesignTag'
+import {
+  DesignTransactionCard,
+  type DesignTransactionDetail,
+} from '@/components/design/DesignTransactionCard'
+import { SignedBitcoinAmount } from '@/components/SignedBitcoinAmount'
 import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning/lightning-backend-service'
 import type { LightningPaymentWithWallet } from '@/lib/lightning/lightning-dashboard-sync'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { cn } from '@/lib/shared/utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 
-interface LightningPaymentItemProps {
-  payment: LightningPaymentWithWallet
-}
+const COPIED_PAYMENT_HASH = 'Payment hash copied to clipboard'
 
-export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
-
+export function LightningPaymentItem({ payment }: { payment: LightningPaymentWithWallet }) {
   const isSent = payment.direction === 'outgoing'
-  const Icon = isSent ? ArrowUpRight : ArrowDownLeft
-  const timestamp = new Date(payment.timestamp * 1000)
+  const details: DesignTransactionDetail[] = [
+    { label: 'Lightning wallet', value: payment.walletLabel, prose: true },
+    {
+      label: 'Payment hash',
+      value: truncateAddress(payment.paymentHash, 5, 5),
+      copyText: payment.paymentHash,
+      copyAriaLabel: 'Copy payment hash',
+      copiedMessage: COPIED_PAYMENT_HASH,
+    },
+  ]
+  if (payment.memo !== '') {
+    details.push({ label: 'Memo', value: payment.memo, prose: true })
+  }
+  if (payment.feesPaidSats > 0) {
+    details.push({
+      label: 'Fee',
+      value: <BitcoinAmountDisplay amountSats={payment.feesPaidSats} amountTypography="addresses" />,
+    })
+  }
+  if (isSent) {
+    details.push({
+      label: 'Total (incl. fee)',
+      value: (
+        <BitcoinAmountDisplay
+          amountSats={getLnOutgoingTotalInclFeeSats(payment)}
+          amountTypography="addresses"
+        />
+      ),
+    })
+  }
 
   return (
-    <div
+    <DesignTransactionCard
       data-testid={`ln-payment-${payment.connectionId}-${payment.paymentHash}`}
-      className="cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
-      onClick={() => setExpanded(!expanded)}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full',
-            isSent ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30',
-          )}
-        >
-          <Icon
-            className={cn(
-              'h-4 w-4',
-              isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            )}
-          />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium capitalize">
-              {isSent ? 'Sent' : 'Received'}
-            </p>
-            <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-              <Zap className="h-3 w-3" />
-              Lightning
-            </span>
-          </div>
-          <p className="truncate text-xs font-medium text-muted-foreground">
-            {payment.walletLabel}
-          </p>
-          <button
-            type="button"
-            className="text-xs text-muted-foreground hover:underline"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowAbsoluteTime(!showAbsoluteTime)
-            }}
-          >
-            {showAbsoluteTime
-              ? format(timestamp, 'yyyy-MM-dd HH:mm')
-              : formatDistanceToNow(timestamp, { addSuffix: true })}
-          </button>
-        </div>
-
-        <div className="text-right">
-          <p
-            className={cn(
-              'text-sm font-medium',
-              isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            )}
-          >
-            <span className="inline-flex items-baseline gap-0.5">
-              <span className="tabular-nums">{isSent ? '-' : '+'}</span>
-              <BitcoinAmountDisplay amountSats={payment.amountSats} size="sm" />
-            </span>
-          </p>
-        </div>
-
-        <div className="ml-1">
-          {payment.isPending ? (
-            <Clock className="h-4 w-4 text-yellow-500" />
-          ) : (
-            <BadgeCheck className="h-4 w-4 text-green-500" />
-          )}
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <div className="flex justify-between">
-            <span>Lightning wallet</span>
-            <span className="max-w-[180px] truncate text-right font-medium text-foreground">
-              {payment.walletLabel}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Payment hash</span>
-            <span className="max-w-[180px] truncate font-mono text-[10px]">
-              {payment.paymentHash}
-            </span>
-          </div>
-          {payment.memo ? (
-            <div className="flex justify-between gap-2">
-              <span>Memo</span>
-              <span className="text-right">{payment.memo}</span>
-            </div>
-          ) : null}
-          {payment.feesPaidSats > 0 && (
-            <div className="flex justify-between gap-2">
-              <span>Fee</span>
-              <span className="text-right">
-                <BitcoinAmountDisplay amountSats={payment.feesPaidSats} size="sm" />
-              </span>
-            </div>
-          )}
-          {isSent && (
-            <div className="flex justify-between gap-2">
-              <span>Total (incl. fee)</span>
-              <span className="text-right">
-                <BitcoinAmountDisplay
-                  amountSats={getLnOutgoingTotalInclFeeSats(payment)}
-                  size="sm"
-                />
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span>Status</span>
-            <span>{payment.isPending ? 'Pending' : 'Settled'}</span>
-          </div>
-        </div>
-      )}
-    </div>
+      direction={isSent ? 'sent' : 'received'}
+      settlement={payment.isPending ? 'pending' : 'confirmed'}
+      amount={<SignedBitcoinAmount sign={isSent ? '-' : '+'} amountSats={payment.amountSats} />}
+      time={payment.timestamp > 0 ? <ActivityTimeButton unixSeconds={payment.timestamp} /> : undefined}
+      tags={
+        <DesignTag icon={<Zap className="size-4" aria-hidden />}>
+          Lightning
+        </DesignTag>
+      }
+      details={details}
+    />
   )
 }

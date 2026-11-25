@@ -1,7 +1,6 @@
 import { useState, useLayoutEffect } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
@@ -51,47 +50,21 @@ export function NearZeroSecurityBanner() {
 
   return (
     <>
-      <div
+      <DesignBanner
         role="alert"
-        className="border-b border-red-900/80 bg-red-600 px-4 py-4 text-red-50 shadow-md dark:bg-red-950 dark:text-red-50"
-      >
-        <div className="mx-auto flex max-w-screen-xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex min-w-0 gap-3">
-            <AlertTriangle
-              className="mt-0.5 h-7 w-7 shrink-0 text-red-100"
-              aria-hidden
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="text-base font-semibold leading-snug">
-                Near-zero security mode is active
-              </p>
-              <p className="text-sm leading-relaxed text-red-100">
-                Your wallets are protected only by a published wrapper key—treat this as unsafe.
-                Set a real app password now.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-            <Button
-              type="button"
-              variant="secondary"
-              className="bg-white text-red-900 hover:bg-red-50 dark:bg-red-100 dark:hover:bg-white"
-              onClick={() => setUpgradeOpen(true)}
-            >
-              Set up password now
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-auto py-1 text-xs text-red-100 hover:bg-red-700/50 hover:text-white"
-              onClick={handleDismissLater}
-            >
-              Set up a password later
-            </Button>
-          </div>
-        </div>
-      </div>
+        status="risk"
+        className="mx-4 mt-4"
+        title="Near-zero security mode is active"
+        description="Your wallets are protected only by a published wrapper key—treat this as unsafe. Set a real app password now."
+        primaryAction={{
+          label: 'Set up password now',
+          onClick: () => setUpgradeOpen(true),
+        }}
+        secondaryAction={{
+          label: 'Set up a password later',
+          onClick: handleDismissLater,
+        }}
+      />
 
       <UpgradeFromNearZeroPasswordModal
         open={upgradeOpen}

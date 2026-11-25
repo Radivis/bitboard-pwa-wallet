@@ -255,6 +255,23 @@ export function truncateAddress(
   return `${address.slice(0, prefixLen)}...${address.slice(-suffixLen)}`
 }
 
+/**
+ * Confirmations for a dashboard row. Pending is 0. A confirmed row stays
+ * unknown until the local tip is at least its block height.
+ */
+export function onchainConfirmationCount(
+  transaction: Pick<TransactionDetails, 'isConfirmed' | 'confirmationBlockHeight'>,
+  localTipHeight: number | null,
+): number | null {
+  if (!transaction.isConfirmed || transaction.confirmationBlockHeight == null) {
+    return 0
+  }
+  if (localTipHeight == null || localTipHeight < transaction.confirmationBlockHeight) {
+    return null
+  }
+  return localTipHeight - transaction.confirmationBlockHeight + 1
+}
+
 export function formatTxDirection(tx: TransactionDetails): 'sent' | 'received' {
   return tx.sentSats > tx.receivedSats ? 'sent' : 'received'
 }

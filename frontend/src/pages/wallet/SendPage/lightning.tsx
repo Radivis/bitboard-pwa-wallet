@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { LightningAddress } from '@getalby/lightning-tools/lnurl'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
@@ -337,7 +337,7 @@ export function useSendFlowLightning({
     canBuildLightning,
     submitLightningPayment,
     resolvedSignetFamilyInvoiceModal: (
-      <AppModal
+      <DesignModal
         isOpen={pendingSignetFamilyInvoice != null}
         onOpenChange={(isOpen) => {
           if (!isOpen) handleCancelPendingSignetFamilyInvoice()
@@ -346,28 +346,28 @@ export function useSendFlowLightning({
         onCancel={handleCancelPendingSignetFamilyInvoice}
         footer={(requestClose) => (
           <>
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               onClick={requestClose}
               disabled={lightningPayMutation.isPending}
             >
               Cancel
-            </Button>
-            <Button
+            </DesignButton>
+            <DesignButton
               type="button"
               onClick={handleConfirmPendingSignetFamilyInvoice}
               disabled={lightningPayMutation.isPending}
             >
               Confirm and pay
-            </Button>
+            </DesignButton>
           </>
         )}
       >
-        <DialogDescription className="text-left text-sm text-muted-foreground">
+        <DialogDescription className="design-type-regular text-left text-muted-foreground">
           {bolt11SignetFamilyConfirmationText(networkMode)}
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
     ),
   }
 }

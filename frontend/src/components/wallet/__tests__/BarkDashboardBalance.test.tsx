@@ -5,6 +5,7 @@ import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
@@ -83,9 +84,14 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     Link: ({
       children,
       to,
+      search,
       ...props
-    }: { children: ReactNode; to: string } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a href={to} {...props}>
+    }: {
+      children: ReactNode
+      to: string
+      search?: { section?: string }
+    } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={search?.section != null ? `${to}?section=${search.section}` : to} {...props}>
         {children}
       </a>
     ),
@@ -127,6 +133,7 @@ function pendingOffboard(): BarkPendingAction {
 describe('BarkDashboardBalance', () => {
   beforeEach(() => {
     pendingActions.current = []
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
     useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true
@@ -163,7 +170,8 @@ describe('BarkDashboardBalance', () => {
 
     const hint = screen.getByTestId('bark-next-refresh-hint')
     expect(hint).toHaveTextContent('Unlock this wallet around')
-    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint).toHaveAttribute('data-slot', 'design-banner')
+    expect(hint).toHaveAttribute('data-status', 'warning')
     expect(hint.parentElement?.firstElementChild).toBe(hint)
   })
 
@@ -186,6 +194,15 @@ describe('BarkDashboardBalance', () => {
       'href',
       '/wallet/bark/board',
     )
+  })
+
+  it('DASH-BARK-22 links Advanced actions to the Bark card in Management', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    const advancedActions = screen.getByTestId('dashboard-bark-advanced-actions')
+    expect(advancedActions).toHaveTextContent('Advanced actions')
+    expect(advancedActions).toHaveAttribute('data-type', 'tertiary')
+    expect(advancedActions).toHaveClass('w-fit', 'self-start')
+    expect(advancedActions).toHaveAttribute('href', '/wallet/management?section=bark')
   })
 
   it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {
@@ -274,11 +291,11 @@ describe('BarkDashboardBalance', () => {
     const spendable = screen.getByTestId('dashboard-bark-balance-spendable')
     const locked = screen.getByTestId('dashboard-bark-balance-locked')
     const exiting = screen.getByTestId('dashboard-bark-balance-exiting')
-    expect(spendable).toHaveClass('text-sm')
+    expect(spendable).toHaveClass('design-type-small-balances')
     expect(spendable).not.toHaveClass('text-3xl')
-    expect(locked).toHaveClass('text-sm')
+    expect(locked).toHaveClass('design-type-small-balances')
     expect(locked).not.toHaveClass('text-3xl')
-    expect(exiting).toHaveClass('text-sm')
+    expect(exiting).toHaveClass('design-type-small-balances')
     expect(exiting).not.toHaveClass('text-3xl')
   })
 
@@ -321,7 +338,7 @@ describe('BarkDashboardBalance', () => {
     renderWithProviders(<BarkDashboardBalance />)
     const banner = screen.getByTestId('bark-pending-action-banner')
     expect(banner).toHaveAttribute('data-state', 'error')
-    expect(banner).toHaveClass('border-red-500/40')
+    expect(banner).toHaveAttribute('data-status', 'error')
     expect(banner).toHaveTextContent('vtxo is not spendable (state: spent)')
   })
 

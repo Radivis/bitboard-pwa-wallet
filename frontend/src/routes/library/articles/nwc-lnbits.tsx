@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nwc-lnbits',
   title: 'LNbits and NWC',
   tagIds: ['lightning', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -36,7 +37,7 @@ export const article: LibraryArticle = {
           </li>
           <li>
             Create a wallet connection and copy the{' '}
-            <code className="text-sm">nostr+walletconnect://</code> URI.
+            <code className="design-type-addresses">nostr+walletconnect://</code> URI.
           </li>
           <li>
             In Bitboard, open <strong>Management → Lightning</strong> and paste the URI.

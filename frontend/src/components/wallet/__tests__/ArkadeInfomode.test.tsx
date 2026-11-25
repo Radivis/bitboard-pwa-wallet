@@ -52,7 +52,22 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: null,
   }),
-  useArkadeNewAddressMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeNewAddressMutation: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useArkadeOffchainReceiveGapQuery: () => ({ data: undefined }),
+  readArkadeOffchainReceiveGap: () =>
+    Promise.resolve({
+      revealed: false,
+      index: 0,
+      receiveCount: 0,
+      gap: 0,
+      batchGap: 0,
+      displayedBatchGap: 0,
+      snapshotPresent: false,
+    }),
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
   useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -65,6 +80,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
   useArkadeAutonomousModeActive: () => false,
+  useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
   useHasPendingBatchIntent: () => false,
   useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,
@@ -141,12 +157,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/wallet/ArkadeExitSection', () => ({
-  ArkadeExitSection: () => (
-    <div data-infomode-id="arkade-exit-section">Exit to on-chain</div>
-  ),
-}))
-
 describe('Arkade Infomode zones', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -169,6 +179,15 @@ describe('Arkade Infomode zones', () => {
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.dashboardBalance}"]`),
     ).not.toBeNull()
     expect(screen.getByText('Arkade balance')).toBeInTheDocument()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.boardFromOnchain}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.renewVtxos}"]`),
+    ).not.toBeNull()
   })
 
   it('ArkadePanel exposes management card action infomode ids', () => {
@@ -178,15 +197,18 @@ describe('Arkade Infomode zones', () => {
     ).not.toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.delegatorFee}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.exitSection}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.boardFromOnchain}"]`),
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.renewVtxos}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.unilateralExit}"]`),
     ).not.toBeNull()
   })
 

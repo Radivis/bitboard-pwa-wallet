@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'esplora-privacy',
   title: 'Esplora privacy',
   tagIds: ['privacy', 'security', 'bitcoin', 'wallets'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -30,7 +31,9 @@ export const article: LibraryArticle = {
           chain data plus a few write endpoints (mainly broadcasting already-signed transactions).
           When Bitboard syncs, it asks Esplora about the script pubkeys (addresses) your wallet has
           already revealed — one HTTP request per address — and merges the answers into your local{' '}
-          <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> state. When you send on-chain,
+          <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> state. A fresh restore does not
+          ask about every possible address. It stops after a run of unused ones — see{' '}
+          <ArticleLink slug="the-gap-limit">The gap limit</ArticleLink>. When you send on-chain,
           the signed transaction is posted to Esplora’s <code>/tx</code> endpoint so miners can pick
           it up.
         </p>
@@ -61,7 +64,7 @@ export const article: LibraryArticle = {
             requests. Settings shows a warning for this case.
           </li>
           <li>
-            <strong>Regtest and Lab:</strong> Esplora traffic stays local (for example{' '}
+            <strong>Regtest and Labnet:</strong> Esplora traffic stays local (for example{' '}
             <code>localhost</code>) or on your own regtest setup — not through the public proxy.
           </li>
         </ul>

@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
+import { Gauge } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
+import { DesignSwitch, type DesignSwitchOption } from '@/components/design/DesignSwitch'
 import { Label } from '@/components/ui/label'
 import {
   SEND_FEE_PRESETS,
@@ -10,6 +12,12 @@ import {
   formatSatPerVbTwoDecimals,
   type SendFeePresetLabel,
 } from '@/lib/esplora/esplora-fee-estimates'
+
+const CUSTOM_FEE_VALUE = 'custom'
+const CUSTOM_FEE_INFO_TEXT =
+  'Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation.'
+
+type FeeRateValue = SendFeePresetLabel | typeof CUSTOM_FEE_VALUE
 
 export function SendOnChainFeeSection(props: {
   feePresetSelection: SendFeePresetLabel
@@ -35,6 +43,16 @@ export function SendOnChainFeeSection(props: {
     onSelectCustomMode,
     hideCustom = false,
   } = props
+  const selectedFeeRate: FeeRateValue = useCustomFee ? CUSTOM_FEE_VALUE : feePresetSelection
+  const feeRateOptions = buildFeeRateOptions(presetSatPerVbByLabel, hideCustom)
+
+  function selectFeeRate(next: FeeRateValue) {
+    if (next === CUSTOM_FEE_VALUE) {
+      onSelectCustomMode()
+      return
+    }
+    onSelectPreset(next, presetSatPerVbByLabel[next])
+  }
 
   return (
     <div className="space-y-2">
@@ -51,61 +69,21 @@ export function SendOnChainFeeSection(props: {
         </InfomodeWrapper>
       </Label>
       {feeEstimatesRefreshing ? (
-        <p className="text-xs text-muted-foreground">Refreshing fee estimates…</p>
+        <p className="design-type-regular text-muted-foreground">Refreshing fee estimates…</p>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        {SEND_FEE_PRESETS.map((preset) => {
-          const { infoTitle, infoText } = SEND_FEE_PRESET_INFOMODE[preset.label]
-          const presetRate = presetSatPerVbByLabel[preset.label]
-          const rateShown = formatSatPerVbTwoDecimals(presetRate)
-          return (
-            <InfomodeWrapper
-              key={preset.label}
-              infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
-              infoTitle={infoTitle}
-              infoText={infoText}
-              className="min-w-[7.5rem] flex-1 sm:min-w-0"
-            >
-              <Button
-                type="button"
-                variant={
-                  !useCustomFee && feePresetSelection === preset.label
-                    ? 'default'
-                    : 'outline'
-                }
-                size="sm"
-                className="w-full"
-                disabled={isPending}
-                onClick={() => onSelectPreset(preset.label, presetRate)}
-              >
-                {preset.label} ({rateShown})
-              </Button>
-            </InfomodeWrapper>
-          )
-        })}
-        {!hideCustom ? (
-        <InfomodeWrapper
-          infoId="send-fee-custom-button"
-          infoTitle="Custom fee"
-          infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
-          className="min-w-[7.5rem] flex-1 sm:min-w-0"
-        >
-          <Button
-            type="button"
-            variant={useCustomFee ? 'default' : 'outline'}
-            size="sm"
-            className="w-full"
-            disabled={isPending}
-            onClick={() => onSelectCustomMode()}
-          >
-            Custom
-          </Button>
-        </InfomodeWrapper>
-        ) : null}
-      </div>
+      <DesignSwitch
+        aria-label="Fee rate"
+        wrap
+        disabled={isPending}
+        value={selectedFeeRate}
+        onValueChange={selectFeeRate}
+        options={feeRateOptions}
+        frameOption={frameFeeRateOption}
+      />
       {!hideCustom && useCustomFee && (
-        <Input
+        <DesignInput
           type="number"
+          leadingIcon={Gauge}
           inputMode="decimal"
           step="any"
           aria-label="Custom fee rate (sat/vB)"
@@ -116,5 +94,48 @@ export function SendOnChainFeeSection(props: {
         />
       )}
     </div>
+  )
+}
+
+function buildFeeRateOptions(
+  presetSatPerVbByLabel: Record<SendFeePresetLabel, number>,
+  hideCustom: boolean,
+): DesignSwitchOption<FeeRateValue>[] {
+  const presetOptions = SEND_FEE_PRESETS.map((preset) => ({
+    value: preset.label,
+    label: `${preset.label} (${formatSatPerVbTwoDecimals(presetSatPerVbByLabel[preset.label])})`,
+  }))
+  if (hideCustom) {
+    return presetOptions
+  }
+  return [...presetOptions, { value: CUSTOM_FEE_VALUE, label: 'Custom' }]
+}
+
+function frameFeeRateOption(
+  option: DesignSwitchOption<FeeRateValue>,
+  optionButton: ReactNode,
+) {
+  if (option.value === CUSTOM_FEE_VALUE) {
+    return (
+      <InfomodeWrapper
+        infoId="send-fee-custom-button"
+        infoTitle="Custom fee"
+        infoText={CUSTOM_FEE_INFO_TEXT}
+        className="w-full"
+      >
+        {optionButton}
+      </InfomodeWrapper>
+    )
+  }
+  const { infoTitle, infoText } = SEND_FEE_PRESET_INFOMODE[option.value]
+  return (
+    <InfomodeWrapper
+      infoId={`send-fee-preset-${option.value.toLowerCase()}`}
+      infoTitle={infoTitle}
+      infoText={infoText}
+      className="w-full"
+    >
+      {optionButton}
+    </InfomodeWrapper>
   )
 }

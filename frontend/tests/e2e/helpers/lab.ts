@@ -9,8 +9,10 @@ import {
   LAB_WALLET_RECEIVE_PAGE_TITLE,
   LAB_WALLET_SEND_PAGE_TITLE,
 } from '@/lib/wallet/wallet-lab-ui-copy'
+import { clickDrawerNavLink } from './drawer-nav'
 import { goToWalletTab } from './wallet-nav'
 import {
+  settingsNetworkButton,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './settings-waits'
@@ -21,23 +23,18 @@ import {
   textReflectsSatsInFormattedDisplaysOrLiteral,
 } from './bitcoin-amount-display'
 
-/** Primary bottom nav (Wallet / Lab / Library / Settings). */
+/** Opens Lab from the header menu. */
 export async function clickMainNavLab(page: Page): Promise<void> {
-  await page
-    .getByRole('navigation', { name: 'Main sections' })
-    .getByRole('link', { name: 'Lab' })
-    .click()
+  await clickDrawerNavLink(page, 'Lab')
 }
 
-/** Switch to Lab network without changing address type (default is Taproot). */
+/** Switch to Labnet without changing address type (default is Taproot). */
 export async function switchToLab(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-  await page
-    .getByRole('button', { name: 'Lab', exact: true })
-    .click()
-  await waitForSettingsNetworkModeButtonSelected(page, 'Lab', 60_000)
+  await settingsNetworkButton(page, 'Labnet').click()
+  await waitForSettingsNetworkModeButtonSelected(page, 'Labnet', 60_000)
 
   await waitForSettingsNetworkSwitchComplete(page)
 
@@ -51,7 +48,7 @@ export async function switchToLab(page: Page): Promise<void> {
 
 /** Reset the lab (navigate to /lab via client-side nav, click Reset, confirm). */
 export async function resetLab(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await clickMainNavLab(page)
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
@@ -179,7 +176,7 @@ export async function mineBlocksInLab(
     ).toBeVisible({
       timeout: 10000,
     })
-    await expect(page.getByRole('main').locator('.font-mono').first()).toContainText(/bcrt1/, {
+    await expect(page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()).toContainText(/bcrt1/, {
       timeout: 10000,
     })
   }
@@ -209,6 +206,7 @@ export async function mineBlocksInLab(
   await page.getByLabel('Number of blocks').fill(String(count))
   await page.getByRole('button', {
     name: ownerType === LabOwnerType.LabEntity ? 'Lab entity' : 'Wallet',
+    exact: true,
   }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
@@ -513,7 +511,7 @@ export async function createTransactionInLab(
   await page.getByRole('button', { name: 'Make transaction' }).click()
   await page.getByLabel('From address').fill(fromAddress)
   await page.getByLabel('To address').fill(toAddress)
-  await page.getByLabel('Amount (sats)').fill(String(amountSats))
+  await page.getByLabel('Amount (sat)').fill(String(amountSats))
   await page.getByLabel('Fee rate (sat/vB)').fill(String(feeRate))
   await page.getByRole('button', { name: 'Send' }).click()
 
@@ -663,10 +661,7 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
         })
         if (await changeFeesHeading.isVisible().catch(() => false)) {
           const dialog = page.getByRole('dialog').filter({ has: changeFeesHeading })
-          const dialogText =
-            (await dialog.innerText().catch(() => '')) ||
-            (await dialog.textContent().catch(() => '')) ||
-            ''
+          const dialogText = (await dialog.textContent().catch(() => '')) || ''
           if (
             textReflectsSatsInFormattedDisplaysOrLiteral(
               dialogText,

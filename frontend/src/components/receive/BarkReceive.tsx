@@ -1,19 +1,31 @@
 import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
+import {
+  BARK_RECEIVE_PAYMENT_COUNT_INFO_ID,
+  BarkReceivePaymentCountInfomodeContent,
+} from '@/components/bark/infomode/BarkReceivePaymentCountInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ReceiveQrCode } from '@/components/receive/ReceiveQrCode'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import {
   useBarkReceiveAddressQuery,
+  useBarkReceivePaymentCountQuery,
   useBarkRevealReceiveAddressMutation,
 } from '@/hooks/useBarkReceiveQueries'
+import { paymentsToAddressLabel, receiveButtonEmphasis } from '@/lib/wallet/receive-gap-surface'
 
 export function BarkReceive() {
   const snapshot = useBarkLoadLifecycleSnapshot()
   const addressQuery = useBarkReceiveAddressQuery()
+  const paymentCountQuery = useBarkReceivePaymentCountQuery()
   const revealMutation = useBarkRevealReceiveAddressMutation()
 
   const indexMissing = snapshot.loadPhase === 'loaded' && snapshot.receiveKeyIndex == null
@@ -25,6 +37,14 @@ export function BarkReceive() {
       addressQuery.isLoading ||
       (addressQuery.isFetching && address.length === 0))
   const showAddressError = indexMissing || snapshot.loadPhase === 'load-error' || addressQuery.isError
+  const showPaymentCount =
+    !showAddressError &&
+    !addressLoading &&
+    address.length > 0 &&
+    typeof paymentCountQuery.data === 'number'
+  const buttonEmphasis = receiveButtonEmphasis(
+    typeof paymentCountQuery.data === 'number' ? paymentCountQuery.data : 0,
+  )
 
   const handleCopy = async () => {
     if (!address) return
@@ -38,39 +58,27 @@ export function BarkReceive() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5" />
             QR Code
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <div className="flex flex-col items-center gap-4">
             {addressLoading ? (
               <LoadingSpinner text="Loading address…" />
             ) : showAddressError ? null : address ? (
-              <div className="rounded-lg bg-white p-4">
-                <QRCodeSVG
-                  value={address}
-                  size={256}
-                  level="M"
-                  imageSettings={{
-                    src: '/bitboard-icon.png',
-                    height: 48,
-                    width: 48,
-                    excavate: true,
-                  }}
-                />
-              </div>
+              <ReceiveQrCode value={address} rail="bark" />
             ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>
             <InfomodeWrapper
               infoId="bark-receive-address"
               infoTitle="Bark receiving address"
@@ -79,11 +87,11 @@ export function BarkReceive() {
             >
               Bark receiving address
             </InfomodeWrapper>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           {showAddressError ? (
-            <p className="text-sm text-destructive">
+            <p className="design-type-regular text-destructive">
               {snapshot.loadPhase === 'load-error' && snapshot.errorMessage
                 ? snapshot.errorMessage
                 : 'Could not load Bark address.'}
@@ -92,21 +100,32 @@ export function BarkReceive() {
             <div className="flex items-center gap-2">
               <div
                 data-testid="bark-receive-address"
-                className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm"
+                className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2"
               >
                 {addressLoading ? 'Loading…' : address || 'Loading…'}
               </div>
-              <Button
-                size="icon"
+              <DesignButton
+                appearance={buttonEmphasis.copy}
                 onClick={handleCopy}
                 disabled={!address}
                 aria-label="Copy address"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+                icon={<Copy />}
+              />
             </div>
           )}
-          <Button
+          {showPaymentCount ? (
+            <InfomodeWrapper
+                  infoId={BARK_RECEIVE_PAYMENT_COUNT_INFO_ID}
+              infoComponent={BarkReceivePaymentCountInfomodeContent}
+              className="rounded-md"
+            >
+              <p data-testid="bark-receive-payment-count">
+                {paymentsToAddressLabel(paymentCountQuery.data ?? 0)}
+              </p>
+            </InfomodeWrapper>
+          ) : null}
+          <DesignButton
+            appearance={buttonEmphasis.generate}
             type="button"
             className="w-full"
             data-testid="bark-generate-new-address"
@@ -114,16 +133,18 @@ export function BarkReceive() {
               revealMutation.isPending || !address || indexMissing || showAddressError
             }
             onClick={() => revealMutation.mutate()}
+            icon={
+              revealMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw />
+              )
+            }
           >
-            {revealMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
             Generate New Address
-          </Button>
-        </CardContent>
-      </Card>
+          </DesignButton>
+        </DesignCardContent>
+      </DesignCard>
     </>
   )
 }

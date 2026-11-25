@@ -68,11 +68,7 @@ fn now_ms() -> u64 {
     }
 }
 
-/// Esplora async client. On WASM the sleeper yields to the browser event loop between retries.
-#[cfg(target_arch = "wasm32")]
-type EsploraAsyncClient = esplora_client::AsyncClient<crate::wasm_sleep::WasmSleeper>;
-/// Esplora async client on native targets.
-#[cfg(not(target_arch = "wasm32"))]
+/// Esplora async client. On WASM the default sleeper yields to the browser event loop.
 type EsploraAsyncClient = esplora_client::AsyncClient;
 
 /// One address's UTXOs, reused by balance and history so session start does not list the same
@@ -93,6 +89,47 @@ pub struct EsploraBlockchain {
 }
 
 impl EsploraBlockchain {
+    /// Addresses whose cached UTXO list is still fresh and contains an unspent output.
+    /// Does not contact Esplora. A stale or missing entry is omitted.
+    pub fn fresh_cached_addresses_with_unspent(&self) -> Vec<String> {
+        let cache = self
+            .address_utxo_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = now_ms();
+        cache
+            .by_address
+            .iter()
+            .filter_map(|(address, (fetched_at_ms, utxos))| {
+                let age_ms = now.saturating_sub(*fetched_at_ms);
+                let still_fresh = age_ms < UNSPENT_OUTSPEND_CACHE_TTL_MS;
+                let has_unspent = utxos.iter().any(|utxo| !utxo.is_spent);
+                (still_fresh && has_unspent).then(|| address.clone())
+            })
+            .collect()
+    }
+
+    /// Insert an address UTXO cache row at a chosen timestamp. Tests use this to check the
+    /// receive-gap TTL without calling Esplora.
+    #[cfg(test)]
+    pub(crate) fn insert_address_utxos_for_test(
+        &self,
+        address: String,
+        fetched_at_ms: u64,
+        utxos: Vec<ExplorerUtxo>,
+    ) {
+        let mut cache = self
+            .address_utxo_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        cache.by_address.insert(address, (fetched_at_ms, utxos));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn address_cache_now_ms_for_test(&self) -> u64 {
+        now_ms()
+    }
+
     /// Client for `esplora_url`. An empty URL is rejected. Each request times out after
     /// [`ESPLORA_HTTP_TIMEOUT_SECS`] and sends cache-busting headers.
     pub fn new(esplora_url: &str) -> ArkResult<Self> {
@@ -100,23 +137,11 @@ impl EsploraBlockchain {
             return Err(ArkWasmError::EmptyEsploraUrl);
         }
 
-        #[cfg(target_arch = "wasm32")]
-        let client = {
-            use crate::wasm_sleep::WasmSleeper;
-            esplora_client::Builder::new(esplora_url)
-                .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
-                .header("Cache-Control", "no-cache")
-                .header("Pragma", "no-cache")
-                .build_async_with_sleeper::<WasmSleeper>()
-                .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?
-        };
-
-        #[cfg(not(target_arch = "wasm32"))]
         let client = esplora_client::Builder::new(esplora_url)
             .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
             .header("Cache-Control", "no-cache")
             .header("Pragma", "no-cache")
-            .build_async_with_sleeper()
+            .build_async()
             .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
 
         Ok(Self {

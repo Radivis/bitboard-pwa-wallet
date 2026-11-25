@@ -17,6 +17,7 @@ const getLiveDashboardMock = vi.hoisted(() =>
 const getAddressMock = vi.hoisted(() => vi.fn().mockResolvedValue('tark1qreceive'))
 
 const setQueryDataMock = vi.hoisted(() => vi.fn())
+const invalidateQueriesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
@@ -28,6 +29,7 @@ vi.mock('@/workers/arkade-factory', () => ({
 vi.mock('@/lib/shared/app-query-client', () => ({
   appQueryClient: {
     setQueryData: (...args: unknown[]) => setQueryDataMock(...args),
+    invalidateQueries: (...args: unknown[]) => invalidateQueriesMock(...args),
   },
 }))
 
@@ -36,6 +38,7 @@ import {
   arkadeAddressQueryKey,
   arkadeBalanceQueryKey,
   arkadeHistoryQueryKey,
+  arkadeReceiveGapQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -61,17 +64,36 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     expect(state.arkadeReceiveAddress).toBe('tark1qreceive')
 
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeBalanceQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeBalanceQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       { confirmedSats: 47_000, totalSats: 47_000 },
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeHistoryQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeHistoryQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       state.arkadePayments,
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeAddressQueryKey(1, 'mutinynet', 'conn-1'),
+      arkadeAddressQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
       'tark1qreceive',
     )
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: arkadeReceiveGapQueryKey({
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      }),
+    })
   })
 
   it('does not write the previous session when the active wallet changed', async () => {
@@ -83,5 +105,6 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     expect(state.arkadeBalance).toBeNull()
     expect(state.arkadePayments).toEqual([])
     expect(setQueryDataMock).not.toHaveBeenCalled()
+    expect(invalidateQueriesMock).not.toHaveBeenCalled()
   })
 })

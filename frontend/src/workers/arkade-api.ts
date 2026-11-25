@@ -59,6 +59,18 @@ export interface ArkadeOperatorConfigDiffResult {
   entries: ArkadeOperatorConfigDiffEntry[]
 }
 
+export interface ArkadeOffchainReceiveGap {
+  revealed: boolean
+  index: number
+  receiveCount: number
+  gap: number
+  /** Batch gap of the index Generate would reveal. */
+  batchGap: number
+  /** Batch gap of the address on screen. 2 or more means a seed restore will not ask about it. */
+  displayedBatchGap: number
+  snapshotPresent: boolean
+}
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   /** Offchain VTXO spendable balance (excludes bumper/boarding). */
@@ -654,6 +666,7 @@ export interface ArkadeService {
   getLiveDashboard(): Promise<ArkadeLiveDashboard>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
+  getOffchainReceiveGap(): Promise<ArkadeOffchainReceiveGap>
   getBoardingAddress(): Promise<string>
   getBoardingStatus(): Promise<ArkadeBoardingStatus>
   sendPayment(params: ArkadeSendParams): Promise<string>

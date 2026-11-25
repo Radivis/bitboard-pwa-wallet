@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-cryptocurrency-exactly',
   title: 'What is a cryptocurrency exactly?',
   tagIds: ['cryptocurrencies', 'bitcoin'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

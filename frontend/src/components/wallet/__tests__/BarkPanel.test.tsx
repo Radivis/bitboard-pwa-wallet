@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
@@ -98,6 +99,7 @@ function pendingOffboard(): BarkPendingAction {
 describe('BarkPanel', () => {
   beforeEach(() => {
     pendingActions.current = []
+    useBitcoinDisplayUnitStore.setState({ defaultBitcoinUnit: 'BTC' })
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }

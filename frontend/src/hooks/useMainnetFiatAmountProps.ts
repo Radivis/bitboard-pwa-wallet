@@ -18,7 +18,9 @@ export type MainnetFiatAmountProps = MainnetFiatAmountDisplayProps & {
 }
 
 /** Shared mainnet fiat-denomination gate for balance display and amount entry. */
-export function useMainnetFiatAmountProps(): MainnetFiatAmountProps {
+export function useMainnetFiatAmountProps(options?: {
+  allowFetchWhenPortfolioZeroForReceivePage?: boolean
+}): MainnetFiatAmountProps {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const fiatDenominationMode = useFiatDenominationStore(
     (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
@@ -26,7 +28,7 @@ export function useMainnetFiatAmountProps(): MainnetFiatAmountProps {
   const defaultFiatCurrency = useFiatDenominationStore(
     (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
-  const fiatRatesQuery = useMainnetFiatRatesQuery()
+  const fiatRatesQuery = useMainnetFiatRatesQuery(options)
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
   const mainnetFiatMode = networkMode === 'mainnet' && fiatDenominationMode
 

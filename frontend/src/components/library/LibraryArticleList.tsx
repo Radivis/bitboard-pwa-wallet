@@ -1,11 +1,18 @@
-import { Link } from '@tanstack/react-router'
-import { Badge } from '@/components/ui/badge'
+import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
+import { DesignTag } from '@/components/design/DesignTag'
+import { useLibraryBookmarks, usePendingBookmarkSlugs } from '@/db'
 import type { LibraryArticle } from '@/lib/library/articles'
+import { libraryTagHref } from '@/lib/library/library-catalog-click'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
 interface LibraryArticleListProps {
   articles: LibraryArticle[]
   emptyMessage: string
+  /**
+   * `page` sits on the page background, so each card uses the lower fill.
+   * `raised` sits inside another card, which is the tag section.
+   */
+  surface?: 'page' | 'raised'
   /** When set, tag badges omit this id (e.g. the tag for the enclosing section on /library/tags). */
   excludeTagId?: LibraryTagId
 }
@@ -13,45 +20,50 @@ interface LibraryArticleListProps {
 export function LibraryArticleList({
   articles,
   emptyMessage,
+  surface = 'raised',
   excludeTagId,
 }: LibraryArticleListProps) {
+  const { data: bookmarkSlugs } = useLibraryBookmarks()
+  const pendingBookmarkSlugs = usePendingBookmarkSlugs()
+  const bookmarksHaveLoaded = bookmarkSlugs != null
+
   if (articles.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+    return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
   }
 
   return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
+    <ul
+      data-slot="design-library-list"
+      data-library-list-surface={surface}
+      className="grid list-none gap-4 p-0"
+    >
       {articles.map((article) => {
         const tagIdsToShow =
           excludeTagId != null
             ? article.tagIds.filter((id) => id !== excludeTagId)
             : article.tagIds
+        const isBookmarked = bookmarkSlugs?.has(article.slug) === true
         return (
-          <li key={article.slug}>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 px-3 py-2 sm:items-center sm:py-1.5">
-              <Link
-                to="/library/articles/$slug"
-                params={{ slug: article.slug }}
-                className="min-w-0 flex-1 font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                {article.title}
-              </Link>
-              {tagIdsToShow.length > 0 ? (
-                <div className="flex max-w-full flex-wrap gap-1.5 sm:justify-end">
-                  {tagIdsToShow.map((tagId) => (
-                    <Badge key={tagId} variant="secondary" asChild>
-                      <Link
-                        to="/library/tags"
-                        search={{ tag: tagId }}
-                        className="cursor-pointer"
-                      >
-                        {getTagLabel(tagId)}
-                      </Link>
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+          <li key={article.slug} className="min-w-0">
+            <DesignLibraryCard
+              title={article.title}
+              articleSlug={article.slug}
+              level={article.level}
+              isBookmarked={isBookmarked}
+              showBookmark={bookmarksHaveLoaded}
+              bookmarkPending={pendingBookmarkSlugs.has(article.slug)}
+              tags={
+                tagIdsToShow.length > 0
+                  ? tagIdsToShow.map((tagId) => (
+                      <DesignTag key={tagId} asChild>
+                        <a href={libraryTagHref(tagId)} data-library-tag={tagId}>
+                          {getTagLabel(tagId)}
+                        </a>
+                      </DesignTag>
+                    ))
+                  : undefined
+              }
+            />
           </li>
         )
       })}

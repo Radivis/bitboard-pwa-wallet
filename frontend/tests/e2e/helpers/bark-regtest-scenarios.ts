@@ -36,7 +36,7 @@ async function readOnchainReceiveAddress(page: Page): Promise<string> {
   await goToWalletTab(page, 'Receive')
   const addressEl = page
     .locator('[data-infomode-id="receive-receiving-address-card"]')
-    .locator('.font-mono')
+    .locator('.design-type-addresses:not(input):not(textarea):not(select)')
   await expect(addressEl).toHaveText(/bcrt1/, { timeout: 45_000 })
   const receiveAddress = (await addressEl.textContent())?.trim()
   if (receiveAddress == null || !receiveAddress.startsWith('bcrt1')) {

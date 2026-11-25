@@ -2,6 +2,10 @@ import { type Page, expect } from '@playwright/test'
 import { satsFromFirstFormattedBitcoinDisplayInRoot } from './bitcoin-amount-display'
 import { goToWalletTab } from './wallet-nav'
 import { E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS } from '@/lib/arkade/e2e/arkade-operator-mock-state'
+import {
+  SOFT_GAP_CONFIRM_TITLE,
+  SOFT_GAP_GENERATE_LABEL,
+} from '@/lib/wallet/receive-gap-surface'
 
 /** Mock ASP E2E happy path is ~5–15s; allow headroom for CI WASM cold start. */
 const ARKADE_MOCK_UI_TIMEOUT_MS = process.env.CI ? 60_000 : 30_000
@@ -212,6 +216,32 @@ export async function clickArkadeGenerateNewAddress(page: Page): Promise<void> {
   const generateButton = page.getByTestId('arkade-generate-new-address')
   await expect(generateButton).toBeEnabled({ timeout: 15_000 })
   await generateButton.click()
+  await confirmArkadeSoftGapDialogWhenOpen(page)
+}
+
+/**
+ * A paid current key reveals immediately. An unused current key opens the soft
+ * confirm. The hard opt-in is left for a person to accept.
+ */
+async function confirmArkadeSoftGapDialogWhenOpen(page: Page): Promise<void> {
+  const softDialog = page.getByRole('dialog', { name: SOFT_GAP_CONFIRM_TITLE })
+  const generatedToast = page.getByText('New Arkade address generated')
+  const toastAlreadyVisible = await generatedToast.isVisible().catch(() => false)
+  const dialogReady = softDialog
+    .waitFor({ state: 'visible', timeout: 15_000 })
+    .then(() => 'dialog' as const)
+    .catch(() => 'dialog-timeout' as const)
+  const toastReady = toastAlreadyVisible
+    ? new Promise<'toast-timeout'>((resolve) => {
+        setTimeout(() => resolve('toast-timeout'), 15_000)
+      })
+    : generatedToast
+        .waitFor({ state: 'visible', timeout: 15_000 })
+        .then(() => 'toast' as const)
+        .catch(() => 'toast-timeout' as const)
+  const outcome = await Promise.race([dialogReady, toastReady])
+  if (outcome !== 'dialog') return
+  await softDialog.getByRole('button', { name: SOFT_GAP_GENERATE_LABEL, exact: true }).click()
 }
 
 /** Wait until `offchain_next_derivation_index` advances after Generate New Address. */

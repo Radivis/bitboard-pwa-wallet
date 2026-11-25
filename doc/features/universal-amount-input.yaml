@@ -1,0 +1,33 @@
+feature:
+  name: Universal amount input
+  description: >
+    One amount field for Bitcoin and fiat entry. It follows the Settings Bitcoin
+    display unit, unless Send passes a per-send unit, and it uses the default
+    fiat currency when fiat denomination mode is on for mainnet.
+  user_stories:
+    - As a user, I want amount fields to use the Bitcoin unit I chose in Settings
+    - As a user who has not chosen a unit, I want amount fields to start in satoshis
+    - As a user on mainnet with fiat denomination mode, I want amount fields to use my fiat currency
+    - As a user sending Bitcoin, I want to override the Settings unit for that send without changing Settings
+  requirements:
+    - The unset Settings Bitcoin display unit is sat. A unit already saved in Settings stays as saved
+    - On mainnet with fiat denomination mode, the field uses the default fiat currency and ignores the Bitcoin unit, including a Send override
+    - Off mainnet, fiat denomination mode does not change the field. The field stays on the Bitcoin unit
+    - When no Bitcoin unit is passed in, the field uses the Settings unit
+    - When a Bitcoin unit is passed in and fiat mode does not apply, the field uses that unit. Send uses this for its amount-unit selector
+    - The field is a DesignInput. Its placeholder and numeric mode match the active unit or currency
+    - In fiat mode with a usable Bitcoin price and a positive parsed amount, the field shows an approximate Bitcoin amount
+    - In fiat mode without a usable Bitcoin price, the field shows that the Bitcoin price is unavailable
+    - Callers keep the raw text and decide what an empty field means. The shared parser reports empty, invalid, or a satoshi amount
+    - Fee rates, the lab miner subsidy, block weight, and VTXO search stay separate fields
+  pages:
+    - UniversalAmountInput:
+      - description: Shared Bitcoin or fiat amount field
+      - file: frontend/src/components/UniversalAmountInput.tsx
+      - visible_elements:
+        - amount text field
+        - approximate Bitcoin amount when fiat entry has a positive amount and a usable price
+        - Bitcoin price unavailable note when fiat entry has no usable price
+      - requirements:
+        - Implemented by frontend/src/lib/wallet/__tests__/universal-amount.test.ts
+        - Implemented by frontend/src/components/__tests__/UniversalAmountInput.test.tsx

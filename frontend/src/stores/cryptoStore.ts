@@ -17,7 +17,7 @@ import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-ses
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
-import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
+import { navigateToStartIfOnWalletRoute } from '@/lib/shared/app-router';
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error';
 import { errorMessage } from '@/lib/shared/utils';
 import type { Remote } from 'comlink';
@@ -32,6 +32,7 @@ import type {
   DraftLabPsbtTransactionParams,
   DraftLabPsbtTransactionResult,
   EncryptedBlobForDb,
+  ExternalReceiveGap,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
   OpenWalletSessionParams,
@@ -73,6 +74,7 @@ interface CryptoState {
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
+  getExternalReceiveGap: () => Promise<ExternalReceiveGap>;
   buildAndSignLabTransaction: (
     params: BuildAndSignLabTransactionParams,
   ) => Promise<BuildAndSignLabTransactionResult>;
@@ -224,6 +226,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
 
+    getExternalReceiveGap: () =>
+      withErrorHandling((worker) => worker.getExternalReceiveGap()),
+
     buildAndSignLabTransaction: (params) =>
       withErrorHandling((worker) => worker.buildAndSignLabTransaction(params)),
 
@@ -309,7 +314,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
         }
       }
       await awaitInFlightWalletSecretsWrites();
-      navigateToLibraryIfOnWalletRoute();
+      navigateToStartIfOnWalletRoute();
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();

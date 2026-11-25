@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'ml-dsa',
   title: 'ML-DSA (Module Lattice Digital Signature Algorithm)',
   tagIds: ['cryptography', 'quantum-computing', 'standards'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
@@ -75,7 +76,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           Bitboard signs wallet data exports using <strong>ML-DSA-65</strong>. This serves two
           purposes:

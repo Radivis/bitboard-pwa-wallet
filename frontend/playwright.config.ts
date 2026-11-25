@@ -90,8 +90,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCi,
   retries: isCi ? 2 : 1,
-  /** GitHub-hosted runners are small; too many Chromium + WASM lab workers can OOM or hit 90s timeouts. */
-  workers: isCi ? 2 : undefined,
+  /**
+   * Two workers locally and in CI. More Chromium + WASM wallets full-scan public
+   * Esplora at once, which stalls network switches and lock.
+   */
+  workers: 2,
   reporter: isCi
     ? [
         ['github'],

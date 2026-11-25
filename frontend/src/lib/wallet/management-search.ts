@@ -8,13 +8,33 @@
  *
  * `completedExitTxid` comes from a successful Arkade unilateral-exit complete.
  * Management keeps the sweep txid on screen until the notice is dismissed.
+ *
+ * `section` comes from a dashboard Advanced actions button and scrolls that
+ * rail's card into view.
  */
 const SWEEP_TXID_PATTERN = /^[0-9a-fA-F]{64}$/
+
+export const MANAGEMENT_RAIL_SECTIONS = ['arkade', 'bark', 'lightning'] as const
+
+export type ManagementRailSection = (typeof MANAGEMENT_RAIL_SECTIONS)[number]
+
+export function managementRailCardElementId(section: ManagementRailSection): string {
+  return `management-${section}-card`
+}
+
+export function isManagementRailSection(value: unknown): value is ManagementRailSection {
+  return (
+    typeof value === 'string' &&
+    (MANAGEMENT_RAIL_SECTIONS as readonly string[]).includes(value)
+  )
+}
 
 export interface ManagementSearch {
   openDelete?: boolean
   /** Lowercase 64-character transaction id of a completed unilateral-exit sweep. */
   completedExitTxid?: string
+  /** Rail card to scroll into view. */
+  section?: ManagementRailSection
 }
 
 export function parseManagementSearch(search: Record<string, unknown>): ManagementSearch {
@@ -34,6 +54,9 @@ export function parseManagementSearch(search: Record<string, unknown>): Manageme
     SWEEP_TXID_PATTERN.test(search.completedExitTxid)
   ) {
     parsed.completedExitTxid = search.completedExitTxid.toLowerCase()
+  }
+  if (isManagementRailSection(search.section)) {
+    parsed.section = search.section
   }
   return parsed
 }

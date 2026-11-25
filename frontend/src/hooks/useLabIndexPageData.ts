@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import {
+  formatUniversalAmountFromSats,
+  parseUniversalAmount,
+  useUniversalAmountEntry,
+} from '@/lib/wallet/universal-amount'
 import { minOutputSizeRaisedToastMessage } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 import { errorMessage } from '@/lib/shared/utils'
 import { labOpDraftLabEntityTransaction } from '@/lib/lab/lab-worker-operations'
@@ -35,6 +40,7 @@ const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
  * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
  */
 export function useLabIndexPageData() {
+  const amountEntry = useUniversalAmountEntry()
   const { data: labState } = useLabChainStateQuery()
   const blocks = useMemo(() => labState?.blocks ?? [], [labState?.blocks])
   const addresses = useMemo(() => labState?.addresses ?? [], [labState?.addresses])
@@ -179,7 +185,7 @@ export function useLabIndexPageData() {
       ) {
         amountSats = UX_DUST_FLOOR_SATS
         toast.warning(minOutputSizeRaisedToastMessage())
-        setAmountSats(String(UX_DUST_FLOOR_SATS))
+        setAmountSats(formatUniversalAmountFromSats(UX_DUST_FLOOR_SATS, amountEntry))
       }
 
       setSendPrepPending(true)
@@ -200,7 +206,7 @@ export function useLabIndexPageData() {
           draftResult.draft.finalAmountSats !== amountSats
         ) {
           amountSats = draftResult.draft.finalAmountSats
-          setAmountSats(String(amountSats))
+          setAmountSats(formatUniversalAmountFromSats(amountSats, amountEntry))
           toast.warning(minOutputSizeRaisedToastMessage())
           try {
             draftResult = await labOpDraftLabEntityTransaction({
@@ -236,7 +242,7 @@ export function useLabIndexPageData() {
         setSendPrepPending(false)
       }
     },
-    [createTxMutation, getBalanceForAddress, clearSendForm],
+    [createTxMutation, getBalanceForAddress, clearSendForm, amountEntry],
   )
 
   const confirmDeadRecipientSend = useCallback(() => {
@@ -281,9 +287,10 @@ export function useLabIndexPageData() {
   }, [])
 
   const handleSend = useCallback(() => {
-    const amount = parseInt(amountSats, 10)
+    const parsedAmount = parseUniversalAmount(amountSats, amountEntry)
+    const amount = parsedAmount.kind === 'sats' ? parsedAmount.amountSats : Number.NaN
     const fee = parseFloat(feeRate)
-    if (isNaN(amount) || amount < 1) {
+    if (!Number.isFinite(amount) || amount < 1) {
       toast.error('Enter a valid amount')
       return
     }
@@ -348,6 +355,7 @@ export function useLabIndexPageData() {
     fromAddress,
     toAddress,
     amountSats,
+    amountEntry,
     feeRate,
     runLabEntitySendPipeline,
     addressToOwner,

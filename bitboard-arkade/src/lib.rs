@@ -6,29 +6,27 @@ mod error;
 mod esplora_blockchain;
 mod exit_balance;
 mod incremental_vtxo_sync;
+#[cfg(test)]
+mod indexer_fetch_tests;
 mod network;
 mod offchain_snapshot;
 mod operator_config_diff;
 mod outpoint;
 mod persistence;
-mod session;
-mod signer_migration;
-mod unilateral_exit_materials;
-#[cfg(target_arch = "wasm32")]
-mod wasm_sleep;
-
-#[cfg(test)]
-mod indexer_fetch_tests;
 #[cfg(test)]
 mod persistence_tests;
 #[cfg(test)]
 mod receive_address_tests;
+mod receive_gap;
+mod session;
 #[cfg(test)]
 mod session_boarding_utxo_tests;
 #[cfg(test)]
 mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
+mod signer_migration;
+mod unilateral_exit_materials;
 #[cfg(not(target_arch = "wasm32"))]
 pub use api_types::{
     CompleteUnilateralExitParams, ProceedUnilateralExitStepParams, SendPaymentParams,
@@ -411,6 +409,13 @@ pub fn arkade_get_address() -> Result<String, JsValue> {
 pub fn arkade_reveal_next_receive_address() -> Result<String, JsValue> {
     map_js_error(with_session(|session| {
         session.reveal_next_offchain_address()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_offchain_receive_gap() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.offchain_receive_gap()?)
     }))
 }
 
