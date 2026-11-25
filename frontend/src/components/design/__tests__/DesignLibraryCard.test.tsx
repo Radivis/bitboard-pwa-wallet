@@ -140,13 +140,27 @@ describe('DesignLibraryCard', () => {
 
     const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
     expect(bookmark).toHaveAttribute('aria-pressed', 'true')
-    expect(bookmark.querySelector('svg')?.getAttribute('class')).toContain(
-      'fill-[var(--design-text-regular)]',
-    )
+    expect(bookmark.className).toContain('text-[var(--design-text-regular)]')
+    expect(bookmark.querySelector('svg')?.getAttribute('class')).toContain('fill-current')
   })
 
-  it('ignores a tap while that bookmark is still saving', async () => {
-    const user = userEvent.setup()
+  it('omits the bookmark icon until the caller knows the bookmark state', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+        showBookmark={false}
+        onToggleBookmark={() => {}}
+      />,
+    )
+
+    expect(await screen.findByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /bookmarks/i })).not.toBeInTheDocument()
+  })
+
+  it('disables the bookmark while that bookmark is still saving', async () => {
     const onToggleBookmark = vi.fn()
     renderWithLibraryRouter(
       <DesignLibraryCard
@@ -159,9 +173,9 @@ describe('DesignLibraryCard', () => {
       />,
     )
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' }),
-    )
+    const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
+    expect(bookmark).toBeDisabled()
+    expect(bookmark.className).toContain('disabled:text-[var(--design-text-button-tertiary-disabled)]')
     expect(onToggleBookmark).not.toHaveBeenCalled()
   })
 })

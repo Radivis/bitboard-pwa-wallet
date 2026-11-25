@@ -14,6 +14,7 @@ export function DesignLibraryCard({
   tags,
   isBookmarked,
   onToggleBookmark,
+  showBookmark = true,
   bookmarkPending = false,
   className,
 }: {
@@ -24,6 +25,8 @@ export function DesignLibraryCard({
   tags?: ReactNode
   isBookmarked: boolean
   onToggleBookmark: () => void
+  /** False while the bookmark query has not returned, so the icon is omitted. */
+  showBookmark?: boolean
   bookmarkPending?: boolean
   className?: string
 }) {
@@ -56,27 +59,26 @@ export function DesignLibraryCard({
           />
         ))}
       </div>
-      <button
-        type="button"
-        className={cn(
-          designFocusClassName,
-          'absolute bottom-3 right-4 z-10 size-6 p-0 text-[var(--design-text-regular)]',
-        )}
-        aria-pressed={isBookmarked}
-        aria-disabled={bookmarkPending || undefined}
-        aria-label={
-          isBookmarked ? `Remove ${title} from bookmarks` : `Add ${title} to bookmarks`
-        }
-        onClick={() => {
-          if (bookmarkPending) return
-          onToggleBookmark()
-        }}
-      >
-        <Bookmark
-          className={cn('size-6', isBookmarked && 'fill-[var(--design-text-regular)]')}
-          aria-hidden
-        />
-      </button>
+      {showBookmark ? (
+        <button
+          type="button"
+          className={cn(
+            designFocusClassName,
+            'absolute bottom-3 right-4 z-10 size-6 p-0 text-[var(--design-text-regular)] disabled:text-[var(--design-text-button-tertiary-disabled)]',
+          )}
+          aria-pressed={isBookmarked}
+          aria-label={
+            isBookmarked ? `Remove ${title} from bookmarks` : `Add ${title} to bookmarks`
+          }
+          disabled={bookmarkPending}
+          onClick={onToggleBookmark}
+        >
+          <Bookmark
+            className={cn('size-6', isBookmarked && 'fill-current')}
+            aria-hidden
+          />
+        </button>
+      ) : null}
     </article>
   )
 }

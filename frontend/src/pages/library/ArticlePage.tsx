@@ -8,7 +8,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
-import { useLibraryBookmarks, useSetArticleBookmark } from '@/db'
+import { useLibraryBookmarks, usePendingBookmarkSlugs, useSetArticleBookmark } from '@/db'
 import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 import { cn } from '@/lib/shared/utils'
@@ -18,9 +18,10 @@ export function ArticlePage() {
   const article = getArticle(slug)
   const { data: bookmarkSlugs } = useLibraryBookmarks()
   const setBookmark = useSetArticleBookmark()
+  const pendingBookmarkSlugs = usePendingBookmarkSlugs()
 
-  const isBookmarked =
-    isArticleSlug(slug) && bookmarkSlugs ? bookmarkSlugs.has(slug) : false
+  const bookmarksHaveLoaded = bookmarkSlugs != null
+  const isBookmarked = isArticleSlug(slug) && bookmarkSlugs?.has(slug) === true
 
   if (!article) {
     return (
@@ -45,26 +46,28 @@ export function ArticlePage() {
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className={LIBRARY_ARTICLE_TITLE_CLASS}>{article.title}</h2>
-          <DesignButton
-            type="button"
-            appearance="tertiary"
-            className="h-12 w-12 shrink-0 px-0"
-            aria-pressed={isBookmarked}
-            aria-label={isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks'}
-            disabled={setBookmark.isPending}
-            icon={
-              <Bookmark
-                className={cn(isBookmarked && 'fill-primary text-primary')}
-                aria-hidden
-              />
-            }
-            onClick={() =>
-              void setBookmark.mutateAsync({
-                articleSlug: article.slug,
-                isBookmarked: !isBookmarked,
-              })
-            }
-          />
+          {bookmarksHaveLoaded ? (
+            <DesignButton
+              type="button"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
+              aria-pressed={isBookmarked}
+              aria-label={isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks'}
+              disabled={pendingBookmarkSlugs.has(article.slug)}
+              icon={
+                <Bookmark
+                  className={cn(isBookmarked && 'fill-primary text-primary')}
+                  aria-hidden
+                />
+              }
+              onClick={() =>
+                void setBookmark.mutateAsync({
+                  articleSlug: article.slug,
+                  isBookmarked: !isBookmarked,
+                })
+              }
+            />
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-3">
           {article.tagIds.map((tagId) => (

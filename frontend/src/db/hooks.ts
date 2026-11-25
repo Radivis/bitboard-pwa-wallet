@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useMutationState, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureSchemaAndDataMigrated } from './database'
 import { getAllBookmarkSlugs, setArticleBookmark } from './library-articles'
@@ -129,10 +129,22 @@ export function useLibraryBookmarks() {
   })
 }
 
+type SetArticleBookmarkInput = {
+  articleSlug: string
+  isBookmarked: boolean
+}
+
+function articleSlugFromBookmarkMutation(variables: unknown): string | undefined {
+  if (typeof variables !== 'object' || variables == null || !('articleSlug' in variables)) return undefined
+  const articleSlug = variables.articleSlug
+  return typeof articleSlug === 'string' ? articleSlug : undefined
+}
+
 export function useSetArticleBookmark() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (params: { articleSlug: string; isBookmarked: boolean }) => {
+    mutationKey: libraryKeys.setBookmark,
+    mutationFn: async (params: SetArticleBookmarkInput) => {
       await ensureSchemaAndDataMigrated()
       await setArticleBookmark(getDatabase(), params.articleSlug, params.isBookmarked)
     },
@@ -140,6 +152,15 @@ export function useSetArticleBookmark() {
       queryClient.invalidateQueries({ queryKey: libraryKeys.bookmarks })
     },
   })
+}
+
+/** Slugs with a bookmark save in flight, across every list and the article page. */
+export function usePendingBookmarkSlugs(): ReadonlySet<string> {
+  const pendingSlugs = useMutationState({
+    filters: { mutationKey: libraryKeys.setBookmark, status: 'pending' },
+    select: (mutation) => articleSlugFromBookmarkMutation(mutation.state.variables),
+  })
+  return new Set(pendingSlugs.filter((slug): slug is string => slug != null))
 }
 
 export function useLibraryHistory(limit: number) {

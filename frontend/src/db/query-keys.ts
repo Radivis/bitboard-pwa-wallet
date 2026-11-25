@@ -12,6 +12,8 @@ export const walletKeys = {
 
 export const libraryKeys = {
   bookmarks: ['library', 'bookmarks'] as const,
+  /** Shared by every `useSetArticleBookmark` call so pending state is app-wide. */
+  setBookmark: ['library', 'set-bookmark'] as const,
   /** Prefix for `useLibraryHistory(limit)`; invalidate this root after new history rows. */
   historyRoot: ['library', 'history'] as const,
   history: (limit: number) => [...libraryKeys.historyRoot, limit] as const,

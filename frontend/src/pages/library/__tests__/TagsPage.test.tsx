@@ -20,6 +20,7 @@ vi.mock('@/db', () => ({
     isPending: false,
     variables: undefined,
   }),
+  usePendingBookmarkSlugs: () => new Set<string>(),
 }))
 
 function renderTagsPage(initialEntry: string) {

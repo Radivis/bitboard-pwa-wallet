@@ -18,6 +18,7 @@ export {
   useDeleteWallet,
   useLibraryBookmarks,
   useSetArticleBookmark,
+  usePendingBookmarkSlugs,
   useLibraryHistory,
   useWalletNoMnemonicBackupFlag,
 } from './hooks'

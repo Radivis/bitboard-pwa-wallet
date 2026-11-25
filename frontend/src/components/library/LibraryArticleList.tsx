@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
-import { useLibraryBookmarks, useSetArticleBookmark } from '@/db'
+import { useLibraryBookmarks, usePendingBookmarkSlugs, useSetArticleBookmark } from '@/db'
 import type { LibraryArticle } from '@/lib/library/articles'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
@@ -25,7 +25,8 @@ export function LibraryArticleList({
 }: LibraryArticleListProps) {
   const { data: bookmarkSlugs } = useLibraryBookmarks()
   const setBookmark = useSetArticleBookmark()
-  const pendingBookmarkSlug = setBookmark.isPending ? setBookmark.variables?.articleSlug : undefined
+  const pendingBookmarkSlugs = usePendingBookmarkSlugs()
+  const bookmarksHaveLoaded = bookmarkSlugs != null
 
   if (articles.length === 0) {
     return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
@@ -50,7 +51,8 @@ export function LibraryArticleList({
               articleSlug={article.slug}
               level={article.level}
               isBookmarked={isBookmarked}
-              bookmarkPending={pendingBookmarkSlug === article.slug}
+              showBookmark={bookmarksHaveLoaded}
+              bookmarkPending={pendingBookmarkSlugs.has(article.slug)}
               onToggleBookmark={() =>
                 void setBookmark.mutateAsync({
                   articleSlug: article.slug,

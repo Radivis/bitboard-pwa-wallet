@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -16,16 +16,21 @@ const bookmarkMutation = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
 }))
 
+const bookmarkQuery = vi.hoisted(() => ({
+  slugs: new Set(['what-is-a-wallet']) as Set<string> | undefined,
+}))
+
 vi.mock('@/db', () => ({
   useLibraryBookmarks: () => ({
-    data: new Set(['what-is-a-wallet']),
-    isLoading: false,
+    data: bookmarkQuery.slugs,
+    isLoading: bookmarkQuery.slugs == null,
   }),
   useSetArticleBookmark: () => ({
     mutateAsync: bookmarkMutation.mutateAsync,
     isPending: false,
     variables: undefined,
   }),
+  usePendingBookmarkSlugs: () => new Set<string>(),
 }))
 
 const walletArticle: LibraryArticle = {
@@ -37,6 +42,11 @@ const walletArticle: LibraryArticle = {
 }
 
 describe('LibraryArticleList', () => {
+  beforeEach(() => {
+    bookmarkQuery.slugs = new Set(['what-is-a-wallet'])
+    bookmarkMutation.mutateAsync.mockReset()
+  })
+
   it('fits as many 240px columns as the row allows and lets them share it', async () => {
     renderWithLibraryRouter(
       <LibraryArticleList articles={[walletArticle]} emptyMessage="Nothing here." />,
@@ -87,6 +97,16 @@ describe('LibraryArticleList', () => {
       articleSlug: 'what-is-a-wallet',
       isBookmarked: false,
     })
+  })
+
+  it('hides bookmark icons until the bookmark query returns', async () => {
+    bookmarkQuery.slugs = undefined
+    renderWithLibraryRouter(
+      <LibraryArticleList articles={[walletArticle]} emptyMessage="Nothing here." />,
+    )
+
+    expect(await screen.findByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /bookmarks/i })).not.toBeInTheDocument()
   })
 
   it('shows the empty message when there are no articles', async () => {
