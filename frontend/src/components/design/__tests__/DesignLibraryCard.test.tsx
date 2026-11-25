@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
-import { Link } from '@tanstack/react-router'
+import userEvent from '@testing-library/user-event'
 
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
@@ -19,11 +19,12 @@ describe('DesignLibraryCard', () => {
         title="What is a wallet"
         articleSlug="what-is-a-wallet"
         level={1}
+        isBookmarked={false}
         tags={
           <DesignTag asChild>
-            <Link to="/library/tags" search={{ tag: 'bitcoin' }}>
+            <a href="/library/tags?tag=bitcoin" data-library-tag="bitcoin">
               Bitcoin
-            </Link>
+            </a>
           </DesignTag>
         }
       />,
@@ -31,6 +32,7 @@ describe('DesignLibraryCard', () => {
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
     expect(title).toHaveAttribute('href', '/library/articles/what-is-a-wallet')
+    expect(title).toHaveAttribute('data-library-article', 'what-is-a-wallet')
     expect(title).toHaveAttribute('data-library-card-title')
     expect(title.className).toContain('design-type-emphasis')
     expect(title.className).toContain('text-[var(--design-text-regular)]')
@@ -38,6 +40,7 @@ describe('DesignLibraryCard', () => {
 
     const tag = screen.getByRole('link', { name: 'Bitcoin' })
     expect(tag).toHaveAttribute('href', '/library/tags?tag=bitcoin')
+    expect(tag).toHaveAttribute('data-library-tag', 'bitcoin')
     expect(tag).toHaveAttribute('data-slot', 'design-tag')
     expect(tag.className).toContain('hover:bg-[var(--design-nav-background-hover)]')
     expect(tag.className).toContain('active:bg-[var(--design-nav-background-active)]')
@@ -50,6 +53,7 @@ describe('DesignLibraryCard', () => {
         title="Security models for cryptocurrencies and conventional currencies"
         articleSlug="security-models-for-cryptocurrencies-and-conventional-currencies"
         level={2}
+        isBookmarked={false}
       />,
     )
 
@@ -61,7 +65,12 @@ describe('DesignLibraryCard', () => {
 
   it('fills its grid cell, with a 20px radius and a 16px stack gap', async () => {
     renderWithLibraryRouter(
-      <DesignLibraryCard title="What is a wallet" articleSlug="what-is-a-wallet" level={1} />,
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+      />,
     )
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
@@ -89,5 +98,78 @@ describe('DesignLibraryCard', () => {
     expect(cardRules).toContain('0 4px 10px 0 rgb(0 0 0 / 0.25)')
     expect(cardRules).toContain('inset 0 4px 9px 0 rgb(236 235 239 / 0.08)')
     expect(cardRules).not.toContain('0 5px 12px 0 rgb(0 0 0 / 0.25)')
+  })
+
+  it('keeps the bookmark control off the article link', async () => {
+    const user = userEvent.setup()
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+      />,
+    )
+
+    const bookmark = await screen.findByRole('button', { name: 'Add What is a wallet to bookmarks' })
+    expect(bookmark).toHaveAttribute('aria-pressed', 'false')
+    expect(bookmark).toHaveAttribute('data-library-bookmark', 'what-is-a-wallet')
+    expect(bookmark.className).toContain('absolute')
+    expect(bookmark.className).toContain('bottom-3')
+    expect(bookmark.className).toContain('right-4')
+    expect(bookmark.className).toContain('z-10')
+    expect(bookmark.className).toContain('size-6')
+    await user.click(bookmark)
+    expect(screen.getByRole('link', { name: 'What is a wallet' })).toHaveAttribute(
+      'href',
+      '/library/articles/what-is-a-wallet',
+    )
+  })
+
+  it('fills the bookmark when the article is already bookmarked', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked
+      />,
+    )
+
+    const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
+    expect(bookmark).toHaveAttribute('aria-pressed', 'true')
+    expect(bookmark.className).toContain('text-[var(--design-text-regular)]')
+    expect(bookmark.querySelector('svg')?.getAttribute('class')).toContain('fill-current')
+  })
+
+  it('omits the bookmark icon until the caller knows the bookmark state', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked={false}
+        showBookmark={false}
+      />,
+    )
+
+    expect(await screen.findByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /bookmarks/i })).not.toBeInTheDocument()
+  })
+
+  it('disables the bookmark while that bookmark is still saving', async () => {
+    renderWithLibraryRouter(
+      <DesignLibraryCard
+        title="What is a wallet"
+        articleSlug="what-is-a-wallet"
+        level={1}
+        isBookmarked
+        bookmarkPending
+      />,
+    )
+
+    const bookmark = await screen.findByRole('button', { name: 'Remove What is a wallet from bookmarks' })
+    expect(bookmark).toBeDisabled()
+    expect(bookmark.className).toContain('disabled:text-[var(--design-text-button-tertiary-disabled)]')
   })
 })

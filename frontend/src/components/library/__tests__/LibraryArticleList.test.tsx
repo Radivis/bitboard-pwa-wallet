@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
@@ -10,6 +10,18 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 
 const designTokensPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../design-tokens.css')
 const designTokens = readFileSync(designTokensPath, 'utf8')
+
+const bookmarkQuery = vi.hoisted(() => ({
+  slugs: new Set(['what-is-a-wallet']) as Set<string> | undefined,
+}))
+
+vi.mock('@/db', () => ({
+  useLibraryBookmarks: () => ({
+    data: bookmarkQuery.slugs,
+    isLoading: bookmarkQuery.slugs == null,
+  }),
+  usePendingBookmarkSlugs: () => new Set<string>(),
+}))
 
 const walletArticle: LibraryArticle = {
   slug: 'what-is-a-wallet',
@@ -20,6 +32,10 @@ const walletArticle: LibraryArticle = {
 }
 
 describe('LibraryArticleList', () => {
+  beforeEach(() => {
+    bookmarkQuery.slugs = new Set(['what-is-a-wallet'])
+  })
+
   it('fits as many 240px columns as the row allows and lets them share it', async () => {
     renderWithLibraryRouter(
       <LibraryArticleList articles={[walletArticle]} emptyMessage="Nothing here." />,
@@ -36,9 +52,15 @@ describe('LibraryArticleList', () => {
     expect(listRules).toContain('repeat(auto-fill, minmax(min(100%, 240px), 1fr))')
     expect(title.closest('[data-slot="design-library-card"]')).not.toBeNull()
     expect(screen.getByRole('img', { name: 'Beginner' })).toBeInTheDocument()
+    expect(title).toHaveAttribute('data-library-article', 'what-is-a-wallet')
     expect(screen.getByRole('link', { name: 'Bitcoin' })).toHaveAttribute(
       'href',
       '/library/tags?tag=bitcoin',
+    )
+    expect(screen.getByRole('link', { name: 'Bitcoin' })).toHaveAttribute('data-library-tag', 'bitcoin')
+    expect(screen.getByRole('button', { name: 'Remove What is a wallet from bookmarks' })).toHaveAttribute(
+      'data-library-bookmark',
+      'what-is-a-wallet',
     )
     expect(screen.getByRole('link', { name: 'Wallets' })).toBeInTheDocument()
   })
@@ -55,6 +77,16 @@ describe('LibraryArticleList', () => {
     expect(await screen.findByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Bitcoin' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Wallets' })).toBeInTheDocument()
+  })
+
+  it('hides bookmark icons until the bookmark query returns', async () => {
+    bookmarkQuery.slugs = undefined
+    renderWithLibraryRouter(
+      <LibraryArticleList articles={[walletArticle]} emptyMessage="Nothing here." />,
+    )
+
+    expect(await screen.findByRole('link', { name: 'What is a wallet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /bookmarks/i })).not.toBeInTheDocument()
   })
 
   it('shows the empty message when there are no articles', async () => {

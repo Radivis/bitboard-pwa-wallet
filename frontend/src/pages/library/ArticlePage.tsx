@@ -1,5 +1,5 @@
 import { Link, useParams } from '@tanstack/react-router'
-import { Star } from 'lucide-react'
+import { Bookmark } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DesignTag } from '@/components/design/DesignTag'
 import {
@@ -8,7 +8,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
-import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
+import { useLibraryBookmarks, usePendingBookmarkSlugs, useSetArticleBookmark } from '@/db'
 import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 import { cn } from '@/lib/shared/utils'
@@ -16,11 +16,12 @@ import { cn } from '@/lib/shared/utils'
 export function ArticlePage() {
   const { slug } = useParams({ from: '/library/articles/$slug' })
   const article = getArticle(slug)
-  const { data: favoriteSlugs } = useLibraryFavorites()
-  const setFavorite = useSetArticleFavorite()
+  const { data: bookmarkSlugs } = useLibraryBookmarks()
+  const setBookmark = useSetArticleBookmark()
+  const pendingBookmarkSlugs = usePendingBookmarkSlugs()
 
-  const isFavorite =
-    isArticleSlug(slug) && favoriteSlugs ? favoriteSlugs.has(slug) : false
+  const bookmarksHaveLoaded = bookmarkSlugs != null
+  const isBookmarked = isArticleSlug(slug) && bookmarkSlugs?.has(slug) === true
 
   if (!article) {
     return (
@@ -45,26 +46,28 @@ export function ArticlePage() {
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className={LIBRARY_ARTICLE_TITLE_CLASS}>{article.title}</h2>
-          <DesignButton
-            type="button"
-            appearance="tertiary"
-            className="h-12 w-12 shrink-0 px-0"
-            aria-pressed={isFavorite}
-            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            disabled={setFavorite.isPending}
-            icon={
-              <Star
-                className={cn(isFavorite && 'fill-primary text-primary')}
-                aria-hidden
-              />
-            }
-            onClick={() =>
-              void setFavorite.mutateAsync({
-                articleSlug: article.slug,
-                isFavorite: !isFavorite,
-              })
-            }
-          />
+          {bookmarksHaveLoaded ? (
+            <DesignButton
+              type="button"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
+              aria-pressed={isBookmarked}
+              aria-label={isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks'}
+              disabled={pendingBookmarkSlugs.has(article.slug)}
+              icon={
+                <Bookmark
+                  className={cn(isBookmarked && 'fill-primary text-primary')}
+                  aria-hidden
+                />
+              }
+              onClick={() =>
+                void setBookmark.mutateAsync({
+                  articleSlug: article.slug,
+                  isBookmarked: !isBookmarked,
+                })
+              }
+            />
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-3">
           {article.tagIds.map((tagId) => (

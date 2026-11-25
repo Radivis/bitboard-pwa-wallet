@@ -1,7 +1,8 @@
-import { Link } from '@tanstack/react-router'
 import { DesignLibraryCard } from '@/components/design/DesignLibraryCard'
 import { DesignTag } from '@/components/design/DesignTag'
+import { useLibraryBookmarks, usePendingBookmarkSlugs } from '@/db'
 import type { LibraryArticle } from '@/lib/library/articles'
+import { libraryTagHref } from '@/lib/library/library-catalog-click'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
 interface LibraryArticleListProps {
@@ -22,6 +23,10 @@ export function LibraryArticleList({
   surface = 'raised',
   excludeTagId,
 }: LibraryArticleListProps) {
+  const { data: bookmarkSlugs } = useLibraryBookmarks()
+  const pendingBookmarkSlugs = usePendingBookmarkSlugs()
+  const bookmarksHaveLoaded = bookmarkSlugs != null
+
   if (articles.length === 0) {
     return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
   }
@@ -37,19 +42,23 @@ export function LibraryArticleList({
           excludeTagId != null
             ? article.tagIds.filter((id) => id !== excludeTagId)
             : article.tagIds
+        const isBookmarked = bookmarkSlugs?.has(article.slug) === true
         return (
           <li key={article.slug} className="min-w-0">
             <DesignLibraryCard
               title={article.title}
               articleSlug={article.slug}
               level={article.level}
+              isBookmarked={isBookmarked}
+              showBookmark={bookmarksHaveLoaded}
+              bookmarkPending={pendingBookmarkSlugs.has(article.slug)}
               tags={
                 tagIdsToShow.length > 0
                   ? tagIdsToShow.map((tagId) => (
                       <DesignTag key={tagId} asChild>
-                        <Link to="/library/tags" search={{ tag: tagId }}>
+                        <a href={libraryTagHref(tagId)} data-library-tag={tagId}>
                           {getTagLabel(tagId)}
-                        </Link>
+                        </a>
                       </DesignTag>
                     ))
                   : undefined

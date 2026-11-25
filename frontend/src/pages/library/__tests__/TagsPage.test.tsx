@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -10,11 +11,19 @@ import {
 } from '@tanstack/react-router'
 
 import { TagsPage } from '@/pages/library/TagsPage'
+
+const setBookmark = vi.hoisted(() => vi.fn())
 import { isLibraryTagId, type LibraryTagId } from '@/lib/library/tags'
 import { useLibraryFilterSortStore } from '@/stores/libraryFilterSortStore'
 
 vi.mock('@/db', () => ({
-  useLibraryFavorites: () => ({ data: new Set<string>(), isLoading: false }),
+  useLibraryBookmarks: () => ({ data: new Set<string>(), isLoading: false }),
+  useSetArticleBookmark: () => ({
+    mutateAsync: setBookmark,
+    isPending: false,
+    variables: undefined,
+  }),
+  usePendingBookmarkSlugs: () => new Set<string>(),
 }))
 
 function renderTagsPage(initialEntry: string) {
@@ -47,6 +56,7 @@ function tagSection(tagId: string) {
 
 describe('TagsPage', () => {
   beforeEach(() => {
+    setBookmark.mockReset()
     Element.prototype.scrollIntoView = vi.fn()
     useLibraryFilterSortStore.setState({
       query: '',
@@ -97,13 +107,32 @@ describe('TagsPage', () => {
     expect(document.querySelector('[id^="library-tag-"]')).toBeNull()
   })
 
-  it('shows the empty-favorites message when Favorites matches nothing', async () => {
-    useLibraryFilterSortStore.setState({ scope: 'favorites' })
+  it('shows the empty-bookmarks message when Bookmarked matches nothing', async () => {
+    useLibraryFilterSortStore.setState({ scope: 'bookmarks' })
     renderTagsPage('/library/tags')
 
     expect(
-      await screen.findByText('No favorites yet. Open an article and tap the star to add one.'),
+      await screen.findByText('No bookmarks yet. Open an article and tap the bookmark to add one.'),
     ).toBeInTheDocument()
     expect(document.querySelector('[id^="library-tag-"]')).toBeNull()
+  })
+
+  it('saves a bookmark from an open tag section', async () => {
+    const user = userEvent.setup()
+    renderTagsPage('/library/tags?tag=wallets')
+
+    await waitFor(() => {
+      expect(tagSection('wallets')).toHaveProperty('open', true)
+    })
+    const walletsSection = tagSection('wallets')
+    if (walletsSection == null) throw new Error('Wallets section was not rendered')
+    await user.click(
+      within(walletsSection).getByRole('button', { name: 'Add What is a wallet to bookmarks' }),
+    )
+
+    expect(setBookmark).toHaveBeenCalledWith({
+      articleSlug: 'what-is-a-wallet',
+      isBookmarked: true,
+    })
   })
 })

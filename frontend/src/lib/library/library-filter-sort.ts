@@ -4,7 +4,7 @@ import { getTagLabel } from '@/lib/library/tags'
 
 export type LibraryArticleSort = 'title-asc' | 'title-desc' | 'level-asc' | 'level-desc'
 
-export type LibraryArticleScope = 'all' | 'favorites'
+export type LibraryArticleScope = 'all' | 'bookmarks'
 
 export interface LibraryFilterSortCriteria {
   query: string
@@ -19,13 +19,13 @@ export const LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE =
 
 export function libraryFilterEmptyMessage(
   criteria: Pick<LibraryFilterSortCriteria, 'scope' | 'minimumLevel' | 'maximumLevel'>,
-  favoriteCount: number,
+  bookmarkCount: number,
 ): string {
   if (criteria.minimumLevel > criteria.maximumLevel) return LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE
-  if (criteria.scope === 'favorites' && favoriteCount === 0) {
-    return 'No favorites yet. Open an article and tap the star to add one.'
+  if (criteria.scope === 'bookmarks' && bookmarkCount === 0) {
+    return 'No bookmarks yet. Open an article and tap the bookmark to add one.'
   }
-  if (criteria.scope === 'favorites') return 'No favorites match the current filters.'
+  if (criteria.scope === 'bookmarks') return 'No bookmarks match the current filters.'
   return 'No articles match the current filters.'
 }
 
@@ -54,23 +54,23 @@ function compareArticles(left: LibraryArticle, right: LibraryArticle, sort: Libr
 function articleIsInScope(
   article: LibraryArticle,
   criteria: LibraryFilterSortCriteria,
-  favoriteSlugs: ReadonlySet<string> | undefined,
+  bookmarkSlugs: ReadonlySet<string> | undefined,
 ): boolean {
-  if (criteria.scope !== 'favorites') return true
-  return favoriteSlugs?.has(article.slug) === true
+  if (criteria.scope !== 'bookmarks') return true
+  return bookmarkSlugs?.has(article.slug) === true
 }
 
 export function applyLibraryFilterSort(
   articles: readonly LibraryArticle[],
   criteria: LibraryFilterSortCriteria,
-  favoriteSlugs?: ReadonlySet<string>,
+  bookmarkSlugs?: ReadonlySet<string>,
 ): LibraryArticle[] {
   if (criteria.minimumLevel > criteria.maximumLevel) return []
   const normalizedQuery = normalizeSearch(criteria.query)
   return articles
     .filter(
       (article) =>
-        articleIsInScope(article, criteria, favoriteSlugs) &&
+        articleIsInScope(article, criteria, bookmarkSlugs) &&
         article.level >= criteria.minimumLevel &&
         article.level <= criteria.maximumLevel &&
         articleMatchesQuery(article, normalizedQuery),

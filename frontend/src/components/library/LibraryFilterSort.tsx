@@ -18,7 +18,7 @@ import {
 
 const SCOPE_OPTIONS: { value: LibraryArticleScope; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'favorites', label: 'Favorites' },
+  { value: 'bookmarks', label: 'Bookmarked' },
 ]
 
 const LEVEL_OPTIONS = LIBRARY_LEVELS.map((level) => ({

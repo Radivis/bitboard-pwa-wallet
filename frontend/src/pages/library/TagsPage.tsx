@@ -5,9 +5,10 @@ import { Tags as TagsIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { DesignCard } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { useLibraryCatalogClick } from '@/components/library/useLibraryCatalogClick'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
-import { useLibraryFavorites } from '@/db'
+import { useLibraryBookmarks } from '@/db'
 import { listArticles, type LibraryArticle } from '@/lib/library/articles'
 import {
   applyLibraryFilterSort,
@@ -125,21 +126,22 @@ export function TagsPage() {
   const tagIds = useMemo(() => listLibraryTagIdsSortedByLabel(), [])
   const articlesByTagId = useMemo(() => buildArticlesByTagId(), [])
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
-  const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
-  const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
+  const { data: bookmarkSlugs, isLoading } = useLibraryBookmarks()
+  const bookmarksAreLoading = criteria.scope === 'bookmarks' && isLoading
+  const onCatalogClick = useLibraryCatalogClick(bookmarkSlugs)
   const sections = useMemo(() => {
     const shown: VisibleTagSection[] = []
     for (const tagId of tagIds) {
       const articles = articlesByTagId.get(tagId) ?? []
-      const visibleArticles = applyLibraryFilterSort(articles, criteria, favoriteSlugs)
+      const visibleArticles = applyLibraryFilterSort(articles, criteria, bookmarkSlugs)
       if (!shouldShowTagSection(articles.length, visibleArticles.length, focusedTag === tagId)) continue
       shown.push({ tagId, articles, visibleArticles })
     }
     return shown
-  }, [articlesByTagId, criteria, favoriteSlugs, focusedTag, tagIds])
+  }, [articlesByTagId, criteria, bookmarkSlugs, focusedTag, tagIds])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onClick={onCatalogClick}>
       <PageHeader title="Tags" icon={TagsIcon} />
 
       <p className="design-type-regular text-muted-foreground">
@@ -149,11 +151,11 @@ export function TagsPage() {
 
       <LibraryFilterSort />
 
-      {favoritesAreLoading ? (
+      {bookmarksAreLoading ? (
         <p className="design-type-regular text-muted-foreground">Loading…</p>
       ) : sections.length === 0 ? (
         <p className="design-type-regular text-muted-foreground">
-          {libraryFilterEmptyMessage(criteria, favoriteSlugs?.size ?? 0)}
+          {libraryFilterEmptyMessage(criteria, bookmarkSlugs?.size ?? 0)}
         </p>
       ) : (
         <div className="space-y-3">

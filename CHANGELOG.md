@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The receive page shows the current gap, if it is 2 or higher
 - Confirmation modal for "Generate New Address" when the unused gap is 1–19 after a sync, and a hard opt-in once the gap reaches 20, including before the first sync
 - Library articles now have levels from Beginner to Specialist
-- Filter by minimum level, maximum level, or favorites in the Library
+- Filter by minimum level, maximum level, or bookmarks in the Library
 - Sorting of articles in the Library by level or alphabetically
 - New Library articles: "Address reuse and deanonymization", "Can Bitcoin transactions be dropped?", and "The gap limit"
 
@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The theme switcher is now is the side drawer
 - The bottom nav bar now only has one row at max; top level navigation now works through the side drawer
 - Removed the Favorites page in the Library, since it has become redundant through the new filter switch
+- Renamed favorites to bookmarks in the Library
 - Removing a NWC connected Lightning wallet now requires confirmation within a modal
 
 ## [0.3.7] - 2026-11-11
