@@ -1,4 +1,5 @@
-import { Search } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { ChevronDown, Search } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
 import { designFocusClassName } from '@/components/design/design-classes'
@@ -41,6 +42,35 @@ function isLibraryArticleSort(value: string): value is LibraryArticleSort {
   return SORT_OPTIONS.some((option) => option.value === value)
 }
 
+function LibrarySelect({
+  id,
+  value,
+  onChange,
+  children,
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  children: ReactNode
+}) {
+  return (
+    <div className="relative">
+      <select
+        id={id}
+        className={cn(librarySelectClassName, 'appearance-none pr-12')}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {children}
+      </select>
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-3 size-5 -translate-y-1/2 text-[var(--design-text-regular)]"
+      />
+    </div>
+  )
+}
+
 function LibraryLevelSelect({
   id,
   label,
@@ -57,12 +87,11 @@ function LibraryLevelSelect({
       <label htmlFor={id} className="design-type-emphasis text-foreground">
         {label}
       </label>
-      <select
+      <LibrarySelect
         id={id}
-        className={librarySelectClassName}
-        value={value}
-        onChange={(event) => {
-          const level = libraryLevelFromSelectValue(event.target.value)
+        value={String(value)}
+        onChange={(nextValue) => {
+          const level = libraryLevelFromSelectValue(nextValue)
           if (level != null) onChange(level)
         }}
       >
@@ -71,7 +100,7 @@ function LibraryLevelSelect({
             {level} {LIBRARY_LEVEL_LABEL[level]}
           </option>
         ))}
-      </select>
+      </LibrarySelect>
     </div>
   )
 }
@@ -116,12 +145,11 @@ export function LibraryFilterSort() {
         <label htmlFor="library-sort" className="design-type-emphasis text-foreground">
           Sort
         </label>
-        <select
+        <LibrarySelect
           id="library-sort"
-          className={librarySelectClassName}
           value={criteria.sort}
-          onChange={(event) => {
-            if (isLibraryArticleSort(event.target.value)) setSort(event.target.value)
+          onChange={(nextValue) => {
+            if (isLibraryArticleSort(nextValue)) setSort(nextValue)
           }}
         >
           {SORT_OPTIONS.map((option) => (
@@ -129,7 +157,7 @@ export function LibraryFilterSort() {
               {option.label}
             </option>
           ))}
-        </select>
+        </LibrarySelect>
       </div>
       <DesignSwitch
         aria-label="Shown articles"

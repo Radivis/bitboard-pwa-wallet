@@ -32,6 +32,8 @@ describe('LibraryFilterSort', () => {
       maximumLevel: 4,
       sort: 'level-desc',
     })
+    expect(screen.getByLabelText('Minimum level').className).toContain('appearance-none')
+    expect(screen.getByLabelText('Minimum level').nextElementSibling).toHaveClass('right-4')
   })
 
   it('writes All and Favorites to the store', async () => {
