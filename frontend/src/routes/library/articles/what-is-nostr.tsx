@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-nostr',
   title: 'What is Nostr?',
   tagIds: ['nostr', 'decentralized-networks', 'cryptography'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'the-flp-impossibility-in-asynchronous-systems',
   title: 'The FLP impossibility in asynchronous systems',
   tagIds: ['decentralized-networks', 'blockchain', 'bitcoin'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

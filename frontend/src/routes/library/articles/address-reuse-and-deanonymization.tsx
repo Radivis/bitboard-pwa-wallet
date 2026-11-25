@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'address-reuse-and-deanonymization',
   title: 'Address reuse and deanonymization',
   tagIds: ['privacy', 'wallets', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

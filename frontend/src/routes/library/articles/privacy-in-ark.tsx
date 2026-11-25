@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'privacy-in-ark',
   title: 'Privacy in Ark',
   tagIds: ['privacy', 'bitcoin', 'l2', 'wallets'],
+  level: 4,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

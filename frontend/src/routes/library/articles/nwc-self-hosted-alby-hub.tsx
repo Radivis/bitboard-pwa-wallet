@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nwc-self-hosted-alby-hub',
   title: 'Self-hosted Alby Hub and NWC',
   tagIds: ['lightning', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

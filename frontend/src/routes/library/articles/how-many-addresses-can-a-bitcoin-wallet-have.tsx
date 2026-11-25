@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'how-many-addresses-can-a-bitcoin-wallet-have',
   title: 'How many addresses can a Bitcoin wallet have?',
   tagIds: ['wallets', 'bitcoin', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

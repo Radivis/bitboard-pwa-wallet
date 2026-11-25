@@ -176,6 +176,8 @@ Resting fill is elevation 2. Hover raises the fill to elevation 3. The card sits
 
 The title is the article link, and that link stretches across the card. Tags stay their own links to the tag page, with the tag hover and active fills. They sit above the stretched title so a tag click does not open the article. The enclosing tag on a tag section is omitted from that card.
 
+Under the tags, a centered row shows the article's specialization: one 24px graduation cap for Beginner, then one more for each step through Specialist. The caps are 8px apart. The row's accessible name is that level's name.
+
 ### Modal
 
 `theme` is Light or Dark. The panel fill is `elevation/4`. Light and Dark use the elevation 4 shadow stack from the Basics elevation-patterns frame. It does not follow the network.

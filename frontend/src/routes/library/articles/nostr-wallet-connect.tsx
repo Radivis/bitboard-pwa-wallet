@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nostr-wallet-connect',
   title: 'Nostr Wallet Connect (NWC)',
   tagIds: ['nostr', 'lightning', 'wallets', 'standards', 'privacy'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

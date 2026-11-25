@@ -14,6 +14,7 @@ const designTokens = readFileSync(designTokensPath, 'utf8')
 const walletArticle: LibraryArticle = {
   slug: 'what-is-a-wallet',
   title: 'What is a wallet',
+  level: 1,
   tagIds: ['bitcoin', 'wallets'],
   body: null,
 }
@@ -33,6 +34,7 @@ describe('LibraryArticleList', () => {
     const listRules = designTokens.slice(listRulesStart, designTokens.indexOf('[data-slot="design-library-card"]'))
     expect(listRules).toContain('repeat(auto-fill, minmax(min(100%, 240px), 1fr))')
     expect(title.closest('[data-slot="design-library-card"]')).not.toBeNull()
+    expect(screen.getByRole('img', { name: 'Beginner' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Bitcoin' })).toHaveAttribute(
       'href',
       '/library/tags?tag=bitcoin',

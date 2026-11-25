@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'can-bitcoin-transactions-be-dropped',
   title: 'Can Bitcoin transactions be dropped?',
   tagIds: ['bitcoin', 'blockchain', 'mining'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-are-hd-wallets-and-how-do-they-work',
   title: 'What are HD wallets and how do they work?',
   tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

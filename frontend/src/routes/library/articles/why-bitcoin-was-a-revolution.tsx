@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'why-bitcoin-was-a-revolution',
   title: 'Why Bitcoin represented a true revolution',
   tagIds: ['history', 'bitcoin'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

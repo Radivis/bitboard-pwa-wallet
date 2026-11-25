@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'nwc-zeus',
   title: 'Zeus and NWC',
   tagIds: ['lightning', 'wallets'],
+  level: 2,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

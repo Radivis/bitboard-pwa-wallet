@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'segwit',
   title: 'SegWit',
   tagIds: ['bitcoin', 'soft-forks', 'history'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

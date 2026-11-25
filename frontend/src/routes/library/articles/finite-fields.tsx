@@ -9,6 +9,7 @@ export const article: LibraryArticle = {
   slug: 'finite-fields',
   title: 'Finite Fields',
   tagIds: ['cryptography', 'elliptic-curves', 'formulas'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

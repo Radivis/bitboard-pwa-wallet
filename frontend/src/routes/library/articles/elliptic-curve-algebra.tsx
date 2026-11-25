@@ -10,6 +10,7 @@ export const article: LibraryArticle = {
   slug: 'elliptic-curve-algebra',
   title: 'Elliptic Curve Algebra',
   tagIds: ['cryptography', 'elliptic-curves', 'formulas'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

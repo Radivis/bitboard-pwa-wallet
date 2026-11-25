@@ -32,6 +32,7 @@ export function LibraryArticleList({
             <DesignLibraryCard
               title={article.title}
               articleSlug={article.slug}
+              level={article.level}
               tags={
                 tagIdsToShow.length > 0
                   ? tagIdsToShow.map((tagId) => (

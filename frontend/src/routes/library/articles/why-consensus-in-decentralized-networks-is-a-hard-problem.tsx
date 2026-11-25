@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'why-consensus-in-decentralized-networks-is-a-hard-problem',
   title: 'Why consensus in decentralized networks is a hard problem',
   tagIds: ['decentralized-networks', 'blockchain', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

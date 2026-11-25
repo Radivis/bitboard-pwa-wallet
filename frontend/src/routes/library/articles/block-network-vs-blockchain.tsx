@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'block-network-vs-blockchain',
   title: 'The difference between a block network and a blockchain',
   tagIds: ['blockchain', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

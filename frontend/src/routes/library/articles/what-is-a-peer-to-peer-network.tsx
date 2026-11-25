@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-peer-to-peer-network',
   title: 'What is a peer to peer network?',
   tagIds: ['decentralized-networks', 'bitcoin'],
+  level: 1,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

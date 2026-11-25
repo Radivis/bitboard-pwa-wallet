@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'what-is-a-blockchain-reorganization',
   title: 'What is a blockchain reorganization?',
   tagIds: ['blockchain', 'bitcoin', 'mining'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

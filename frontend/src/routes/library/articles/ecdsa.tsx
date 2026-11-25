@@ -6,6 +6,7 @@ export const article: LibraryArticle = {
   slug: 'ecdsa',
   title: 'ECDSA (Elliptic Curve Digital Signature Algorithm)',
   tagIds: ['cryptography', 'elliptic-curves', 'bitcoin', 'formulas'],
+  level: 5,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

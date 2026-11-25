@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'quantum-computers-and-bitcoin',
   title: 'The threat of quantum computers for Bitcoin',
   tagIds: ['quantum-computing', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">

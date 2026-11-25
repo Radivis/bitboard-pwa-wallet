@@ -5,6 +5,7 @@ export const article: LibraryArticle = {
   slug: 'soft-forks-hard-forks-and-backward-compatibility',
   title: 'Soft forks, hard forks, and backward compatibility',
   tagIds: ['soft-forks', 'hard-forks', 'bitcoin'],
+  level: 3,
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
