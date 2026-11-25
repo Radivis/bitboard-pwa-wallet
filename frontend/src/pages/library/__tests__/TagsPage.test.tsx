@@ -91,7 +91,7 @@ describe('TagsPage', () => {
 
     expect(
       await screen.findByText(
-        'No article can have a minimum level higher than the maximum level. Surprisingly, this includes every article.',
+        'No article can have a minimum level higher than the maximum level. This logic implies that you see no articles here.',
       ),
     ).toBeInTheDocument()
     expect(document.querySelector('[id^="library-tag-"]')).toBeNull()

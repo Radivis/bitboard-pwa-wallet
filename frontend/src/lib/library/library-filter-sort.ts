@@ -15,7 +15,7 @@ export interface LibraryFilterSortCriteria {
 }
 
 export const LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE =
-  'No article can have a minimum level higher than the maximum level. Surprisingly, this includes every article.'
+  'No article can have a minimum level higher than the maximum level. This logic implies that you see no articles here.'
 
 export function libraryFilterEmptyMessage(
   criteria: Pick<LibraryFilterSortCriteria, 'scope' | 'minimumLevel' | 'maximumLevel'>,
