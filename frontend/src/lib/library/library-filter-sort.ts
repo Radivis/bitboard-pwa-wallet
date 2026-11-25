@@ -14,6 +14,21 @@ export interface LibraryFilterSortCriteria {
   scope: LibraryArticleScope
 }
 
+export const LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE =
+  'No article can have a minimum level higher than the maximum level. Surprisingly, this includes every article.'
+
+export function libraryFilterEmptyMessage(
+  criteria: Pick<LibraryFilterSortCriteria, 'scope' | 'minimumLevel' | 'maximumLevel'>,
+  favoriteCount: number,
+): string {
+  if (criteria.minimumLevel > criteria.maximumLevel) return LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE
+  if (criteria.scope === 'favorites' && favoriteCount === 0) {
+    return 'No favorites yet. Open an article and tap the star to add one.'
+  }
+  if (criteria.scope === 'favorites') return 'No favorites match the current filters.'
+  return 'No articles match the current filters.'
+}
+
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
 }

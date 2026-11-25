@@ -9,7 +9,12 @@ import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
 import { useLibraryFavorites } from '@/db'
 import { listArticles, type LibraryArticle } from '@/lib/library/articles'
-import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
+import {
+  applyLibraryFilterSort,
+  LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE,
+  libraryFilterEmptyMessage,
+  type LibraryFilterSortCriteria,
+} from '@/lib/library/library-filter-sort'
 import {
   getTagLabel,
   isLibraryTagId,
@@ -34,23 +39,39 @@ function buildArticlesByTagId(): Map<LibraryTagId, LibraryArticle[]> {
   return map
 }
 
+function shouldShowTagSection(
+  articleCount: number,
+  visibleArticleCount: number,
+  isFocused: boolean,
+): boolean {
+  if (isFocused) return true
+  if (articleCount === 0) return true
+  return visibleArticleCount > 0
+}
+
+function tagSectionEmptyMessage(
+  articleCount: number,
+  criteria: Pick<LibraryFilterSortCriteria, 'minimumLevel' | 'maximumLevel'>,
+): string {
+  if (articleCount === 0) return 'No articles use this tag yet.'
+  if (criteria.minimumLevel > criteria.maximumLevel) return LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE
+  return 'No articles in this tag match the current filters.'
+}
+
 function TagSection({
   tagId,
   articles,
-  favoriteSlugs,
+  visibleArticles,
+  isFocused,
+  criteria,
 }: {
   tagId: LibraryTagId
   articles: LibraryArticle[]
-  favoriteSlugs: ReadonlySet<string> | undefined
+  visibleArticles: LibraryArticle[]
+  isFocused: boolean
+  criteria: Pick<LibraryFilterSortCriteria, 'minimumLevel' | 'maximumLevel'>
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
-  const { tag: focusedTag } = useSearch({ from: '/library/tags' })
-  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
-  const visibleArticles = useMemo(
-    () => applyLibraryFilterSort(articles, criteria, favoriteSlugs),
-    [articles, criteria, favoriteSlugs],
-  )
-  const isFocused = focusedTag === tagId
 
   useEffect(() => {
     if (!isFocused || !detailsRef.current) return
@@ -78,11 +99,7 @@ function TagSection({
         <CardContentPadding>
           <LibraryArticleList
             articles={visibleArticles}
-            emptyMessage={
-              articles.length === 0
-                ? 'No articles use this tag yet.'
-                : 'No articles in this tag match the current filters.'
-            }
+            emptyMessage={tagSectionEmptyMessage(articles.length, criteria)}
             excludeTagId={tagId}
           />
         </CardContentPadding>
@@ -97,12 +114,29 @@ function CardContentPadding({ children }: { children: ReactNode }) {
   )
 }
 
+interface VisibleTagSection {
+  tagId: LibraryTagId
+  articles: LibraryArticle[]
+  visibleArticles: LibraryArticle[]
+}
+
 export function TagsPage() {
-  const tagIds = listLibraryTagIdsSortedByLabel()
+  const { tag: focusedTag } = useSearch({ from: '/library/tags' })
+  const tagIds = useMemo(() => listLibraryTagIdsSortedByLabel(), [])
   const articlesByTagId = useMemo(() => buildArticlesByTagId(), [])
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
   const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
   const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
+  const sections = useMemo(() => {
+    const shown: VisibleTagSection[] = []
+    for (const tagId of tagIds) {
+      const articles = articlesByTagId.get(tagId) ?? []
+      const visibleArticles = applyLibraryFilterSort(articles, criteria, favoriteSlugs)
+      if (!shouldShowTagSection(articles.length, visibleArticles.length, focusedTag === tagId)) continue
+      shown.push({ tagId, articles, visibleArticles })
+    }
+    return shown
+  }, [articlesByTagId, criteria, favoriteSlugs, focusedTag, tagIds])
 
   return (
     <div className="space-y-6">
@@ -117,14 +151,20 @@ export function TagsPage() {
 
       {favoritesAreLoading ? (
         <p className="design-type-regular text-muted-foreground">Loading…</p>
+      ) : sections.length === 0 ? (
+        <p className="design-type-regular text-muted-foreground">
+          {libraryFilterEmptyMessage(criteria, favoriteSlugs?.size ?? 0)}
+        </p>
       ) : (
         <div className="space-y-3">
-          {tagIds.map((tagId) => (
+          {sections.map((section) => (
             <TagSection
-              key={tagId}
-              tagId={tagId}
-              articles={articlesByTagId.get(tagId) ?? []}
-              favoriteSlugs={favoriteSlugs}
+              key={section.tagId}
+              tagId={section.tagId}
+              articles={section.articles}
+              visibleArticles={section.visibleArticles}
+              isFocused={focusedTag === section.tagId}
+              criteria={criteria}
             />
           ))}
         </div>

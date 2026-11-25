@@ -1,4 +1,4 @@
-import { useRef, useState, type Ref } from 'react'
+import { useRef, useState, type KeyboardEvent, type Ref } from 'react'
 import { Popover } from 'radix-ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -35,6 +35,24 @@ const optionMenuItemClassName = cn(
 export type DesignOptionMenuOption<Value extends string> = {
   value: Value
   label: string
+}
+
+function selectedOptionIndex<Value extends string>(
+  options: readonly DesignOptionMenuOption<Value>[],
+  value: Value,
+): number {
+  const index = options.findIndex((option) => option.value === value)
+  return index === -1 ? 0 : index
+}
+
+/** Next roving-focus index. Arrow keys stop at the ends. Home and End jump. */
+function nextOptionIndex(currentIndex: number, optionCount: number, key: string): number | null {
+  if (optionCount === 0) return null
+  if (key === 'Home') return 0
+  if (key === 'End') return optionCount - 1
+  if (key === 'ArrowDown') return Math.min(currentIndex + 1, optionCount - 1)
+  if (key === 'ArrowUp') return Math.max(currentIndex - 1, 0)
+  return null
 }
 
 type DesignOptionMenuProps<Value extends string> = {
@@ -111,7 +129,25 @@ function OptionMenu<Value extends string>({
   options: readonly DesignOptionMenuOption<Value>[]
   onValueChange: (value: Value) => void
 }) {
-  const selectedOptionRef = useRef<HTMLButtonElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const initialIndex = selectedOptionIndex(options, value)
+  const [activeIndex, setActiveIndex] = useState(initialIndex)
+  const activeIndexRef = useRef(initialIndex)
+
+  function focusOption(index: number) {
+    if (options.length === 0) return
+    const nextIndex = Math.min(Math.max(index, 0), options.length - 1)
+    activeIndexRef.current = nextIndex
+    setActiveIndex(nextIndex)
+    optionRefs.current[nextIndex]?.focus()
+  }
+
+  function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const nextIndex = nextOptionIndex(activeIndexRef.current, options.length, event.key)
+    if (nextIndex == null) return
+    event.preventDefault()
+    focusOption(nextIndex)
+  }
 
   return (
     <Popover.Portal>
@@ -122,7 +158,7 @@ function OptionMenu<Value extends string>({
         className={optionMenuPanelClassName}
         onOpenAutoFocus={(openEvent) => {
           openEvent.preventDefault()
-          selectedOptionRef.current?.focus()
+          focusOption(selectedOptionIndex(options, value))
         }}
       >
         <div
@@ -133,13 +169,17 @@ function OptionMenu<Value extends string>({
             OPTION_MENU_RING_GUTTER_CLASS,
             OPTION_MENU_LIST_MAX_HEIGHT_CLASS,
           )}
+          onKeyDown={onListKeyDown}
         >
-          {options.map((option) => (
+          {options.map((option, index) => (
             <OptionMenuItem
               key={option.value}
               label={option.label}
               selected={option.value === value}
-              optionRef={option.value === value ? selectedOptionRef : undefined}
+              tabIndex={index === activeIndex ? 0 : -1}
+              optionRef={(element) => {
+                optionRefs.current[index] = element
+              }}
               onSelect={() => onValueChange(option.value)}
             />
           ))}
@@ -152,12 +192,14 @@ function OptionMenu<Value extends string>({
 function OptionMenuItem({
   label,
   selected,
+  tabIndex,
   optionRef,
   onSelect,
 }: {
   label: string
   selected: boolean
-  optionRef?: Ref<HTMLButtonElement>
+  tabIndex: 0 | -1
+  optionRef: Ref<HTMLButtonElement>
   onSelect: () => void
 }) {
   return (
@@ -165,6 +207,7 @@ function OptionMenuItem({
       ref={optionRef}
       type="button"
       role="option"
+      tabIndex={tabIndex}
       aria-selected={selected}
       className={cn(
         optionMenuItemClassName,

@@ -6,19 +6,11 @@ import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
 import { useLibraryFavorites } from '@/db'
 import { listArticles } from '@/lib/library/articles'
-import { applyLibraryFilterSort, type LibraryArticleScope } from '@/lib/library/library-filter-sort'
+import { applyLibraryFilterSort, libraryFilterEmptyMessage } from '@/lib/library/library-filter-sort'
 import {
   selectLibraryFilterSortCriteria,
   useLibraryFilterSortStore,
 } from '@/stores/libraryFilterSortStore'
-
-function indexEmptyMessage(scope: LibraryArticleScope, favoriteCount: number): string {
-  if (scope === 'favorites' && favoriteCount === 0) {
-    return 'No favorites yet. Open an article and tap the star to add one.'
-  }
-  if (scope === 'favorites') return 'No favorites match the current filters.'
-  return 'No articles match the current filters.'
-}
 
 export function LibraryIndexPage() {
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
@@ -34,8 +26,8 @@ export function LibraryIndexPage() {
       <PageHeader title="Library" icon={List} variant="area" />
 
       <p className="design-type-regular text-muted-foreground">
-        In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
-        browse by tag or history, and Favorites to see articles you starred.
+        In-app guides and reference material. Articles are fixed for accuracy. Choose Favorites on
+        this page to see articles you starred. Use the bottom bar to browse by tag or history.
       </p>
 
       <LibraryFilterSort />
@@ -46,7 +38,7 @@ export function LibraryIndexPage() {
         <LibraryArticleList
           articles={articles}
           surface="page"
-          emptyMessage={indexEmptyMessage(criteria.scope, favoriteSlugs?.size ?? 0)}
+          emptyMessage={libraryFilterEmptyMessage(criteria, favoriteSlugs?.size ?? 0)}
         />
       )}
     </div>

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LibraryArticle } from '@/lib/library/library-article'
-import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
+import {
+  applyLibraryFilterSort,
+  LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE,
+  libraryFilterEmptyMessage,
+} from '@/lib/library/library-filter-sort'
 import type { LibraryLevel } from '@/lib/library/library-level'
 import type { LibraryTagId } from '@/lib/library/tags'
 
@@ -49,9 +53,9 @@ describe('applyLibraryFilterSort', () => {
   })
 
   it('matches nothing when the minimum level is above the maximum', () => {
-    expect(
-      applyLibraryFilterSort([wallet, ecdsa], { ...openCriteria, minimumLevel: 4, maximumLevel: 2 }),
-    ).toEqual([])
+    const criteria = { ...openCriteria, minimumLevel: 4 as const, maximumLevel: 2 as const }
+    expect(applyLibraryFilterSort([wallet, ecdsa], criteria)).toEqual([])
+    expect(libraryFilterEmptyMessage(criteria, 0)).toBe(LIBRARY_INVERTED_LEVEL_RANGE_MESSAGE)
   })
 
   it('sorts titles in either direction', () => {

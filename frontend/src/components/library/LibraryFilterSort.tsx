@@ -5,7 +5,12 @@ import { DesignInput } from '@/components/design/DesignInput'
 import { DesignOptionMenu } from '@/components/design/DesignOptionMenu'
 import { DesignSwitch } from '@/components/design/DesignSwitch'
 import type { LibraryArticleScope, LibraryArticleSort } from '@/lib/library/library-filter-sort'
-import { LIBRARY_LEVEL_LABEL, LIBRARY_LEVELS, type LibraryLevel } from '@/lib/library/library-level'
+import {
+  isLibraryLevel,
+  LIBRARY_LEVEL_LABEL,
+  LIBRARY_LEVELS,
+  type LibraryLevel,
+} from '@/lib/library/library-level'
 import {
   selectLibraryFilterSortCriteria,
   useLibraryFilterSortStore,
@@ -30,8 +35,8 @@ const SORT_OPTIONS: { value: LibraryArticleSort; label: string }[] = [
 
 function libraryLevelFromSelectValue(value: string): LibraryLevel | null {
   const level = Number(value)
-  if (level === 1 || level === 2 || level === 3 || level === 4 || level === 5) return level
-  return null
+  if (!isLibraryLevel(level)) return null
+  return level
 }
 
 function LibraryLevelMenu({
