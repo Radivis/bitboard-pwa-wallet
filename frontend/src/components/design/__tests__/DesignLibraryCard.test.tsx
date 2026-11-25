@@ -53,6 +53,7 @@ describe('DesignLibraryCard', () => {
     expect(card?.className).toContain('rounded-[20px]')
     expect(card?.className).toContain('h-full')
     expect(card?.className).toContain('w-full')
+    expect(card?.className).toContain('max-w-[480px]')
     expect(card?.className).toContain('gap-4')
     expect(card?.className).toContain('px-6')
     expect(card?.className).toContain('py-3')

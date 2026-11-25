@@ -20,7 +20,7 @@ export function DesignLibraryCard({
     <article
       data-slot="design-library-card"
       className={cn(
-        'design-ui relative flex h-full w-full min-w-0 flex-col gap-4 rounded-[20px] px-6 py-3',
+        'design-ui relative flex h-full w-full max-w-[480px] min-w-0 flex-col gap-4 rounded-[20px] px-6 py-3',
         className,
       )}
     >

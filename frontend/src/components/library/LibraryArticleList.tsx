@@ -21,7 +21,7 @@ export function LibraryArticleList({
   }
 
   return (
-    <ul className="grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4 p-0">
+    <ul data-slot="design-library-list" className="grid list-none gap-4 p-0">
       {articles.map((article) => {
         const tagIdsToShow =
           excludeTagId != null

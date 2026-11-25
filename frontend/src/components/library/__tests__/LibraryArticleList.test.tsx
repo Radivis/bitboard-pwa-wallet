@@ -1,9 +1,15 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { renderWithLibraryRouter } from '@/test-utils/library-router'
 import type { LibraryArticle } from '@/lib/library/library-article'
+
+const designTokensPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../design-tokens.css')
+const designTokens = readFileSync(designTokensPath, 'utf8')
 
 const walletArticle: LibraryArticle = {
   slug: 'what-is-a-wallet',
@@ -13,16 +19,19 @@ const walletArticle: LibraryArticle = {
 }
 
 describe('LibraryArticleList', () => {
-  it('lays cards out in equal columns of at least 300px', async () => {
+  it('fits as many 240px columns as the row allows and lets them share it', async () => {
     renderWithLibraryRouter(
       <LibraryArticleList articles={[walletArticle]} emptyMessage="Nothing here." />,
     )
 
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
     const list = title.closest('ul')
+    expect(list).toHaveAttribute('data-slot', 'design-library-list')
     expect(list?.className).toContain('grid')
-    expect(list?.className).toContain('grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]')
     expect(list?.className).toContain('gap-4')
+    const listRulesStart = designTokens.indexOf('[data-slot="design-library-list"]')
+    const listRules = designTokens.slice(listRulesStart, designTokens.indexOf('[data-slot="design-library-card"]'))
+    expect(listRules).toContain('repeat(auto-fill, minmax(min(100%, 240px), 1fr))')
     expect(title.closest('[data-slot="design-library-card"]')).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Bitcoin' })).toHaveAttribute(
       'href',

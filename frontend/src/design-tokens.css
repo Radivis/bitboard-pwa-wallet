@@ -624,6 +624,17 @@ a:focus-visible [data-slot="design-lab-transaction-card"] {
 }
 
 /*
+ * Library list. A fixed maximum would be the size used to count columns, so
+ * the row would keep cards near 480px and leave the rest empty. 1fr is not a
+ * fixed size, so auto-fill counts by the 240px floor and then the columns
+ * share the row. A parent narrower than 240px shrinks the single column
+ * through min(100%, 240px). The card's own 480px max still caps a lone column.
+ */
+[data-slot="design-library-list"] {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+
+/*
  * Library card. Fill is elevation 2 at rest and elevation 3 on hover.
  * The card sits on an elevation 1 surface, and the component's elevation 2
  * and 3 shadows are measured from the base surface, so the painted shadows
