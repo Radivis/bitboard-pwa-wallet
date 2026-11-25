@@ -7,6 +7,11 @@ import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 interface LibraryArticleListProps {
   articles: LibraryArticle[]
   emptyMessage: string
+  /**
+   * `page` sits on the page background, so each card uses the lower fill.
+   * `raised` sits inside another card, which is the tag section.
+   */
+  surface?: 'page' | 'raised'
   /** When set, tag badges omit this id (e.g. the tag for the enclosing section on /library/tags). */
   excludeTagId?: LibraryTagId
 }
@@ -14,6 +19,7 @@ interface LibraryArticleListProps {
 export function LibraryArticleList({
   articles,
   emptyMessage,
+  surface = 'raised',
   excludeTagId,
 }: LibraryArticleListProps) {
   if (articles.length === 0) {
@@ -21,7 +27,11 @@ export function LibraryArticleList({
   }
 
   return (
-    <ul data-slot="design-library-list" className="grid list-none gap-4 p-0">
+    <ul
+      data-slot="design-library-list"
+      data-library-list-surface={surface}
+      className="grid list-none gap-4 p-0"
+    >
       {articles.map((article) => {
         const tagIdsToShow =
           excludeTagId != null

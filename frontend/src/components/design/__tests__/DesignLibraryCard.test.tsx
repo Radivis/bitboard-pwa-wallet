@@ -80,6 +80,8 @@ describe('DesignLibraryCard', () => {
     const cardRules = designTokens.slice(cardRulesStart, designTokens.indexOf('[data-slot="design-modal"]'))
     expect(cardRules).toContain('--design-elevation-2')
     expect(cardRules).toContain('--design-elevation-3')
+    expect(cardRules).toContain('[data-library-list-surface="page"] [data-slot="design-library-card"]')
+    expect(cardRules).toContain('--design-elevation-1')
     expect(cardRules).toContain('0 1px 3px 1px rgb(0 0 0 / 0.15)')
     expect(cardRules).toContain('0 3px 8px 0 rgb(0 0 0 / 0.25)')
     expect(cardRules).toContain('inset 0 4px 7px 0 rgb(245 244 246 / 0.08)')

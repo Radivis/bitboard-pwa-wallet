@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { List } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
@@ -41,18 +40,15 @@ export function LibraryIndexPage() {
 
       <LibraryFilterSort />
 
-      <DesignCard>
-        <DesignCardContent>
-          {favoritesAreLoading ? (
-            <p className="design-type-regular text-muted-foreground">Loading…</p>
-          ) : (
-            <LibraryArticleList
-              articles={articles}
-              emptyMessage={indexEmptyMessage(criteria.scope, favoriteSlugs?.size ?? 0)}
-            />
-          )}
-        </DesignCardContent>
-      </DesignCard>
+      {favoritesAreLoading ? (
+        <p className="design-type-regular text-muted-foreground">Loading…</p>
+      ) : (
+        <LibraryArticleList
+          articles={articles}
+          surface="page"
+          emptyMessage={indexEmptyMessage(criteria.scope, favoriteSlugs?.size ?? 0)}
+        />
+      )}
     </div>
   )
 }

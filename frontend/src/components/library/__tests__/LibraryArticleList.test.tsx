@@ -28,6 +28,7 @@ describe('LibraryArticleList', () => {
     const title = await screen.findByRole('link', { name: 'What is a wallet' })
     const list = title.closest('ul')
     expect(list).toHaveAttribute('data-slot', 'design-library-list')
+    expect(list).toHaveAttribute('data-library-list-surface', 'raised')
     expect(list?.className).toContain('grid')
     expect(list?.className).toContain('gap-4')
     const listRulesStart = designTokens.indexOf('[data-slot="design-library-list"]')
