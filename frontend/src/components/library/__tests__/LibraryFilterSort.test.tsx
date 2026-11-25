@@ -22,9 +22,12 @@ describe('LibraryFilterSort', () => {
     renderWithLibraryRouter(<LibraryFilterSort />)
 
     await user.type(await screen.findByLabelText('Search'), 'ark')
-    await user.selectOptions(screen.getByLabelText('Minimum level'), '3')
-    await user.selectOptions(screen.getByLabelText('Maximum level'), '4')
-    await user.selectOptions(screen.getByLabelText('Sort'), 'level-desc')
+    await user.click(screen.getByRole('button', { name: 'Minimum level 1 Beginner' }))
+    await user.click(screen.getByRole('option', { name: '3 Advanced' }))
+    await user.click(screen.getByRole('button', { name: 'Maximum level 5 Specialist' }))
+    await user.click(screen.getByRole('option', { name: '4 Expert' }))
+    await user.click(screen.getByRole('button', { name: 'Sort Alphabetic (A -> Z)' }))
+    await user.click(screen.getByRole('option', { name: 'Level (5 -> 1)' }))
 
     expect(useLibraryFilterSortStore.getState()).toMatchObject({
       query: 'ark',
@@ -32,8 +35,6 @@ describe('LibraryFilterSort', () => {
       maximumLevel: 4,
       sort: 'level-desc',
     })
-    expect(screen.getByLabelText('Minimum level').className).toContain('appearance-none')
-    expect(screen.getByLabelText('Minimum level').nextElementSibling).toHaveClass('right-4')
   })
 
   it('writes All and Favorites to the store', async () => {
