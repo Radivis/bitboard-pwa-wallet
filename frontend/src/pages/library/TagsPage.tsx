@@ -7,6 +7,7 @@ import { DesignCard } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
+import { useLibraryFavorites } from '@/db'
 import { listArticles, type LibraryArticle } from '@/lib/library/articles'
 import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
 import {
@@ -36,16 +37,18 @@ function buildArticlesByTagId(): Map<LibraryTagId, LibraryArticle[]> {
 function TagSection({
   tagId,
   articles,
+  favoriteSlugs,
 }: {
   tagId: LibraryTagId
   articles: LibraryArticle[]
+  favoriteSlugs: ReadonlySet<string> | undefined
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const { tag: focusedTag } = useSearch({ from: '/library/tags' })
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
   const visibleArticles = useMemo(
-    () => applyLibraryFilterSort(articles, criteria),
-    [articles, criteria],
+    () => applyLibraryFilterSort(articles, criteria, favoriteSlugs),
+    [articles, criteria, favoriteSlugs],
   )
   const isFocused = focusedTag === tagId
 
@@ -97,6 +100,9 @@ function CardContentPadding({ children }: { children: ReactNode }) {
 export function TagsPage() {
   const tagIds = listLibraryTagIdsSortedByLabel()
   const articlesByTagId = useMemo(() => buildArticlesByTagId(), [])
+  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
+  const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
+  const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
 
   return (
     <div className="space-y-6">
@@ -109,15 +115,20 @@ export function TagsPage() {
 
       <LibraryFilterSort />
 
-      <div className="space-y-3">
-        {tagIds.map((tagId) => (
-          <TagSection
-            key={tagId}
-            tagId={tagId}
-            articles={articlesByTagId.get(tagId) ?? []}
-          />
-        ))}
-      </div>
+      {favoritesAreLoading ? (
+        <p className="design-type-regular text-muted-foreground">Loading…</p>
+      ) : (
+        <div className="space-y-3">
+          {tagIds.map((tagId) => (
+            <TagSection
+              key={tagId}
+              tagId={tagId}
+              articles={articlesByTagId.get(tagId) ?? []}
+              favoriteSlugs={favoriteSlugs}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -5,18 +5,29 @@ import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
+import { useLibraryFavorites } from '@/db'
 import { listArticles } from '@/lib/library/articles'
-import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
+import { applyLibraryFilterSort, type LibraryArticleScope } from '@/lib/library/library-filter-sort'
 import {
   selectLibraryFilterSortCriteria,
   useLibraryFilterSortStore,
 } from '@/stores/libraryFilterSortStore'
 
+function indexEmptyMessage(scope: LibraryArticleScope, favoriteCount: number): string {
+  if (scope === 'favorites' && favoriteCount === 0) {
+    return 'No favorites yet. Open an article and tap the star to add one.'
+  }
+  if (scope === 'favorites') return 'No favorites match the current filters.'
+  return 'No articles match the current filters.'
+}
+
 export function LibraryIndexPage() {
   const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
+  const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
+  const favoritesAreLoading = criteria.scope === 'favorites' && isLoading
   const articles = useMemo(
-    () => applyLibraryFilterSort(listArticles(), criteria),
-    [criteria],
+    () => applyLibraryFilterSort(listArticles(), criteria, favoriteSlugs),
+    [criteria, favoriteSlugs],
   )
 
   return (
@@ -25,17 +36,21 @@ export function LibraryIndexPage() {
 
       <p className="design-type-regular text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
-        browse by tag, favorites, or history.
+        browse by tag or history, and Favorites to see articles you starred.
       </p>
 
       <LibraryFilterSort />
 
       <DesignCard>
         <DesignCardContent>
-          <LibraryArticleList
-            articles={articles}
-            emptyMessage="No articles match the current filters."
-          />
+          {favoritesAreLoading ? (
+            <p className="design-type-regular text-muted-foreground">Loading…</p>
+          ) : (
+            <LibraryArticleList
+              articles={articles}
+              emptyMessage={indexEmptyMessage(criteria.scope, favoriteSlugs?.size ?? 0)}
+            />
+          )}
         </DesignCardContent>
       </DesignCard>
     </div>

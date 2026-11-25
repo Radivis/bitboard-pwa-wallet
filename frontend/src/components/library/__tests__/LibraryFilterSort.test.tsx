@@ -13,6 +13,7 @@ describe('LibraryFilterSort', () => {
       minimumLevel: 1,
       maximumLevel: 5,
       sort: 'title-asc',
+      scope: 'all',
     })
   })
 
@@ -31,5 +32,16 @@ describe('LibraryFilterSort', () => {
       maximumLevel: 4,
       sort: 'level-desc',
     })
+  })
+
+  it('writes All and Favorites to the store', async () => {
+    const user = userEvent.setup()
+    renderWithLibraryRouter(<LibraryFilterSort />)
+
+    await user.click(await screen.findByRole('button', { name: 'Favorites' }))
+    expect(useLibraryFilterSortStore.getState().scope).toBe('favorites')
+
+    await user.click(screen.getByRole('button', { name: 'All' }))
+    expect(useLibraryFilterSortStore.getState().scope).toBe('all')
   })
 })

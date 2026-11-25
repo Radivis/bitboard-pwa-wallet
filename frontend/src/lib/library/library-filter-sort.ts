@@ -4,11 +4,14 @@ import { getTagLabel } from '@/lib/library/tags'
 
 export type LibraryArticleSort = 'title-asc' | 'title-desc' | 'level-asc' | 'level-desc'
 
+export type LibraryArticleScope = 'all' | 'favorites'
+
 export interface LibraryFilterSortCriteria {
   query: string
   minimumLevel: LibraryLevel
   maximumLevel: LibraryLevel
   sort: LibraryArticleSort
+  scope: LibraryArticleScope
 }
 
 function normalizeSearch(value: string): string {
@@ -33,15 +36,26 @@ function compareArticles(left: LibraryArticle, right: LibraryArticle, sort: Libr
   return compareTitles(left, right)
 }
 
+function articleIsInScope(
+  article: LibraryArticle,
+  criteria: LibraryFilterSortCriteria,
+  favoriteSlugs: ReadonlySet<string> | undefined,
+): boolean {
+  if (criteria.scope !== 'favorites') return true
+  return favoriteSlugs?.has(article.slug) === true
+}
+
 export function applyLibraryFilterSort(
   articles: readonly LibraryArticle[],
   criteria: LibraryFilterSortCriteria,
+  favoriteSlugs?: ReadonlySet<string>,
 ): LibraryArticle[] {
   if (criteria.minimumLevel > criteria.maximumLevel) return []
   const normalizedQuery = normalizeSearch(criteria.query)
   return articles
     .filter(
       (article) =>
+        articleIsInScope(article, criteria, favoriteSlugs) &&
         article.level >= criteria.minimumLevel &&
         article.level <= criteria.maximumLevel &&
         articleMatchesQuery(article, normalizedQuery),

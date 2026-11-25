@@ -17,7 +17,6 @@ import {
   SlidersHorizontal,
   List,
   Tags,
-  Star,
   History,
   Blocks,
   Zap,
@@ -131,13 +130,6 @@ const LIBRARY_SUB_NAV_ITEMS: SectionSubNavItem[] = [
     label: 'Tags',
     icon: Tags,
     isActive: (pathname) => pathname === '/library/tags',
-  },
-  {
-    kind: 'pathname',
-    to: '/library/favorites',
-    label: 'Favorites',
-    icon: Star,
-    isActive: (pathname) => pathname === '/library/favorites',
   },
   {
     kind: 'pathname',

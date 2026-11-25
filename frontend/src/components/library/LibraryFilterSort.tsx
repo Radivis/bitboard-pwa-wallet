@@ -3,14 +3,20 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { designFocusClassName } from '@/components/design/design-classes'
 import { DesignInput } from '@/components/design/DesignInput'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { designTypeClassName } from '@/components/design/design-type'
-import type { LibraryArticleSort } from '@/lib/library/library-filter-sort'
+import type { LibraryArticleScope, LibraryArticleSort } from '@/lib/library/library-filter-sort'
 import { LIBRARY_LEVEL_LABEL, LIBRARY_LEVELS, type LibraryLevel } from '@/lib/library/library-level'
 import { cn } from '@/lib/shared/utils'
 import {
   selectLibraryFilterSortCriteria,
   useLibraryFilterSortStore,
 } from '@/stores/libraryFilterSortStore'
+
+const SCOPE_OPTIONS: { value: LibraryArticleScope; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'favorites', label: 'Favorites' },
+]
 
 const SORT_OPTIONS: { value: LibraryArticleSort; label: string }[] = [
   { value: 'title-asc', label: 'Alphabetic (A -> Z)' },
@@ -76,6 +82,7 @@ export function LibraryFilterSort() {
   const setMinimumLevel = useLibraryFilterSortStore((state) => state.setMinimumLevel)
   const setMaximumLevel = useLibraryFilterSortStore((state) => state.setMaximumLevel)
   const setSort = useLibraryFilterSortStore((state) => state.setSort)
+  const setScope = useLibraryFilterSortStore((state) => state.setScope)
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
@@ -124,6 +131,12 @@ export function LibraryFilterSort() {
           ))}
         </select>
       </div>
+      <DesignSwitch
+        aria-label="Shown articles"
+        value={criteria.scope}
+        onValueChange={setScope}
+        options={SCOPE_OPTIONS}
+      />
     </div>
   )
 }

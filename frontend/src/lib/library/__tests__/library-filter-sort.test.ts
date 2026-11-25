@@ -25,6 +25,7 @@ const openCriteria = {
   minimumLevel: 1 as const,
   maximumLevel: 5 as const,
   sort: 'title-asc' as const,
+  scope: 'all' as const,
 }
 
 describe('applyLibraryFilterSort', () => {
@@ -63,6 +64,21 @@ describe('applyLibraryFilterSort', () => {
     expect(
       applyLibraryFilterSort(articles, { ...openCriteria, sort: 'title-desc' }).map((item) => item.title),
     ).toEqual(['What is a wallet', 'ECDSA', 'Dust Transactions'])
+  })
+
+  it('keeps only starred articles when the scope is favorites', () => {
+    const articles = [wallet, dust, ecdsa]
+    const favoriteSlugs = new Set([wallet.slug, ecdsa.slug])
+    expect(
+      applyLibraryFilterSort(articles, { ...openCriteria, scope: 'favorites' }, favoriteSlugs).map(
+        (item) => item.title,
+      ),
+    ).toEqual(['ECDSA', 'What is a wallet'])
+    expect(applyLibraryFilterSort(articles, openCriteria, favoriteSlugs).map((item) => item.title)).toEqual([
+      'Dust Transactions',
+      'ECDSA',
+      'What is a wallet',
+    ])
   })
 
   it('sorts by level and breaks ties by title A to Z', () => {
