@@ -1,18 +1,30 @@
 import { useMemo } from 'react'
 import { Star } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
 import { useLibraryFavorites } from '@/db'
-import { listArticlesSortedByTitle } from '@/lib/library/articles'
+import { listArticles } from '@/lib/library/articles'
+import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
+import {
+  selectLibraryFilterSortCriteria,
+  useLibraryFilterSortStore,
+} from '@/stores/libraryFilterSortStore'
 
 export function FavoritesPage() {
   const { data: favoriteSlugs, isLoading } = useLibraryFavorites()
+  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
 
-  const articles = useMemo(() => {
+  const favoritedArticles = useMemo(() => {
     if (!favoriteSlugs) return []
-    return listArticlesSortedByTitle().filter((a) => favoriteSlugs.has(a.slug))
+    return listArticles().filter((article) => favoriteSlugs.has(article.slug))
   }, [favoriteSlugs])
+  const articles = useMemo(
+    () => applyLibraryFilterSort(favoritedArticles, criteria),
+    [favoritedArticles, criteria],
+  )
 
   return (
     <div className="space-y-6">
@@ -22,6 +34,8 @@ export function FavoritesPage() {
         Articles you marked with the star. Favorites are stored on this device only.
       </p>
 
+      <LibraryFilterSort />
+
       <DesignCard>
         <DesignCardContent>
           {isLoading ? (
@@ -29,7 +43,11 @@ export function FavoritesPage() {
           ) : (
             <LibraryArticleList
               articles={articles}
-              emptyMessage="No favorites yet. Open an article and tap the star to add one."
+              emptyMessage={
+                favoritedArticles.length === 0
+                  ? 'No favorites yet. Open an article and tap the star to add one.'
+                  : 'No favorites match the current filters.'
+              }
             />
           )}
         </DesignCardContent>

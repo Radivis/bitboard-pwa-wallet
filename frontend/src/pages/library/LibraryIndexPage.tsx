@@ -1,29 +1,23 @@
-import { useMemo, useState } from 'react'
-import { List, Search } from 'lucide-react'
+import { useMemo } from 'react'
+import { List } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
-import { DesignInput } from '@/components/design/DesignInput'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryFilterSort } from '@/components/library/LibraryFilterSort'
 import { PageHeader } from '@/components/PageHeader'
-import { listArticlesSortedByTitle } from '@/lib/library/articles'
-import { getTagLabel } from '@/lib/library/tags'
-
-function normalizeSearch(value: string): string {
-  return value.trim().toLowerCase()
-}
+import { listArticles } from '@/lib/library/articles'
+import { applyLibraryFilterSort } from '@/lib/library/library-filter-sort'
+import {
+  selectLibraryFilterSortCriteria,
+  useLibraryFilterSortStore,
+} from '@/stores/libraryFilterSortStore'
 
 export function LibraryIndexPage() {
-  const [query, setQuery] = useState('')
-  const articles = useMemo(() => {
-    const sorted = listArticlesSortedByTitle()
-    const normalizedQuery = normalizeSearch(query)
-    if (!normalizedQuery) return sorted
-    return sorted.filter((article) => {
-      if (article.title.toLowerCase().includes(normalizedQuery)) return true
-      return article.tagIds.some((tagId) =>
-        getTagLabel(tagId).toLowerCase().includes(normalizedQuery),
-      )
-    })
-  }, [query])
+  const criteria = useLibraryFilterSortStore(useShallow(selectLibraryFilterSortCriteria))
+  const articles = useMemo(
+    () => applyLibraryFilterSort(listArticles(), criteria),
+    [criteria],
+  )
 
   return (
     <div className="space-y-6">
@@ -34,26 +28,13 @@ export function LibraryIndexPage() {
         browse by tag, favorites, or history.
       </p>
 
-      <div className="space-y-2">
-        <label htmlFor="library-search" className="design-type-emphasis text-foreground">
-          Search
-        </label>
-        <DesignInput
-          id="library-search"
-          type="search"
-          leadingIcon={Search}
-          placeholder="Filter by title or tag…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
+      <LibraryFilterSort />
 
       <DesignCard>
         <DesignCardContent>
           <LibraryArticleList
             articles={articles}
-            emptyMessage="No articles match your search. Try a different term."
+            emptyMessage="No articles match the current filters."
           />
         </DesignCardContent>
       </DesignCard>
