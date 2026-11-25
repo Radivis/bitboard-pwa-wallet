@@ -623,6 +623,37 @@ a:focus-visible [data-slot="design-lab-transaction-card"] {
   box-shadow: var(--design-lab-transaction-card-shadow), 0 0 0 2px var(--design-focus-ring);
 }
 
+/*
+ * Library card. Fill is elevation 2 at rest and elevation 3 on hover.
+ * The card sits on an elevation 1 surface, and the component's elevation 2
+ * and 3 shadows are measured from the base surface, so the painted shadows
+ * are one step lower: elevation 1 at rest and elevation 2 on hover. The
+ * variable keeps the focus ring from dropping a layer. The title link is
+ * stretched over the card, so its hover raises the fill too. Focusing that
+ * link rings the card. Tag focus keeps the tag ring.
+ */
+[data-slot="design-library-card"] {
+  background: var(--design-elevation-2);
+  --design-library-card-shadow:
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+  box-shadow: var(--design-library-card-shadow);
+}
+
+[data-slot="design-library-card"]:hover,
+[data-slot="design-library-card"]:has([data-library-card-title]:hover) {
+  background: var(--design-elevation-3);
+  --design-library-card-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+}
+
+[data-slot="design-library-card"]:has([data-library-card-title]:focus-visible) {
+  box-shadow: var(--design-library-card-shadow), 0 0 0 2px var(--design-focus-ring);
+}
+
 /* Set on the element, not through a Tailwind shadow utility. DialogContent also
    applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
 [data-slot="design-modal"] {

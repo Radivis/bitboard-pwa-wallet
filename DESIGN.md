@@ -168,6 +168,14 @@ The transaction row in the lab block Transactions card and the Mempool card. It 
 
 A transfer keeps the sender on the left. The arrow and the recipient stay on the right. Below the md breakpoint the sender is its own row and the arrow with the recipient is the next row. From md up they share one row. Coinbase shows a Coinbase tag that hugs its label, then the arrow and the recipient, with no sender. The amount and the fee each have their own row, icon on the left and amount on the right. A coinbase fee is shown as 0. The transaction id is not on the card. The row links to the transaction page, except a coinbase that does not have a page yet.
 
+### Library card
+
+The article card on the Library index, Favorites, and each tag section. Corner radius is 20. Padding is 24 by 12. The title and the tag row are 16px apart. The list is a grid of equal columns: `repeat(auto-fill, minmax(min(100%, 300px), 1fr))`, with 16px between cards. A wide page adds a column whenever another 300px fits, and every card, including the last row, uses that column width. A narrow parent shrinks the single column to the parent. The card fills its cell.
+
+Resting fill is elevation 2. Hover raises the fill to elevation 3. The card sits on an elevation 1 surface, and the component's elevation 2 and 3 shadows are measured from the base surface, so the painted shadows are one step lower: the elevation 1 stack at rest and the elevation 2 stack on hover.
+
+The title is the article link, and that link stretches across the card. Tags stay their own links to the tag page, with the tag hover and active fills. They sit above the stretched title so a tag click does not open the article. The enclosing tag on a tag section is omitted from that card.
+
 ### Modal
 
 `theme` is Light or Dark. The panel fill is `elevation/4`. Light and Dark use the elevation 4 shadow stack from the Basics elevation-patterns frame. It does not follow the network.
